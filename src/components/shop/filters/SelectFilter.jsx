@@ -5,43 +5,31 @@ export default function SelectFilter({
   onToggle,
   disabled = false,
 }) {
-  const values = field?.allowedValues ?? [];
-  const multi = field?.multi !== false; // default true
+  const values = field?.allowedValues ?? []
+  const multi = field?.multi !== false
+  if (!values.length) return null
 
-  if (!values.length) return null;
-
-  const current = multi ? selected : selected?.[0] || "";
+  const current = multi ? selected : selected?.[0] || ''
 
   const handleChange = (e) => {
-    const val = e.target.value;
+    const val = e.target.value
 
-    // For single-select, empty means clear
     if (!multi) {
-      if (!val) onToggle(field.key, current, false); // toggle off current if any
-      else onToggle(field.key, val, false);
-      return;
+      if (!val) onToggle(field.key, current, false)
+      else onToggle(field.key, val, false)
+      return
     }
 
-    // For multi-select, native <select multiple> gives selectedOptions
     const selectedOptions = Array.from(e.target.selectedOptions).map(
-      (opt) => opt.value
-    );
+      (opt) => opt.value,
+    )
 
-    // Instead of introducing a new "setFilter" dependency here,
-    // we toggle diff one by one using onToggle (simple + consistent).
-    // We compute desired set and reconcile toggles.
-    const desired = new Set(selectedOptions);
-    const existing = new Set(selected);
+    const desired = new Set(selectedOptions)
+    const existing = new Set(selected)
 
-    // toggle off removed
-    for (const v of existing) {
-      if (!desired.has(v)) onToggle(field.key, v, true);
-    }
-    // toggle on added
-    for (const v of desired) {
-      if (!existing.has(v)) onToggle(field.key, v, true);
-    }
-  };
+    for (const v of existing) if (!desired.has(v)) onToggle(field.key, v, true)
+    for (const v of desired) if (!existing.has(v)) onToggle(field.key, v, true)
+  }
 
   return (
     <div className="space-y-2">
@@ -52,7 +40,11 @@ export default function SelectFilter({
         value={current}
         multiple={multi}
         onChange={handleChange}
-        className="w-full rounded-md border bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+        className={[
+          'w-full rounded-md bg-white px-3 py-2 text-sm ring-1 ring-slate-200 transition',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+          disabled ? 'cursor-not-allowed opacity-60' : 'hover:ring-slate-300',
+        ].join(' ')}
       >
         {!multi && <option value="">All</option>}
         {values.map((v) => (
@@ -68,5 +60,5 @@ export default function SelectFilter({
         </p>
       )}
     </div>
-  );
+  )
 }

@@ -5,10 +5,10 @@ export default function CheckboxFilter({
   onToggle,
   disabled = false,
 }) {
-  const values = field?.allowedValues ?? [];
-  const multi = field?.multi !== false; // default true
+  const values = field?.allowedValues ?? []
+  const multi = field?.multi !== false
 
-  if (!values.length) return null;
+  if (!values.length) return null
 
   return (
     <div className="space-y-2">
@@ -16,28 +16,31 @@ export default function CheckboxFilter({
 
       <div className="space-y-2">
         {values.map((v) => {
-          const checked = selected.includes(v);
+          const checked = selected.includes(v)
 
           return (
             <label
               key={v}
               className={[
-                "flex items-center gap-2 text-sm",
-                disabled ? "opacity-60" : "",
-              ].join(" ")}
+                'flex items-center gap-2 text-sm',
+                disabled ? 'opacity-60' : 'cursor-pointer',
+              ].join(' ')}
             >
               <input
                 type="checkbox"
                 disabled={disabled}
                 checked={checked}
                 onChange={() => onToggle(field.key, v, multi)}
-                className="h-4 w-4"
+                className={[
+                  'h-4 w-4 rounded border-slate-300 text-slate-900',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+                ].join(' ')}
               />
               <span className="text-slate-700">{v}</span>
             </label>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }

@@ -1,104 +1,196 @@
-import { useDispatch, useSelector } from 'react-redux'
-import { Link } from 'react-router-dom'
-import { clearCart, setCartItemQuantity } from '../../features/cart/cartSlice'
+// src/pages/Public/CartPage.jsx
+import { useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { Link } from "react-router-dom";
+import { FaArrowLeft, FaTrash, FaShoppingCart } from "react-icons/fa";
+import {
+  clearCart,
+  removeFromCart,
+  setCartItemQuantity,
+} from "../../features/cart/cartSlice";
+import QuantityControl from "../../components/common/QuantityControl";
+
+const placeholder = "/placeholder.jpg";
 
 export default function CartPage() {
-  const dispatch = useDispatch()
-  const items = useSelector((state) => state.cart.items)
+  const dispatch = useDispatch();
+  const items = useSelector((state) => state.cart.items || []);
+  const [note, setNote] = useState("");
 
-  if (!items.length) {
-    return (
-      <div className="rounded-xl border bg-white p-6">
-        <h1 className="text-lg font-semibold text-slate-900">Your cart is empty</h1>
-        <p className="mt-2 text-sm text-slate-600">Add some products from the shop.</p>
-        <Link
-          to="/shop"
-          className="mt-4 inline-block rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Go to Shop
-        </Link>
-      </div>
-    )
-  }
+  const summary = useMemo(() => {
+    const lines = items.length;
+    const units = items.reduce((sum, i) => sum + (i.quantity || 0), 0);
+    return { lines, units };
+  }, [items]);
+
+  const setQty = (productId, val) => {
+    const num = typeof val === "number" ? val : parseInt(val, 10);
+    if (!Number.isFinite(num)) return;
+    dispatch(setCartItemQuantity({ productId, quantity: num }));
+  };
+
+  const submit = () => {
+    // eslint-disable-next-line no-alert
+    alert("Submitted (placeholder).\n\nNote:\n" + note);
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">Cart</h1>
-        <button
-          type="button"
-          onClick={() => dispatch(clearCart())}
-          className="text-sm text-slate-600 hover:text-slate-900"
+    <div className="mx-auto max-w-3xl px-4 py-8">
+      {/* Header */}
+      <div className="mb-3 flex items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <FaShoppingCart className="text-slate-900" size={18} />
+            <h1 className="text-xl font-semibold text-slate-900">Cart</h1>
+          </div>
+
+          <p className="mt-1 text-sm text-slate-500">
+            {summary.lines} item{summary.lines !== 1 && "s"} · {summary.units}{" "}
+            unit
+            {summary.units !== 1 && "s"}
+          </p>
+        </div>
+
+        <Link
+          to="/shop"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 hover:underline"
         >
-          Clear cart
-        </button>
+          <FaArrowLeft size={12} />
+          Back to Shop
+        </Link>
       </div>
 
-      <div className="rounded-xl border bg-white">
-        {items.map(({ productId, product, quantity }) => {
-          const image = product?.images?.[0] || '/placeholder.jpg'
-          const tags = [
-            product?.packingUnit,
-            product?.grade,
-            product?.catalogCode ? `Code ${product.catalogCode}` : null,
-          ].filter(Boolean)
+      {/* Empty */}
+      {items.length === 0 ? (
+        <div className="mt-2 rounded-xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 ring-1 ring-slate-200">
+            <FaShoppingCart className="text-slate-600" size={18} />
+          </div>
 
-          return (
-            <div key={productId} className="flex gap-4 border-b p-4 last:border-b-0">
-              <img
-                src={image}
-                alt={product?.name || 'Product'}
-                className="h-16 w-16 rounded-lg bg-slate-100 object-cover"
-                onError={(e) => {
-                  e.currentTarget.onerror = null
-                  e.currentTarget.src = '/placeholder.jpg'
-                }}
-              />
+          <p className="mt-4 text-sm font-medium text-slate-900">
+            Your cart is empty
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            Add a few items to continue.
+          </p>
 
-              <div className="flex-1">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      {product?.name || 'Unnamed Product'}
-                    </p>
+          <Link
+            to="/shop"
+            className="mt-6 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+          >
+            Browse products
+          </Link>
+        </div>
+      ) : (
+        <>
+          {/* Main panel */}
+          <div className="mt-2 rounded-xl bg-white p-4 sm:p-6 shadow-sm ring-1 ring-slate-200 space-y-6">
+            {/* Items */}
+            <div className="space-y-3">
+              {items.map(({ productId, product, quantity }) => {
+                const image =
+                  product?.images?.[0] || product?.imageUrl || placeholder;
+                const name = product?.name || "Untitled product";
 
-                    {tags.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1.5">
-                        {tags.map((t) => (
-                          <span
-                            key={t}
-                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
-                          >
-                            {t}
-                          </span>
-                        ))}
+                return (
+                  <div
+                    key={productId}
+                    className="rounded-lg bg-slate-50 p-3 sm:p-4 ring-1 ring-slate-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* X */}
+                      <button
+                        type="button"
+                        onClick={() => dispatch(removeFromCart(productId))}
+                        className="inline-flex h-8 w-fit shrink-0 items-center justify-center rounded-md text-slate-500 transition
+                                   hover:bg-white hover:text-slate-900
+                                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                        aria-label="Remove item"
+                        title="Remove item"
+                      >
+                        <span className=" p-2 font-semibold leading-none text-lg sm:text-xl">
+                          ×
+                        </span>
+                      </button>
+
+                      {/* Image */}
+                      <img
+                        src={image}
+                        alt={name}
+                        className="h-12 w-12 shrink-0 rounded-md bg-white object-cover ring-1 ring-slate-200"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = placeholder;
+                        }}
+                      />
+
+                      {/* Text */}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium leading-snug text-slate-900">
+                          {name}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                <div className="mt-3 flex items-center gap-3">
-                  <label className="text-xs text-slate-600">Qty</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={quantity}
-                    onChange={(e) =>
-                      dispatch(
-                        setCartItemQuantity({
-                          productId,
-                          quantity: Math.max(1, Number(e.target.value) || 1),
-                        }),
-                      )
-                    }
-                    className="w-24 rounded-lg border px-2 py-1 text-sm"
-                  />
-                </div>
-              </div>
+                      {/* Quantity */}
+                      <QuantityControl
+                        quantity={quantity}
+                        setQuantity={(val) => setQty(productId, val)}
+                        min={1}
+                        size="sm"
+                        compact
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )
-        })}
-      </div>
+
+            {/* Note */}
+            <div className="pt-4 border-t border-slate-200">
+              <label className="block text-sm font-medium text-slate-900">
+                Note (optional)
+              </label>
+              <p className="mt-1 text-sm text-slate-500">
+                Add any special request or details for your order.
+              </p>
+
+              <textarea
+                rows={4}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional…"
+                className="mt-3 w-full rounded-lg bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 transition
+                           placeholder:text-slate-400 hover:ring-slate-300
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+              />
+            </div>
+
+            {/* Actions (same row on mobile + desktop) */}
+            <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => dispatch(clearCart())}
+                className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline"
+              >
+                <FaTrash size={12} />
+                Clear Cart
+              </button>
+
+              <button
+                type="button"
+                onClick={submit}
+                className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+              >
+                Submit request
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
-  )
+  );
 }

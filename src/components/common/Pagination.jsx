@@ -1,46 +1,46 @@
+// src/components/common/Pagination.jsx
 export default function Pagination({ pagination, onPageChange }) {
   if (!pagination) return null
 
-  const { page, totalPages, hasPrev, hasNext, total } = pagination
-
-  if (totalPages <= 1) {
-    // no need to render pagination for single page
-    return (
-      <p className="text-xs text-slate-500">
-        Showing {total} item{total !== 1 && 's'}.
-      </p>
-    )
-  }
+  const { page, totalPages, hasPrev, hasNext } = pagination
+  if (totalPages <= 1) return null
 
   const goTo = (newPage) => {
     if (newPage < 1 || newPage > totalPages) return
     onPageChange(newPage)
   }
 
+  const btnClass = (disabled) =>
+    [
+      'inline-flex h-9 items-center justify-center rounded-lg px-3 text-sm transition',
+      'ring-1 ring-slate-200 bg-white text-slate-700',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+      disabled
+        ? 'cursor-not-allowed opacity-50'
+        : 'hover:bg-slate-50 hover:ring-slate-300',
+    ].join(' ')
+
   return (
-    <div className="flex flex-col gap-2 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-      <p>
-        Page {page} of {totalPages} · {total} item{total !== 1 && 's'}
-      </p>
-      <div className="inline-flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => goTo(page - 1)}
-          disabled={!hasPrev}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Prev
-        </button>
-        <span className="px-2">|</span>
-        <button
-          type="button"
-          onClick={() => goTo(page + 1)}
-          disabled={!hasNext}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
+    <div className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => goTo(page - 1)}
+        disabled={!hasPrev}
+        className={btnClass(!hasPrev)}
+      >
+        Prev
+      </button>
+
+      <span className="px-2 text-xs text-slate-400">|</span>
+
+      <button
+        type="button"
+        onClick={() => goTo(page + 1)}
+        disabled={!hasNext}
+        className={btnClass(!hasNext)}
+      >
+        Next
+      </button>
     </div>
   )
 }

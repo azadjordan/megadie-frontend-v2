@@ -1,8 +1,8 @@
 // src/components/shop/ShopFilters.jsx
-import ChipsFilter from "./filters/ChipsFilter";
-import SearchFilter from "./filters/SearchFilter";
-import SelectFilter from "./filters/SelectFilter";
-import CheckboxFilter from "./filters/CheckboxFilter";
+import ChipsFilter from './filters/ChipsFilter'
+import SearchFilter from './filters/SearchFilter'
+import SelectFilter from './filters/SelectFilter'
+import CheckboxFilter from './filters/CheckboxFilter'
 
 export default function ShopFilters({
   config,
@@ -13,36 +13,37 @@ export default function ShopFilters({
   onClearAll,
   hasActiveFilters = false,
 }) {
-  if (!config) return null;
+  if (!config) return null
 
   const fields = (config.fields || [])
     .slice()
-    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
 
   if (fields.length === 0) {
     return (
       <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <p className="text-sm text-slate-500">No filters available.</p>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 space-y-5">
+    <div className="space-y-5 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-slate-900">Filters</h2>
 
-        {hasActiveFilters && typeof onClearAll === "function" && (
+        {hasActiveFilters && typeof onClearAll === 'function' && (
           <button
             type="button"
             disabled={disabled}
             onClick={onClearAll}
             className={[
-              "rounded-full px-3 py-1 text-xs transition",
-              "ring-1 ring-slate-200 bg-white text-slate-700",
-              disabled ? "cursor-not-allowed opacity-60" : "hover:bg-slate-50",
-            ].join(" ")}
+              'text-xs font-medium transition',
+              disabled
+                ? 'cursor-not-allowed text-slate-400'
+                : 'text-slate-500 hover:text-slate-700 hover:underline',
+            ].join(' ')}
           >
             Clear all
           </button>
@@ -51,11 +52,11 @@ export default function ShopFilters({
 
       {/* Fields */}
       {fields.map((field) => {
-        const selected = selectedFilters[field.key] || [];
-        const labelByValue = valueLabelMaps[field.key];
+        const selected = selectedFilters[field.key] || []
+        const labelByValue = valueLabelMaps[field.key]
 
         switch (field.ui) {
-          case "search":
+          case 'search':
             return (
               <SearchFilter
                 key={field.key}
@@ -64,9 +65,9 @@ export default function ShopFilters({
                 onToggle={onToggle}
                 disabled={disabled}
               />
-            );
+            )
 
-          case "select":
+          case 'select':
             return (
               <SelectFilter
                 key={field.key}
@@ -75,9 +76,9 @@ export default function ShopFilters({
                 onToggle={onToggle}
                 disabled={disabled}
               />
-            );
+            )
 
-          case "checkbox":
+          case 'checkbox':
             return (
               <CheckboxFilter
                 key={field.key}
@@ -86,9 +87,9 @@ export default function ShopFilters({
                 onToggle={onToggle}
                 disabled={disabled}
               />
-            );
+            )
 
-          case "chips":
+          case 'chips':
           default:
             return (
               <ChipsFilter
@@ -99,9 +100,9 @@ export default function ShopFilters({
                 disabled={disabled}
                 labelByValue={labelByValue}
               />
-            );
+            )
         }
       })}
     </div>
-  );
+  )
 }

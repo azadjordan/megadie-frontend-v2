@@ -1,3 +1,4 @@
+// src/components/common/ProductCard.jsx
 import { useMemo, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { FaShoppingCart, FaCheck, FaPlus } from 'react-icons/fa'
@@ -29,12 +30,12 @@ export default function ProductCard({ product }) {
 
     dispatch(addToCart({ ...product, quantity: qtyNum }))
     setIsAdded(true)
-    setTimeout(() => setIsAdded(false), 800)
+    setTimeout(() => setIsAdded(false), 900)
     setQuantity(1)
   }
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="flex h-full flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
       {/* Image */}
       <div className="h-40 w-full overflow-hidden bg-slate-100">
         <img
@@ -73,22 +74,28 @@ export default function ProductCard({ product }) {
 
         {/* Bottom controls */}
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <QuantityControl quantity={quantity} setQuantity={setQuantity} min={1} />
+          <QuantityControl
+            quantity={quantity}
+            setQuantity={setQuantity}
+            min={1}
+            size="sm"
+          />
 
           <button
             type="button"
             onClick={handleAddToCart}
             disabled={isAdded}
             aria-label={isAdded ? 'Added to cart' : 'Add to cart'}
-            className={`flex items-center justify-center rounded-lg px-3 py-2 text-xs font-medium shadow-sm transition
-              ${
-                isAdded
-                  ? 'cursor-not-allowed bg-slate-200 text-slate-500'
-                  : 'cursor-pointer bg-purple-600 text-white hover:bg-purple-700'
-              }`}
+            className={[
+              'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+              isAdded
+                ? 'cursor-default bg-slate-200 text-slate-600'
+                : 'bg-slate-900 text-white hover:bg-slate-800',
+            ].join(' ')}
           >
             {isAdded ? <FaCheck size={14} /> : <FaShoppingCart size={14} />}
-            {!isAdded && <FaPlus size={10} className="ml-1" />}
+            {!isAdded && <FaPlus size={10} />}
           </button>
         </div>
       </div>

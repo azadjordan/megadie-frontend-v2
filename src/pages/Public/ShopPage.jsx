@@ -9,7 +9,7 @@ import ProductCard from "../../components/common/ProductCard";
 import Pagination from "../../components/common/Pagination";
 import useShopQueryState from "../../hooks/useShopQueryState";
 import ShopFilters from "../../components/shop/ShopFilters";
-import ProductTypeSwitcher from "../../components/shop/ProductTypeSwitcher";
+import ProductTypeNav from "../../components/shop/ProductTypeNav";
 
 const DEFAULT_PRODUCT_TYPE = "Ribbon";
 const PAGE_LIMIT = 48;
@@ -98,7 +98,6 @@ export default function ShopPage() {
   const products = data?.products ?? [];
   const pagination = data?.pagination ?? null;
 
-  // Derived (must be before returns)
   const totalItems = pagination?.total ?? products.length;
 
   const hasActiveFilters = useMemo(
@@ -111,10 +110,33 @@ export default function ShopPage() {
 
   const handlePageChange = (newPage) => setPage(newPage);
 
+  // Meta text: "Showing X – Y of Z items"
+  const showingText = useMemo(() => {
+    if (!pagination) {
+      if (products.length === 0) return "Showing 0 items";
+      return `Showing 1 – ${products.length} of ${products.length} item${
+        products.length !== 1 ? "s" : ""
+      }`;
+    }
+
+    const page = pagination.page ?? 1;
+    const perPage =
+      pagination.limit ?? productsQueryParams?.limit ?? PAGE_LIMIT;
+    const total = pagination.total ?? 0;
+
+    if (total === 0) return "Showing 0 items";
+
+    const start = (page - 1) * perPage + 1;
+    const end = Math.min(start + products.length - 1, total);
+
+    return `Showing ${start} – ${end} of ${total} item${
+      total !== 1 ? "s" : ""
+    }`;
+  }, [pagination, products.length, productsQueryParams?.limit]);
+
   // Safe early returns
-  if (isLoadingConfigs || (needsCategories && isLoadingCategories)) {
+  if (isLoadingConfigs || (needsCategories && isLoadingCategories))
     return <Loader />;
-  }
 
   if (isErrorConfigs) {
     const msg =
@@ -145,10 +167,17 @@ export default function ShopPage() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* Filters */}
-        <aside className="lg:col-span-3">
+        {/* Left rail: Product types (nav) + filters */}
+        <aside className="lg:col-span-3 space-y-4">
+          <ProductTypeNav
+            productTypes={productTypes}
+            value={productType}
+            onChange={setProductType}
+            disabled={isFetching}
+          />
+
           {activeFilterConfig ? (
-            <div className="lg:sticky lg:top-4">
+            <div className="lg:sticky lg:top-16">
               <ShopFilters
                 config={activeFilterConfig}
                 selectedFilters={filters}
@@ -168,26 +197,15 @@ export default function ShopPage() {
 
         {/* Results */}
         <section className="lg:col-span-9 space-y-4">
-          {/* Top bar: tabs on the left, meta on the far right */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <ProductTypeSwitcher
-              productTypes={productTypes}
-              value={productType}
-              onChange={setProductType}
-              disabled={isFetching}
-            />
+          {/* Meta row */}
+          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+            <span className="whitespace-nowrap">{showingText}</span>
 
-            <div className="flex items-center gap-3 text-xs text-slate-500 sm:justify-end">
+            {pagination && (
               <span className="whitespace-nowrap">
-                {totalItems} item{totalItems !== 1 && "s"}
+                Page {pagination.page} / {pagination.totalPages}
               </span>
-
-              {pagination && (
-                <span className="whitespace-nowrap">
-                  Page {pagination.page} / {pagination.totalPages}
-                </span>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Products grid */}
@@ -205,7 +223,10 @@ export default function ShopPage() {
 
           {/* Pagination */}
           <div className="flex justify-end">
-            <Pagination pagination={pagination} onPageChange={handlePageChange} />
+            <Pagination
+              pagination={pagination}
+              onPageChange={handlePageChange}
+            />
           </div>
 
           {isFetching && !isLoadingProducts && (

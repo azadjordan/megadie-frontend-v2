@@ -4,12 +4,12 @@ export default function ChipsFilter({
   selected = [],
   onToggle,
   disabled = false,
-  labelByValue = null, // ✅ NEW
+  labelByValue = null,
 }) {
-  const values = field?.allowedValues ?? [];
-  const multi = field?.multi !== false; // default true
+  const values = field?.allowedValues ?? []
+  const multi = field?.multi !== false
 
-  if (!values.length) return null;
+  if (!values.length) return null
 
   return (
     <div className="space-y-2">
@@ -17,8 +17,8 @@ export default function ChipsFilter({
 
       <div className="flex flex-wrap gap-2">
         {values.map((v) => {
-          const isActive = selected.includes(v);
-          const display = (labelByValue && labelByValue[v]) || v; // ✅ label fallback
+          const isActive = selected.includes(v)
+          const display = (labelByValue && labelByValue[v]) || v
 
           return (
             <button
@@ -27,19 +27,20 @@ export default function ChipsFilter({
               disabled={disabled}
               onClick={() => onToggle(field.key, v, multi)}
               className={[
-                "rounded-full border px-3 py-1 text-xs transition",
-                disabled ? "cursor-not-allowed opacity-60" : "hover:bg-slate-50",
+                'rounded-full px-3 py-1 text-xs ring-1 transition',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+                disabled ? 'cursor-not-allowed opacity-60' : '',
                 isActive
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-700",
-              ].join(" ")}
-              title={v} // nice: still shows key on hover
+                  ? 'bg-slate-900 text-white ring-slate-900 hover:bg-slate-800'
+                  : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 hover:ring-slate-300',
+              ].join(' ')}
+              title={v}
             >
               {display}
             </button>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
