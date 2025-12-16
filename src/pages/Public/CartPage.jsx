@@ -96,7 +96,7 @@ export default function CartPage() {
                 return (
                   <div
                     key={productId}
-                    className="rounded-lg bg-slate-50 p-3 sm:p-4 ring-1 ring-slate-200"
+                    className="rounded-lg bg-slate-50 p-3 sm:p-4 ring-1 ring-slate-300"
                   >
                     <div className="flex items-center gap-3">
                       {/* X */}

@@ -1,7 +1,9 @@
+// src/features/auth/authSlice.js
 import { createSlice } from '@reduxjs/toolkit'
 
 const initialState = {
-  userInfo: null, // { _id, name, email, isAdmin }
+  userInfo: null,        // { _id, name, email, isAdmin, ... }
+  isInitialized: false,  // tells UI we’ve checked session at least once
 }
 
 const authSlice = createSlice({
@@ -13,9 +15,13 @@ const authSlice = createSlice({
     },
     logout: (state) => {
       state.userInfo = null
+      state.isInitialized = true
+    },
+    setInitialized: (state) => {
+      state.isInitialized = true
     },
   },
 })
 
-export const { setCredentials, logout } = authSlice.actions
+export const { setCredentials, logout, setInitialized } = authSlice.actions
 export default authSlice.reducer

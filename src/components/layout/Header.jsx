@@ -1,7 +1,7 @@
 // src/components/layout/Header.jsx
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
-import { useSelector } from 'react-redux'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
 import {
   FaStore,
   FaShoppingCart,
@@ -11,13 +11,17 @@ import {
   FaSignOutAlt,
 } from 'react-icons/fa'
 
+import { apiSlice } from '../../app/apiSlice'
+import { logout as logoutAction } from '../../features/auth/authSlice'
+import { useLogoutMutation } from '../../features/auth/usersApiSlice'
+
 const desktopLink = ({ isActive }) =>
-  `inline-flex items-center gap-2 text-sm font-medium transition ${
+  `inline-flex items-center gap-2 text-base font-medium transition ${
     isActive ? 'text-slate-900' : 'text-slate-700 hover:text-slate-900'
   }`
 
 const drawerLink = ({ isActive }) =>
-  `flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
+  `flex items-center justify-between rounded-lg px-3 py-2 text-base font-medium transition ${
     isActive
       ? 'bg-slate-100 text-slate-900'
       : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
@@ -25,18 +29,30 @@ const drawerLink = ({ isActive }) =>
 
 export default function Header() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const dispatch = useDispatch()
+
   const [menuOpen, setMenuOpen] = useState(false)
   const drawerRef = useRef(null)
 
-  // Cart count (your current cart shape)
+  // Cart count
   const count = useSelector((state) =>
     (state.cart.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0),
   )
 
-  // Placeholder auth (wire later)
-  const isAuthed = false
-  const firstName = 'Account'
+  // Auth state
+  const { userInfo, isInitialized } = useSelector((state) => state.auth)
+  const isAuthed = !!userInfo
+  const isAdmin = !!userInfo?.isAdmin
 
+  const firstName = (() => {
+    const label = userInfo?.name || userInfo?.email || 'Account'
+    return String(label).trim().split(' ')[0] || 'Account'
+  })()
+
+  const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation()
+
+  // Cart bounce animation
   const [bounce, setBounce] = useState(false)
   useEffect(() => {
     if (count > 0) {
@@ -75,30 +91,38 @@ export default function Header() {
     }
   }, [menuOpen])
 
-  const logoutPlaceholder = () => {
+  const handleLogout = async () => {
     setMenuOpen(false)
-    // eslint-disable-next-line no-alert
-    alert('Logout (placeholder)')
+
+    try {
+      await logoutApi().unwrap()
+    } catch {
+      // silent best-effort logout
+    } finally {
+      dispatch(logoutAction())
+      dispatch(apiSlice.util.resetApiState())
+      navigate('/', { replace: true })
+    }
   }
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         {/* Logo */}
-        <Link to="/" className="text-lg font-semibold tracking-tight text-slate-900">
+        <Link to="/" className="text-xl font-semibold tracking-tight text-slate-900">
           Megadie
         </Link>
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-8 md:flex">
           <NavLink to="/shop" className={desktopLink}>
-            <FaStore size={16} />
+            <FaStore size={20} />
             Shop
           </NavLink>
 
           <NavLink to="/cart" className={desktopLink}>
             <span className="relative flex items-center">
-              <FaShoppingCart size={16} />
+              <FaShoppingCart size={20} />
               {count > 0 && (
                 <span
                   className={[
@@ -113,31 +137,42 @@ export default function Header() {
             Cart
           </NavLink>
 
-          {isAuthed ? (
+          {/* Auth (desktop) */}
+          {!isInitialized ? null : isAuthed ? (
             <>
               <NavLink to="/account" className={desktopLink}>
-                <FaUser size={16} />
+                <FaUser size={20} />
                 {firstName}
               </NavLink>
 
               <button
-                onClick={logoutPlaceholder}
-                className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900 disabled:opacity-60"
                 type="button"
               >
-                <FaSignOutAlt size={16} />
-                Logout
+                <FaSignOutAlt size={20} />
+                {isLoggingOut ? 'Logging out…' : 'Logout'}
               </button>
             </>
           ) : (
             <NavLink to="/login" className={desktopLink}>
-              <FaUser size={16} />
+              <FaUser size={20} />
               Sign in
             </NavLink>
           )}
+
+          {/* Admin entry point (desktop) — LAST */}
+          {!isInitialized ? null : isAdmin ? (
+            <NavLink to="/admin" className={desktopLink}>
+              <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-semibold text-white">
+                Admin
+              </span>
+            </NavLink>
+          ) : null}
         </div>
 
-        {/* Mobile hamburger (old style) */}
+        {/* Mobile hamburger */}
         <div className="relative md:hidden">
           <button
             onClick={() => setMenuOpen((v) => !v)}
@@ -145,7 +180,7 @@ export default function Header() {
             className="text-slate-700 hover:text-slate-900 transition"
             type="button"
           >
-            {menuOpen ? <FaTimes size={26} /> : <FaBars size={26} />}
+            {menuOpen ? <FaTimes size={28} /> : <FaBars size={28} />}
           </button>
 
           {count > 0 && (
@@ -171,29 +206,29 @@ export default function Header() {
             className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-900">Menu</span>
+              <span className="text-base font-semibold text-slate-900">Menu</span>
               <button
                 onClick={() => setMenuOpen(false)}
                 className="text-slate-700 hover:text-slate-900"
                 type="button"
                 aria-label="Close menu"
               >
-                <FaTimes size={22} />
+                <FaTimes size={24} />
               </button>
             </div>
 
             <div className="p-4 space-y-2">
-              <NavLink to="/shop" className={drawerLink} onClick={() => setMenuOpen(false)}>
+              <NavLink to="/shop" className={drawerLink}>
                 <span className="flex items-center gap-3">
-                  <FaStore size={18} />
+                  <FaStore size={20} />
                   Shop
                 </span>
               </NavLink>
 
-              <NavLink to="/cart" className={drawerLink} onClick={() => setMenuOpen(false)}>
+              <NavLink to="/cart" className={drawerLink}>
                 <span className="flex items-center gap-3">
                   <span className="relative">
-                    <FaShoppingCart size={18} />
+                    <FaShoppingCart size={20} />
                     {count > 0 && (
                       <span className="absolute -right-2 -top-2 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white">
                         {count}
@@ -204,34 +239,48 @@ export default function Header() {
                 </span>
               </NavLink>
 
+              {/* Auth (mobile) */}
               <div className="pt-2 border-t border-slate-200">
-                {isAuthed ? (
+                {!isInitialized ? null : isAuthed ? (
                   <>
-                    <NavLink to="/account" className={drawerLink} onClick={() => setMenuOpen(false)}>
+                    <NavLink to="/account" className={drawerLink}>
                       <span className="flex items-center gap-3">
-                        <FaUser size={18} />
+                        <FaUser size={20} />
                         {firstName}
                       </span>
                     </NavLink>
 
                     <button
-                      onClick={logoutPlaceholder}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
                       type="button"
                     >
-                      <FaSignOutAlt size={18} />
-                      Logout
+                      <FaSignOutAlt size={20} />
+                      {isLoggingOut ? 'Logging out…' : 'Logout'}
                     </button>
                   </>
                 ) : (
-                  <NavLink to="/login" className={drawerLink} onClick={() => setMenuOpen(false)}>
+                  <NavLink to="/login" className={drawerLink}>
                     <span className="flex items-center gap-3">
-                      <FaUser size={18} />
+                      <FaUser size={20} />
                       Sign in
                     </span>
                   </NavLink>
                 )}
               </div>
+
+              {/* Admin entry point (mobile) — LAST */}
+              {!isInitialized ? null : isAdmin ? (
+                <NavLink to="/admin" className={drawerLink}>
+                  <span className="flex items-center gap-3">
+                    <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-semibold text-white">
+                      Admin
+                    </span>
+                    Admin Panel
+                  </span>
+                </NavLink>
+              ) : null}
             </div>
           </aside>
         </>
