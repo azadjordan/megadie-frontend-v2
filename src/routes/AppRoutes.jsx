@@ -28,6 +28,8 @@ import AccountProfilePage from '../pages/Account/AccountProfilePage'
 import AccountRequestsPage from '../pages/Account/AccountRequestsPage'
 import AccountOrdersPage from '../pages/Account/AccountOrdersPage'
 import AccountInvoicesPage from '../pages/Account/AccountInvoicesPage'
+import AccountOrderDetailsPage from '../pages/Account/AccountOrderDetailsPage'
+import AccountInvoiceDetailsPage from '../pages/Account/AccountInvoiceDetailsPage'
 
 export default function AppRoutes() {
   return (
@@ -44,8 +46,12 @@ export default function AppRoutes() {
             <Route path="/account" element={<Navigate to="/account/requests" replace />} />
             <Route path="/account/profile" element={<AccountProfilePage />} />
             <Route path="/account/requests" element={<AccountRequestsPage />} />
+
             <Route path="/account/orders" element={<AccountOrdersPage />} />
+            <Route path="/account/orders/:id" element={<AccountOrderDetailsPage />} />
+
             <Route path="/account/invoices" element={<AccountInvoicesPage />} />
+            <Route path="/account/invoices/:id" element={<AccountInvoiceDetailsPage />} />
           </Route>
         </Route>
 
