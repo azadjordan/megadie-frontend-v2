@@ -1,8 +1,10 @@
 // src/pages/Public/CartPage.jsx
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaTrash, FaShoppingCart } from "react-icons/fa";
+import { toast } from "react-toastify";
+
 import {
   clearCart,
   removeFromCart,
@@ -10,12 +12,22 @@ import {
 } from "../../features/cart/cartSlice";
 import QuantityControl from "../../components/common/QuantityControl";
 
+// ✅ Quotes API
+import { useCreateQuoteMutation } from "../../features/quotes/quotesApiSlice";
+
 const placeholder = "/placeholder.jpg";
 
 export default function CartPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const items = useSelector((state) => state.cart.items || []);
+  const { userInfo, isInitialized } = useSelector((state) => state.auth);
+
   const [note, setNote] = useState("");
+
+  const [createQuote, { isLoading: isSubmitting }] = useCreateQuoteMutation();
 
   const summary = useMemo(() => {
     const lines = items.length;
@@ -29,9 +41,38 @@ export default function CartPage() {
     dispatch(setCartItemQuantity({ productId, quantity: num }));
   };
 
-  const submit = () => {
-    // eslint-disable-next-line no-alert
-    alert("Submitted (placeholder).\n\nNote:\n" + note);
+  const submit = async () => {
+    // Wait for auth bootstrap before deciding
+    if (!isInitialized) return;
+
+    // Must be logged in to create a quote
+    if (!userInfo) {
+      return navigate("/login", { state: { from: location }, replace: true });
+    }
+
+    if (items.length === 0) return;
+
+    const requestedItems = items
+      .filter((i) => i?.productId && Number(i?.quantity) > 0)
+      .map((i) => ({
+        product: i.productId, // backend expects ObjectId string
+        qty: Number(i.quantity),
+      }));
+
+    if (requestedItems.length === 0) return;
+
+    try {
+      await createQuote({
+        requestedItems,
+        clientToAdminNote: note?.trim() ? note.trim() : undefined,
+      }).unwrap();
+
+      dispatch(clearCart());
+      setNote("");
+      navigate("/account/requests", { replace: true });
+    } catch (err) {
+      toast.error(err?.data?.message || err?.error || "Failed to submit request");
+    }
   };
 
   return (
@@ -154,7 +195,7 @@ export default function CartPage() {
                 Note (optional)
               </label>
               <p className="mt-1 text-sm text-slate-500">
-                Add any special request or details for your order.
+                Add any special request or details for your quote.
               </p>
 
               <textarea
@@ -168,12 +209,13 @@ export default function CartPage() {
               />
             </div>
 
-            {/* Actions (same row on mobile + desktop) */}
+            {/* Actions */}
             <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-4">
               <button
                 type="button"
                 onClick={() => dispatch(clearCart())}
                 className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline"
+                disabled={isSubmitting}
               >
                 <FaTrash size={12} />
                 Clear Cart
@@ -182,10 +224,11 @@ export default function CartPage() {
               <button
                 type="button"
                 onClick={submit}
+                disabled={isSubmitting || !isInitialized}
                 className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:opacity-60"
               >
-                Submit request
+                {isSubmitting ? "Submitting…" : "Submit request"}
               </button>
             </div>
           </div>

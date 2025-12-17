@@ -1,5 +1,5 @@
 // src/pages/Auth/LoginPage.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -12,17 +12,34 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const { userInfo } = useSelector((state) => state.auth)
+  const { userInfo, isInitialized } = useSelector((state) => state.auth)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
   const [login, { isLoading }] = useLoginMutation()
 
-  // If user is already logged in, redirect away
+  const fromPath = useMemo(() => {
+    const from = location.state?.from
+    return from?.pathname || location.state?.fromPathname || null
+  }, [location.state])
+
+  // ✅ Context banner message based on where the user came from
+  const contextMessage = useMemo(() => {
+    if (!fromPath) return null
+    if (fromPath.startsWith('/cart')) return 'Please sign in to submit your request.'
+    if (fromPath.startsWith('/account')) return 'Please sign in to access your account.'
+    return 'Please sign in to continue.'
+  }, [fromPath])
+
   useEffect(() => {
-    if (userInfo) navigate('/account', { replace: true })
-  }, [userInfo, navigate])
+    if (!isInitialized) return
+    if (!userInfo) return
+
+    if (fromPath) return navigate(fromPath, { replace: true })
+    if (userInfo?.isAdmin) return navigate('/admin', { replace: true })
+    navigate('/', { replace: true })
+  }, [isInitialized, userInfo, fromPath, navigate])
 
   const submitHandler = async (e) => {
     e.preventDefault()
@@ -31,15 +48,10 @@ export default function LoginPage() {
       const res = await login({ email, password }).unwrap()
       dispatch(setCredentials(res.data))
 
-      // ✅ No success toast
-      const from = location.state?.from?.pathname
-      if (from) return navigate(from, { replace: true })
-
+      if (fromPath) return navigate(fromPath, { replace: true })
       if (res.data?.isAdmin) return navigate('/admin', { replace: true })
-
-      navigate('/account', { replace: true }) // lands on /account/requests
+      navigate('/', { replace: true })
     } catch (err) {
-      // ✅ Keep error toast (useful)
       toast.error(err?.data?.message || err?.error || 'Login failed')
     }
   }
@@ -48,6 +60,14 @@ export default function LoginPage() {
     <div className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow-sm">
       <h1 className="text-2xl font-semibold text-slate-900">Sign in</h1>
       <p className="mt-1 text-sm text-slate-600">Access your Megadie account.</p>
+
+      {/* ✅ Context banner */}
+      {contextMessage ? (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="text-sm font-semibold text-slate-900">Action required</div>
+          <div className="mt-1 text-sm text-slate-600">{contextMessage}</div>
+        </div>
+      ) : null}
 
       <form onSubmit={submitHandler} className="mt-6 space-y-4">
         <div>
@@ -76,19 +96,23 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || !isInitialized}
           className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
         >
           {isLoading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
 
-      <p className="mt-4 text-sm text-slate-600">
-        Don&apos;t have an account?{' '}
-        <Link to="/register" className="font-semibold text-slate-900 hover:underline">
-          Create one
+      <div className="mt-6 text-sm text-slate-600">
+        New here?{' '}
+        <Link
+          to="/register"
+          state={{ from: location.state?.from || location }}
+          className="font-semibold text-slate-900 hover:underline"
+        >
+          Create an account
         </Link>
-      </p>
+      </div>
     </div>
   )
 }

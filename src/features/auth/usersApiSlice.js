@@ -12,11 +12,12 @@ export const usersApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ['User'],
     }),
 
+    // ✅ NEW: register
     register: builder.mutation({
-      query: ({ name, email, password, phoneNumber }) => ({
+      query: ({ name, phoneNumber, email, password }) => ({
         url: '/users',
         method: 'POST',
-        body: { name, email, password, phoneNumber },
+        body: { name, phoneNumber, email, password },
       }),
       invalidatesTags: ['User'],
     }),
@@ -47,7 +48,7 @@ export const usersApiSlice = apiSlice.injectEndpoints({
 
 export const {
   useLoginMutation,
-  useRegisterMutation,
+  useRegisterMutation, // ✅ export
   useLogoutMutation,
   useGetMyProfileQuery,
   useUpdateMyProfileMutation,
