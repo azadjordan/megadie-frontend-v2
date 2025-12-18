@@ -25,7 +25,7 @@ function StatusBadge({ status }) {
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
     Delivered: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-    Cancelled: "bg-slate-100 text-slate-700 ring-slate-200",
+    Cancelled: "bg-rose-50 text-rose-800 ring-rose-200",
   };
   return (
     <span className={`${base} ${map[status] || map.Processing}`}>
@@ -78,7 +78,8 @@ export default function AccountOrderDetailsPage() {
   }
 
   const invoiceId =
-    order?.invoice?._id || (typeof order?.invoice === "string" ? order.invoice : null);
+    order?.invoice?._id ||
+    (typeof order?.invoice === "string" ? order.invoice : null);
   const invoiceNumber = order?.invoice?.invoiceNumber || null;
 
   const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
@@ -93,11 +94,17 @@ export default function AccountOrderDetailsPage() {
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <StatusBadge status={order?.status} />
             <div className="text-sm text-slate-600">
-              Created: <span className="text-slate-900">{formatDate(order?.createdAt)}</span>
+              Created:{" "}
+              <span className="text-slate-900">
+                {formatDate(order?.createdAt)}
+              </span>
             </div>
             {order?.deliveredAt ? (
               <div className="text-sm text-slate-600">
-                Delivered: <span className="text-slate-900">{formatDate(order?.deliveredAt)}</span>
+                Delivered:{" "}
+                <span className="text-slate-900">
+                  {formatDate(order?.deliveredAt)}
+                </span>
               </div>
             ) : null}
           </div>
@@ -176,8 +183,12 @@ export default function AccountOrderDetailsPage() {
                 className="grid grid-cols-12 items-center px-5 py-3 text-sm text-slate-800 border-t border-slate-200"
               >
                 <div className="col-span-9 min-w-0">
-                  <div className="truncate font-semibold text-slate-900">{name}</div>
-                  {sku ? <div className="text-xs text-slate-500">SKU: {sku}</div> : null}
+                  <div className="truncate font-semibold text-slate-900">
+                    {name}
+                  </div>
+                  {sku ? (
+                    <div className="text-xs text-slate-500">SKU: {sku}</div>
+                  ) : null}
                 </div>
                 <div className="col-span-3 text-right tabular-nums">{qty}</div>
               </div>

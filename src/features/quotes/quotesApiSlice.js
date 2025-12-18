@@ -3,9 +3,9 @@ import { apiSlice } from '../../app/apiSlice'
 
 export const quotesApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
-    // My requests (quotes)
+    // My requests (quotes) - paginated
     getMyQuotes: builder.query({
-      query: () => '/quotes/my',
+      query: ({ page = 1, limit = 5 } = {}) => `/quotes/my?page=${page}&limit=${limit}`,
       providesTags: (result) => {
         const listTag = { type: 'Quote', id: 'LIST' }
         const rows = result?.data || []

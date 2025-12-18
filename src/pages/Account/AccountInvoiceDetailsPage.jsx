@@ -1,4 +1,5 @@
 // src/pages/Account/AccountInvoiceDetailsPage.jsx
+import { useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import Loader from "../../components/common/Loader";
@@ -32,24 +33,84 @@ function formatDate(iso) {
   }
 }
 
-function money(n) {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "AED" }).format(n);
+function moneyMinor(amountMinor, currency = "AED", factor = 100) {
+  if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
+    return "—";
+  const f = typeof factor === "number" && factor > 0 ? factor : 100;
+  const major = amountMinor / f;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format(major);
+  } catch {
+    return String(major);
+  }
+}
+
+/**
+ * UI-only overdue computation:
+ * overdue if dueDate < now AND balanceDueMinor > 0 AND invoice.status !== "Cancelled"
+ */
+function isOverdue(inv) {
+  if (!inv) return false;
+  if (inv.status === "Cancelled") return false;
+
+  const due = inv.dueDate ? new Date(inv.dueDate).getTime() : null;
+  if (!due || Number.isNaN(due)) return false;
+
+  const paid = typeof inv.paidTotalMinor === "number" ? inv.paidTotalMinor : 0;
+  const amount = typeof inv.amountMinor === "number" ? inv.amountMinor : 0;
+
+  const balance =
+    typeof inv.balanceDueMinor === "number"
+      ? inv.balanceDueMinor
+      : Math.max(amount - paid, 0);
+
+  if (balance <= 0) return false;
+  if (inv.paymentStatus === "Paid") return false;
+
+  return due < Date.now();
 }
 
 function StatusBadge({ status }) {
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
+    "inline-flex items-center px-2.5 py-1 text-xs font-semibold ring-1 ring-inset leading-none";
+
   const map = {
-    Paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-    "Partially Paid": "bg-amber-50 text-amber-800 ring-amber-200",
-    Overdue: "bg-rose-50 text-rose-800 ring-rose-200",
-    Unpaid: "bg-slate-50 text-slate-700 ring-slate-200",
+    Paid: "rounded-full bg-emerald-50 text-emerald-800 ring-emerald-200",
+    PartiallyPaid: "rounded-full bg-amber-50 text-amber-800 ring-amber-200",
+    Unpaid: "rounded-full bg-rose-50 text-rose-800 ring-rose-200",
   };
+
+  const label =
+    status === "PartiallyPaid"
+      ? "Partially paid"
+      : status === "Paid"
+      ? "Paid"
+      : "Unpaid";
+
+  return <span className={`${base} ${map[status] || map.Unpaid}`}>{label}</span>;
+}
+
+function CancelledBadge() {
+  const base =
+    "inline-flex items-center px-2.5 py-1 text-xs font-semibold ring-1 ring-inset leading-none";
   return (
-    <span className={`${base} ${map[status] || map.Unpaid}`}>
-      {status || "Unpaid"}
+    <span className={`${base} rounded-full bg-rose-50 text-rose-800 ring-rose-200`}>
+      Cancelled
     </span>
+  );
+}
+
+function MetaItem({ label, value, valueClassName = "" }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="text-xs font-semibold text-slate-600">{label}</div>
+      <div className={`mt-1 text-sm font-semibold ${valueClassName}`}>
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -57,15 +118,23 @@ export default function AccountInvoiceDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data, isLoading, isError, error, refetch, isFetching } =
-    useGetInvoiceByIdQuery(id);
+  const { data, isLoading, isError, error } = useGetInvoiceByIdQuery(id);
 
-  // ✅ API returns: { success, message, data: invoice }
-  const invoice = data?.data;
+  const invoice = data;
   const payments = Array.isArray(invoice?.payments) ? invoice.payments : [];
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-  const pdfUrl = `${apiBase}/invoices/${id}/pdf`;
+  const paymentsSorted = useMemo(() => {
+    return [...payments].sort(
+      (a, b) =>
+        new Date(b.paymentDate || b.createdAt) -
+        new Date(a.paymentDate || a.createdAt)
+    );
+  }, [payments]);
+
+  const currency = invoice?.currency || "AED";
+  const factor = invoice?.minorUnitFactor || 100;
+
+  const pdfComingSoon = true;
 
   if (isLoading) {
     return (
@@ -78,21 +147,14 @@ export default function AccountInvoiceDetailsPage() {
   if (isError) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        {/* Back outside */}
+        <div>
           <button
             type="button"
             onClick={() => navigate("/account/invoices")}
             className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
           >
             Back
-          </button>
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Retry
           </button>
         </div>
 
@@ -104,7 +166,8 @@ export default function AccountInvoiceDetailsPage() {
   if (!invoice) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        {/* Back outside */}
+        <div>
           <button
             type="button"
             onClick={() => navigate("/account/invoices")}
@@ -112,19 +175,12 @@ export default function AccountInvoiceDetailsPage() {
           >
             Back
           </button>
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </button>
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="text-sm font-semibold text-slate-900">Invoice not found</div>
+          <div className="text-sm font-semibold text-slate-900">
+            Invoice not found
+          </div>
           <p className="mt-1 text-sm text-slate-600">
             The invoice data is missing from the response.
           </p>
@@ -133,100 +189,133 @@ export default function AccountInvoiceDetailsPage() {
     );
   }
 
-  // Best-effort computed display (backend returns virtuals if payments populated)
-  const totalPaid =
-    typeof invoice?.totalPaid === "number"
-      ? invoice.totalPaid
-      : payments
-          .filter((p) => p?.status === "Received")
-          .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalPaidMinor =
+    typeof invoice?.paidTotalMinor === "number" ? invoice.paidTotalMinor : 0;
 
-  const balanceDue =
-    typeof invoice?.balanceDue === "number"
-      ? invoice.balanceDue
-      : Math.max((invoice?.amount || 0) - totalPaid, 0);
+  const balanceDueMinor =
+    typeof invoice?.balanceDueMinor === "number"
+      ? invoice.balanceDueMinor
+      : Math.max((invoice?.amountMinor || 0) - totalPaidMinor, 0);
 
-  const status = invoice?.status;
+  const paymentStatus = invoice?.paymentStatus;
+
+  const orderId = invoice?.order?._id || invoice?.order;
+  const orderNumber = invoice?.order?.orderNumber;
+
+  const overdue = isOverdue(invoice);
+  const cancelled = invoice?.status === "Cancelled";
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {invoice?.invoiceNumber || "Invoice details"}
-          </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <StatusBadge status={status} />
-            <div className="text-sm text-slate-600">
-              Created:{" "}
-              <span className="text-slate-900">{formatDateTime(invoice?.createdAt)}</span>
-            </div>
-            {invoice?.dueDate ? (
-              <div className="text-sm text-slate-600">
-                Due: <span className="text-slate-900">{formatDate(invoice?.dueDate)}</span>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Back
-          </button>
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </button>
-
-          <a
-            href={pdfUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            View PDF
-          </a>
-        </div>
+      {/* Back OUTSIDE the invoice document area */}
+      <div>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+        >
+          Back
+        </button>
       </div>
 
-      {/* Summary */}
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <div className="text-sm font-semibold text-slate-900">Summary</div>
+      {/* Invoice "document" panel (Header + Meta + Summary together) */}
+      <div
+        className={[
+          "relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200",
+          overdue ? "border-l-4 border-rose-500" : "",
+        ].join(" ")}
+      >
+        <div className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-semibold text-slate-900">
+                {invoice?.invoiceNumber || "Invoice details"}
+              </h1>
 
-        <div className="mt-3 grid gap-2 text-sm text-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-slate-600">Amount</span>
-            <span className="font-semibold tabular-nums">{money(invoice?.amount)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-slate-600">Paid</span>
-            <span className="font-semibold tabular-nums">{money(totalPaid)}</span>
-          </div>
-          <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-            <span className="font-semibold text-slate-900">Balance due</span>
-            <span className="font-semibold tabular-nums">{money(balanceDue)}</span>
-          </div>
-
-          {invoice?.order?.orderNumber ? (
-            <div className="pt-3 text-sm text-slate-600">
-              Order:{" "}
-              <Link
-                to="/account/orders"
-                className="font-semibold text-slate-900 hover:underline"
-              >
-                {invoice.order.orderNumber}
-              </Link>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <StatusBadge status={paymentStatus} />
+                {cancelled ? <CancelledBadge /> : null}
+              </div>
             </div>
-          ) : null}
+
+            <div className="flex items-center gap-2">
+              {pdfComingSoon ? (
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 cursor-not-allowed"
+                >
+                  PDF (soon)
+                </button>
+              ) : (
+                <a
+                  href={`/api/invoices/${id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  View PDF
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Meta */}
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <MetaItem label="Created" value={formatDateTime(invoice?.createdAt)} />
+
+            <MetaItem
+              label="Due date"
+              value={invoice?.dueDate ? formatDate(invoice?.dueDate) : "No due date"}
+              valueClassName={
+                overdue ? "text-rose-700 font-semibold" : "text-slate-900"
+              }
+            />
+
+            <MetaItem
+              label="Order"
+              value={
+                orderId && orderNumber ? (
+                  <Link
+                    to={`/account/orders/${orderId}`}
+                    className="font-semibold text-slate-900 hover:underline"
+                  >
+                    {orderNumber}
+                  </Link>
+                ) : (
+                  "—"
+                )
+              }
+            />
+          </div>
+        </div>
+
+        {/* Summary merged into same panel */}
+        <div className="border-t border-slate-200 p-5">
+          <div className="text-sm font-semibold text-slate-900">Summary</div>
+
+          <div className="mt-3 grid gap-2 text-sm text-slate-800">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600">Amount</span>
+              <span className="font-semibold tabular-nums">
+                {moneyMinor(invoice?.amountMinor, currency, factor)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-600">Paid</span>
+              <span className="font-semibold tabular-nums">
+                {moneyMinor(totalPaidMinor, currency, factor)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+              <span className="font-semibold text-slate-900">Balance due</span>
+              <span className="font-semibold tabular-nums">
+                {moneyMinor(balanceDueMinor, currency, factor)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -239,7 +328,7 @@ export default function AccountInvoiceDetailsPage() {
           </div>
         </div>
 
-        {payments.length === 0 ? (
+        {paymentsSorted.length === 0 ? (
           <div className="px-5 py-4 text-sm text-slate-600">
             No payments recorded yet.
           </div>
@@ -247,54 +336,46 @@ export default function AccountInvoiceDetailsPage() {
           <>
             <div className="grid grid-cols-12 bg-slate-50 px-5 py-3 text-xs font-semibold text-slate-700">
               <div className="col-span-4">Date</div>
-              <div className="col-span-3">Method</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-3 text-right">Amount</div>
+              <div className="col-span-4">Method</div>
+              <div className="col-span-4 text-right">Amount</div>
             </div>
 
-            {payments
-              .slice()
-              .sort((a, b) => new Date(a.paymentDate) - new Date(b.paymentDate))
-              .map((p) => (
-                <div
-                  key={p._id}
-                  className="grid grid-cols-12 items-start px-5 py-3 text-sm text-slate-800 border-t border-slate-200"
-                >
-                  <div className="col-span-4">
-                    <div className="font-semibold text-slate-900">
-                      {formatDateTime(p.paymentDate)}
-                    </div>
-                    {p.reference ? (
-                      <div className="text-xs text-slate-500">Ref: {p.reference}</div>
-                    ) : null}
+            {paymentsSorted.map((p) => (
+              <div
+                key={p._id}
+                className="grid grid-cols-12 items-start px-5 py-3 text-sm text-slate-800 border-t border-slate-200"
+              >
+                <div className="col-span-4">
+                  <div className="font-semibold text-slate-900">
+                    {formatDateTime(p.paymentDate || p.createdAt)}
                   </div>
+                  {p.reference ? (
+                    <div className="text-xs text-slate-500">Ref: {p.reference}</div>
+                  ) : null}
+                </div>
 
-                  <div className="col-span-3">
-                    <div className="font-semibold text-slate-900">
-                      {p.paymentMethod || "—"}
-                    </div>
-                    {p.paidTo ? (
-                      <div className="text-xs text-slate-500">Paid to: {p.paidTo}</div>
-                    ) : null}
+                <div className="col-span-4">
+                  <div className="font-semibold text-slate-900">
+                    {p.paymentMethod || "—"}
                   </div>
-
-                  <div className="col-span-2">
-                    <div className="text-sm font-semibold text-slate-900">
-                      {p.status || "—"}
-                    </div>
-                  </div>
-
-                  <div className="col-span-3 text-right tabular-nums font-semibold text-slate-900">
-                    {money(p.amount)}
-                  </div>
-
-                  {p.note ? (
-                    <div className="col-span-12 mt-2 text-xs text-slate-600 whitespace-pre-wrap">
-                      {p.note}
+                  {p.receivedBy ? (
+                    <div className="text-xs text-slate-500">
+                      Received by: {p.receivedBy}
                     </div>
                   ) : null}
                 </div>
-              ))}
+
+                <div className="col-span-4 text-right tabular-nums font-semibold text-slate-900">
+                  {moneyMinor(p.amountMinor, currency, factor)}
+                </div>
+
+                {p.note ? (
+                  <div className="col-span-12 mt-2 text-xs text-slate-600 whitespace-pre-wrap">
+                    {p.note}
+                  </div>
+                ) : null}
+              </div>
+            ))}
           </>
         )}
       </div>

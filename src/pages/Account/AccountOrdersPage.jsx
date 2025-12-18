@@ -1,3 +1,4 @@
+// src/pages/Account/AccountOrdersPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -27,7 +28,7 @@ function StatusBadge({ status }) {
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
     Delivered: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-    Cancelled: "bg-slate-100 text-slate-700 ring-slate-200",
+    Cancelled: "bg-rose-50 text-rose-800 ring-rose-200",
   };
   return (
     <span className={`${base} ${map[status] || map.Processing}`}>
@@ -38,7 +39,7 @@ function StatusBadge({ status }) {
 
 export default function AccountOrdersPage() {
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const limit = 5;
 
   const { data, isLoading, isError, error, refetch, isFetching } =
     useGetMyOrdersQuery({ page, limit });
@@ -119,16 +120,10 @@ export default function AccountOrdersPage() {
             Once your requests are confirmed and processed, your orders will
             appear here.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link
-              to="/account/requests"
-              className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              Go to requests
-            </Link>
+          <div className="mt-4">
             <Link
               to="/shop"
-              className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
               Go to shop
             </Link>

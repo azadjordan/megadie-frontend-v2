@@ -1,3 +1,4 @@
+// src/pages/Account/AccountInvoicesPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -19,57 +20,136 @@ function formatDate(iso) {
   }
 }
 
-function money(n) {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "AED",
-  }).format(n);
+/**
+ * Currency-agnostic minor-units formatting
+ */
+function moneyMinor(amountMinor, currency = "AED", factor = 100) {
+  if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
+    return "—";
+  const f = typeof factor === "number" && factor > 0 ? factor : 100;
+  const major = amountMinor / f;
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format(major);
+  } catch {
+    return major.toFixed(2);
+  }
+}
+
+/**
+ * UI-only overdue computation:
+ * overdue if dueDate < now AND balanceDueMinor > 0 AND invoice.status !== "Cancelled"
+ */
+function isOverdue(inv) {
+  if (!inv) return false;
+  if (inv.status === "Cancelled") return false;
+
+  const due = inv.dueDate ? new Date(inv.dueDate).getTime() : null;
+  if (!due || Number.isNaN(due)) return false;
+
+  const paid = typeof inv.paidTotalMinor === "number" ? inv.paidTotalMinor : 0;
+  const amount = typeof inv.amountMinor === "number" ? inv.amountMinor : 0;
+
+  const balance =
+    typeof inv.balanceDueMinor === "number"
+      ? inv.balanceDueMinor
+      : Math.max(amount - paid, 0);
+
+  if (balance <= 0) return false;
+  if (inv.paymentStatus === "Paid") return false;
+
+  return due < Date.now();
 }
 
 function StatusBadge({ status }) {
   const base =
     "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
+
   const map = {
     Paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-    "Partially Paid": "bg-amber-50 text-amber-800 ring-amber-200",
-    Overdue: "bg-rose-50 text-rose-800 ring-rose-200",
-    Unpaid: "bg-slate-50 text-slate-700 ring-slate-200",
+    PartiallyPaid: "bg-amber-50 text-amber-800 ring-amber-200",
+    Unpaid: "bg-rose-50 text-rose-800 ring-rose-200",
   };
+
+  const label =
+    status === "PartiallyPaid"
+      ? "Partially paid"
+      : status === "Paid"
+      ? "Paid"
+      : "Unpaid";
+
   return (
-    <span className={`${base} ${map[status] || map.Unpaid}`}>
-      {status || "Unpaid"}
-    </span>
+    <span className={`${base} ${map[status] || map.Unpaid}`}>{label}</span>
+  );
+}
+
+function Toggle({ checked, onChange, label, disabled }) {
+  return (
+    <label
+      className={[
+        "inline-flex items-center gap-2 select-none",
+        disabled ? "opacity-50" : "",
+      ].join(" ")}
+    >
+      <span className="text-sm font-semibold text-slate-900">{label}</span>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-disabled={disabled}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          onChange(!checked);
+        }}
+        className={[
+          "relative inline-flex h-6 w-11 items-center rounded-full transition",
+          disabled ? "cursor-not-allowed" : "cursor-pointer",
+          checked ? "bg-slate-900" : "bg-slate-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "inline-block h-5 w-5 transform rounded-full bg-white transition",
+            checked ? "translate-x-5" : "translate-x-1",
+          ].join(" ")}
+        />
+      </button>
+    </label>
   );
 }
 
 export default function AccountInvoicesPage() {
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const [unpaidOnly, setUnpaidOnly] = useState(false);
 
   const { data, isLoading, isError, error, refetch, isFetching } =
-    useGetMyInvoicesQuery({ page, limit });
+    useGetMyInvoicesQuery({ page, unpaid: unpaidOnly });
 
   const invoices = useMemo(() => data?.items || [], [data]);
-  const pagination = data?.pagination;
+
+  const toggleDisabled = !data || invoices.length === 0;
+
+  const pagination = useMemo(() => {
+    if (!data) return null;
+
+    return {
+      page: data.page || 1,
+      totalPages: data.pages || 1,
+      hasPrev: (data.page || 1) > 1,
+      hasNext: (data.page || 1) < (data.pages || 1),
+    };
+  }, [data]);
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              My Invoices
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              View invoice status, payments, and PDF.
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <Loader />
-        </div>
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <Loader />
       </div>
     );
   }
@@ -77,13 +157,13 @@ export default function AccountInvoicesPage() {
   if (isError) {
     return (
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">
               My Invoices
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              View invoice status, payments, and PDF.
+              View invoice status and payments.
             </p>
           </div>
 
@@ -103,106 +183,145 @@ export default function AccountInvoicesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">My Invoices</h1>
           <p className="mt-1 text-sm text-slate-600">
-            View invoice status, payments, and PDF.
+            View invoice status and payments.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-        >
-          {isFetching ? "Refreshing…" : "Refresh"}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Toggle
+            checked={unpaidOnly}
+            onChange={(v) => {
+              if (toggleDisabled) return;
+              setPage(1);
+              setUnpaidOnly(v);
+            }}
+            label="Show Unpaid only"
+            disabled={toggleDisabled}
+          />
+
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {isFetching ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       </div>
 
+      {/* Empty */}
       {invoices.length === 0 ? (
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="text-sm font-semibold text-slate-900">
-            No invoices yet
+            {unpaidOnly ? "No unpaid invoices" : "No invoices yet"}
           </div>
           <p className="mt-1 text-sm text-slate-600">
-            Invoices appear once an order invoice is generated.
+            {unpaidOnly
+              ? "Everything looks fully paid right now."
+              : "Invoices appear once an admin generates an invoice for an order."}
           </p>
-          <div className="mt-4">
-            <Link
-              to="/account/orders"
-              className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              Go to orders
-            </Link>
-          </div>
         </div>
       ) : (
         <>
           <div className="space-y-3">
-            {invoices.map((inv) => (
-              <div
-                key={inv._id}
-                className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <StatusBadge status={inv.status} />
+            {invoices.map((inv) => {
+              const currency = inv.currency || "AED";
+              const factor = inv.minorUnitFactor || 100;
+              const overdue = isOverdue(inv);
+
+              return (
+                <div
+                  key={inv._id}
+                  className={[
+                    "relative rounded-2xl bg-white shadow-sm ring-1 ring-slate-200",
+                    overdue ? "border-l-4 border-rose-500" : "",
+                  ].join(" ")}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <StatusBadge status={inv.paymentStatus} />
+
+                        {inv.status === "Cancelled" ? (
+                          <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200">
+                            Cancelled
+                          </span>
+                        ) : null}
+
+                        <Link
+                          to={`/account/invoices/${inv._id}`}
+                          className="text-sm font-semibold text-slate-900 hover:underline"
+                        >
+                          {inv.invoiceNumber ||
+                            `Invoice #${String(inv._id)
+                              .slice(-6)
+                              .toUpperCase()}`}
+                        </Link>
+
+                        <div className="text-xs text-slate-500">
+                          {formatDate(inv.createdAt)}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                        {/* Balance (primary number) */}
+                        <div className="text-base font-semibold text-slate-900">
+                          Balance due:{" "}
+                          {moneyMinor(inv.balanceDueMinor, currency, factor)}
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                          <div>
+                            Amount:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {moneyMinor(inv.amountMinor, currency, factor)}
+                            </span>
+                          </div>
+                          <div>
+                            Paid:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {moneyMinor(
+                                inv.paidTotalMinor,
+                                currency,
+                                factor
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div
+                          className={[
+                            "text-xs",
+                            overdue
+                              ? "text-rose-700 font-semibold"
+                              : "text-slate-500",
+                          ].join(" ")}
+                        >
+                          {inv.dueDate
+                            ? `Due: ${formatDate(inv.dueDate)}`
+                            : "No due date"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
                       <Link
                         to={`/account/invoices/${inv._id}`}
-                        className="text-sm font-semibold text-slate-900 hover:underline"
+                        className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                       >
-                        {inv.invoiceNumber ||
-                          `Invoice #${String(inv._id).slice(-6).toUpperCase()}`}
+                        View invoice
                       </Link>
-                      <div className="text-xs text-slate-500">
-                        {formatDate(inv.createdAt)}
-                      </div>
                     </div>
-
-                    <div className="mt-2 grid gap-1 text-sm text-slate-700">
-                      <div>
-                        Amount:{" "}
-                        <span className="font-semibold text-slate-900">
-                          {money(inv.amount)}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-x-6 gap-y-1">
-                        <div>
-                          Paid:{" "}
-                          <span className="font-semibold text-slate-900">
-                            {money(inv.totalPaid)}
-                          </span>
-                        </div>
-                        <div>
-                          Balance:{" "}
-                          <span className="font-semibold text-slate-900">
-                            {money(inv.balanceDue)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {inv.dueDate
-                          ? `Due: ${formatDate(inv.dueDate)}`
-                          : "No due date"}
-                        {inv.orderNumber ? ` • Order: ${inv.orderNumber}` : ""}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0">
-                    <Link
-                      to={`/account/invoices/${inv._id}`}
-                      className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                    >
-                      View invoice
-                    </Link>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {pagination ? (
