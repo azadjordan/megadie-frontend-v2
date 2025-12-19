@@ -1,5 +1,5 @@
 // src/routes/AppRoutes.jsx
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 
 import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
@@ -19,7 +19,18 @@ import NotFoundPage from "../pages/Public/NotFoundPage";
 
 import LoginPage from "../pages/Auth/LoginPage";
 import RegisterPage from "../pages/Auth/RegisterPage";
+
+// Admin pages
 import AdminDashboardPage from "../pages/Admin/AdminDashboardPage";
+import AdminRequestsPage from "../pages/Admin/AdminRequestsPage";
+import AdminOrdersPage from "../pages/Admin/AdminOrdersPage";
+import AdminInvoicesPage from "../pages/Admin/AdminInvoicesPage";
+import AdminInventoryPage from "../pages/Admin/AdminInventoryPage";
+import AdminUsersPage from "../pages/Admin/AdminUsersPage";
+import AdminPaymentCreatePage from "../pages/Admin/AdminPaymentCreatePage";
+import AdminRequestDetailsPage from "../pages/Admin/AdminRequestDetailsPage";
+
+
 
 // Guards
 import RequireAdmin from "../components/auth/RequireAdmin";
@@ -29,10 +40,22 @@ import RequireAuth from "../components/auth/RequireAuth";
 import AccountLayout from "../components/layout/AccountLayout";
 import AccountProfilePage from "../pages/Account/AccountProfilePage";
 import AccountRequestsPage from "../pages/Account/AccountRequestsPage";
-import AccountOrdersPage from "../pages/Account/AccountOrdersPage";
+
+// ✅ Billing (Invoices list + Invoice details + Order details)
 import AccountInvoicesPage from "../pages/Account/AccountInvoicesPage";
-import AccountOrderDetailsPage from "../pages/Account/AccountOrderDetailsPage";
 import AccountInvoiceDetailsPage from "../pages/Account/AccountInvoiceDetailsPage";
+import AccountOrderDetailsPage from "../pages/Account/AccountOrderDetailsPage";
+import AdminPaymentsPage from "../pages/Admin/AdminPaymentsPage";
+
+// ✅ Backward-compat param redirects (Navigate can't keep ":id" by itself)
+function InvoiceRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/account/billing/invoices/${id}`} replace />;
+}
+function OrderRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/account/billing/orders/${id}`} replace />;
+}
 
 export default function AppRoutes() {
   return (
@@ -46,24 +69,43 @@ export default function AppRoutes() {
         {/* Protected user routes */}
         <Route element={<RequireAuth />}>
           <Route element={<AccountLayout />}>
+            {/* Default account landing */}
             <Route
               path="/account"
               element={<Navigate to="/account/requests" replace />}
             />
+
+            {/* Account */}
             <Route path="/account/profile" element={<AccountProfilePage />} />
             <Route path="/account/requests" element={<AccountRequestsPage />} />
 
-            <Route path="/account/orders" element={<AccountOrdersPage />} />
+            {/* ✅ Billing section (single sidebar item) */}
             <Route
-              path="/account/orders/:id"
+              path="/account/billing"
+              element={<Navigate to="/account/billing/invoices" replace />}
+            />
+            <Route
+              path="/account/billing/invoices"
+              element={<AccountInvoicesPage />}
+            />
+            <Route
+              path="/account/billing/invoices/:id"
+              element={<AccountInvoiceDetailsPage />}
+            />
+            <Route
+              path="/account/billing/orders/:id"
               element={<AccountOrderDetailsPage />}
             />
 
-            <Route path="/account/invoices" element={<AccountInvoicesPage />} />
+            {/* ✅ Backward-compat redirects (old URLs) */}
             <Route
-              path="/account/invoices/:id"
-              element={<AccountInvoiceDetailsPage />}
+              path="/account/invoices"
+              element={<Navigate to="/account/billing/invoices" replace />}
             />
+            <Route path="/account/invoices/:id" element={<InvoiceRedirect />} />
+            <Route path="/account/orders/:id" element={<OrderRedirect />} />
+
+            {/* ✅ IMPORTANT: We intentionally DO NOT have /account/orders anymore */}
           </Route>
         </Route>
 
@@ -84,11 +126,23 @@ export default function AppRoutes() {
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
       {/* Admin routes (protected) */}
-      <Route element={<RequireAdmin />}>
-        <Route element={<AdminLayout />}>
-          <Route path="/admin" element={<AdminDashboardPage />} />
-        </Route>
-      </Route>
+<Route element={<RequireAdmin />}>
+  <Route path="/admin" element={<AdminLayout />}>
+    <Route index element={<AdminDashboardPage />} />
+
+    <Route path="requests" element={<AdminRequestsPage />} />
+    <Route path="requests/:id" element={<AdminRequestDetailsPage />} />
+
+    <Route path="orders" element={<AdminOrdersPage />} />
+    <Route path="invoices" element={<AdminInvoicesPage />} />
+    <Route path="payments" element={<AdminPaymentsPage />} />
+    <Route path="payments/new" element={<AdminPaymentCreatePage />} />
+    <Route path="users" element={<AdminUsersPage />} />
+    <Route path="inventory" element={<AdminInventoryPage />} />
+  </Route>
+</Route>
+
+
     </Routes>
   );
 }

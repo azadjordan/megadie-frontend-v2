@@ -12,6 +12,8 @@ import {
   useConfirmQuoteMutation,
 } from "../../features/quotes/quotesApiSlice";
 
+import useAccountHeader from "../../hooks/useAccountHeader";
+
 function formatDate(iso) {
   try {
     return new Date(iso).toLocaleString(undefined, {
@@ -39,12 +41,12 @@ function StatusBadge({ status }) {
     "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
 
   // ✅ Removed Rejected completely
-const map = {
-  Processing: "bg-slate-50 text-slate-700 ring-slate-200",
-  Quoted: "bg-amber-50 text-amber-800 ring-amber-200",
-  Confirmed: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  Cancelled: "bg-rose-50 text-rose-800 ring-rose-200", // ✅ red
-};
+  const map = {
+    Processing: "bg-slate-50 text-slate-700 ring-slate-200",
+    Quoted: "bg-amber-50 text-amber-800 ring-amber-200",
+    Confirmed: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+    Cancelled: "bg-rose-50 text-rose-800 ring-rose-200",
+  };
 
   return (
     <span className={`${base} ${map[status] || map.Processing}`}>
@@ -68,11 +70,15 @@ function StatusMessage({ status }) {
 }
 
 export default function AccountRequestsPage() {
+  const { setAccountHeader, clearAccountHeader } = useAccountHeader();
+
   const [page, setPage] = useState(1);
   const limit = 5;
 
-  const { data, isLoading, isError, error, refetch, isFetching } =
-    useGetMyQuotesQuery({ page, limit });
+  const { data, isLoading, isError, error, refetch } = useGetMyQuotesQuery({
+    page,
+    limit,
+  });
 
   const [cancelQuote, { isLoading: isCancelling }] = useCancelQuoteMutation();
   const [confirmQuote, { isLoading: isConfirming }] = useConfirmQuoteMutation();
@@ -82,6 +88,18 @@ export default function AccountRequestsPage() {
 
   const quotes = useMemo(() => data?.data || [], [data]);
   const pagination = data?.pagination;
+
+  // ✅ Use AccountHeader (no local H1, no refresh button)
+  useEffect(() => {
+    setAccountHeader({
+      title: "Requests",
+      subtitle: "Track your quote requests and their status.",
+      right: null,
+      bottom: null,
+    });
+
+    return () => clearAccountHeader();
+  }, [setAccountHeader, clearAccountHeader]);
 
   // Optional: reset expanded cards when paging (prevents "stale" open state)
   useEffect(() => {
@@ -114,21 +132,8 @@ export default function AccountRequestsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              My Requests
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Track your quote requests and their status.
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <Loader />
-        </div>
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <Loader />
       </div>
     );
   }
@@ -136,16 +141,8 @@ export default function AccountRequestsPage() {
   if (isError) {
     return (
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              My Requests
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Track your quote requests and their status.
-            </p>
-          </div>
-
+        <ErrorMessage error={error} />
+        <div>
           <button
             type="button"
             onClick={() => refetch()}
@@ -154,34 +151,12 @@ export default function AccountRequestsPage() {
             Retry
           </button>
         </div>
-
-        <ErrorMessage error={error} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">My Requests</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Track your quote requests and their status.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-      </div>
-
       {quotes.length === 0 ? (
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="text-sm font-semibold text-slate-900">
@@ -301,12 +276,16 @@ export default function AccountRequestsPage() {
                                 key={`${q._id}-${idx}`}
                                 className="grid grid-cols-12 items-center border-t border-slate-200 px-3 py-2 text-sm text-slate-800"
                               >
-                                <div className="col-span-8 truncate">{name}</div>
+                                <div className="col-span-8 truncate">
+                                  {name}
+                                </div>
                                 <div className="col-span-2 text-right tabular-nums">
                                   {qty}
                                 </div>
                                 <div className="col-span-2 text-right tabular-nums">
-                                  {showFullPricing ? money(lineTotal) || "—" : ""}
+                                  {showFullPricing
+                                    ? money(lineTotal) || "—"
+                                    : ""}
                                 </div>
                               </div>
                             );
@@ -353,14 +332,18 @@ export default function AccountRequestsPage() {
                             {showFullPricing ? (
                               <>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-slate-600">Delivery</span>
+                                  <span className="text-slate-600">
+                                    Delivery
+                                  </span>
                                   <span className="tabular-nums">
                                     {money(q.deliveryCharge) || "—"}
                                   </span>
                                 </div>
 
                                 <div className="flex items-center justify-between">
-                                  <span className="text-slate-600">Extra fee</span>
+                                  <span className="text-slate-600">
+                                    Extra fee
+                                  </span>
                                   <span className="tabular-nums">
                                     {money(q.extraFee) || "—"}
                                   </span>
@@ -419,7 +402,10 @@ export default function AccountRequestsPage() {
 
           {pagination ? (
             <div className="pt-2">
-              <Pagination pagination={pagination} onPageChange={(p) => setPage(p)} />
+              <Pagination
+                pagination={pagination}
+                onPageChange={(p) => setPage(p)}
+              />
             </div>
           ) : null}
         </>

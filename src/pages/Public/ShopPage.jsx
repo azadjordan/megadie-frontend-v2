@@ -1,15 +1,18 @@
 // src/pages/Public/ShopPage.jsx
 import { useMemo } from "react";
+
 import { useGetProductsQuery } from "../../features/products/productsApiSlice";
 import { useGetFilterConfigsQuery } from "../../features/filters/filterConfigsApiSlice";
 import { useGetCategoriesQuery } from "../../features/categories/categoriesApiSlice";
+
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import ProductCard from "../../components/common/ProductCard";
 import Pagination from "../../components/common/Pagination";
-import useShopQueryState from "../../hooks/useShopQueryState";
 import ShopFilters from "../../components/shop/ShopFilters";
 import ProductTypeNav from "../../components/shop/ProductTypeNav";
+
+import useShopQueryState from "../../hooks/useShopQueryState";
 
 const DEFAULT_PRODUCT_TYPE = "Ribbon";
 const PAGE_LIMIT = 48;
@@ -28,13 +31,9 @@ export default function ShopPage() {
     defaultLimit: PAGE_LIMIT,
   });
 
-  // Filter configs
-  const {
-    data: filterConfigs = [],
-    isLoading: isLoadingConfigs,
-    isError: isErrorConfigs,
-    error: errorConfigs,
-  } = useGetFilterConfigsQuery();
+  // 1) Filter configs
+  const configsQ = useGetFilterConfigsQuery();
+  const filterConfigs = configsQ.data ?? [];
 
   const productTypes = useMemo(
     () => filterConfigs.map((c) => c.productType),
@@ -46,24 +45,21 @@ export default function ShopPage() {
     [filterConfigs, productType]
   );
 
-  // Categories (for categoryKeys label mapping)
-  const needsCategories = useMemo(
-    () => !!activeFilterConfig?.fields?.some((f) => f.key === "categoryKeys"),
-    [activeFilterConfig]
+  // 2) Categories only if config uses categoryKeys
+  const needsCategories = !!activeFilterConfig?.fields?.some(
+    (f) => f.key === "categoryKeys"
   );
 
-  const {
-    data: categories = [],
-    isLoading: isLoadingCategories,
-    isError: isErrorCategories,
-    error: errorCategories,
-  } = useGetCategoriesQuery(
+  const categoriesQ = useGetCategoriesQuery(
     needsCategories
       ? { productType, isActive: true, limit: 200, page: 1 }
       : undefined,
     { skip: !needsCategories }
   );
 
+  const categories = categoriesQ.data ?? [];
+
+  // Map category key -> label (and only for allowed values if provided)
   const categoryLabelByKey = useMemo(() => {
     if (!needsCategories) return {};
 
@@ -81,85 +77,67 @@ export default function ShopPage() {
     return map;
   }, [needsCategories, categories, activeFilterConfig]);
 
-  // Products
-  const {
-    data,
-    isLoading: isLoadingProducts,
-    isError: isErrorProducts,
-    error: errorProducts,
-    isFetching,
-  } = useGetProductsQuery(productsQueryParams, {
-    skip:
-      isLoadingConfigs ||
-      isErrorConfigs ||
-      (needsCategories && (isLoadingCategories || isErrorCategories)),
+  // 3) Products
+  const shouldSkipProducts =
+    configsQ.isLoading ||
+    configsQ.isError ||
+    (needsCategories && (categoriesQ.isLoading || categoriesQ.isError));
+
+  const productsQ = useGetProductsQuery(productsQueryParams, {
+    skip: shouldSkipProducts,
   });
 
-  const products = data?.products ?? [];
-  const pagination = data?.pagination ?? null;
+  const products = productsQ.data?.products ?? [];
+  const pagination = productsQ.data?.pagination ?? null;
 
-  const totalItems = pagination?.total ?? products.length;
+  const hasActiveFilters =
+    Object.values(filters || {}).some((arr) => Array.isArray(arr) && arr.length);
 
-  const hasActiveFilters = useMemo(
-    () =>
-      Object.values(filters || {}).some(
-        (arr) => Array.isArray(arr) && arr.length > 0
-      ),
-    [filters]
-  );
-
-  const handlePageChange = (newPage) => setPage(newPage);
-
-  // Meta text: "Showing X – Y of Z items"
   const showingText = useMemo(() => {
     if (!pagination) {
-      if (products.length === 0) return "Showing 0 items";
-      return `Showing 1 – ${products.length} of ${products.length} item${
-        products.length !== 1 ? "s" : ""
-      }`;
+      const n = products.length;
+      if (n === 0) return "Showing 0 items";
+      return `Showing 1 – ${n} of ${n} item${n !== 1 ? "s" : ""}`;
     }
 
     const page = pagination.page ?? 1;
-    const perPage =
-      pagination.limit ?? productsQueryParams?.limit ?? PAGE_LIMIT;
+    const limit = pagination.limit ?? productsQueryParams?.limit ?? PAGE_LIMIT;
     const total = pagination.total ?? 0;
 
     if (total === 0) return "Showing 0 items";
 
-    const start = (page - 1) * perPage + 1;
+    const start = (page - 1) * limit + 1;
     const end = Math.min(start + products.length - 1, total);
-
-    return `Showing ${start} – ${end} of ${total} item${
-      total !== 1 ? "s" : ""
-    }`;
+    return `Showing ${start} – ${end} of ${total} item${total !== 1 ? "s" : ""}`;
   }, [pagination, products.length, productsQueryParams?.limit]);
 
-  // Safe early returns
-  if (isLoadingConfigs || (needsCategories && isLoadingCategories))
+  // ---- Early returns (kept predictable) ----
+  if (configsQ.isLoading || (needsCategories && categoriesQ.isLoading)) {
     return <Loader />;
+  }
 
-  if (isErrorConfigs) {
+  if (configsQ.isError) {
     const msg =
-      errorConfigs?.data?.message ||
-      errorConfigs?.error ||
+      configsQ.error?.data?.message ||
+      configsQ.error?.error ||
       "Failed to load filter configurations.";
     return <ErrorMessage message={msg} />;
   }
 
-  if (needsCategories && isErrorCategories) {
+  if (needsCategories && categoriesQ.isError) {
     const msg =
-      errorCategories?.data?.message ||
-      errorCategories?.error ||
+      categoriesQ.error?.data?.message ||
+      categoriesQ.error?.error ||
       "Failed to load categories.";
     return <ErrorMessage message={msg} />;
   }
 
-  if (isLoadingProducts) return <Loader />;
+  if (productsQ.isLoading) return <Loader />;
 
-  if (isErrorProducts) {
+  if (productsQ.isError) {
     const msg =
-      errorProducts?.data?.message ||
-      errorProducts?.error ||
+      productsQ.error?.data?.message ||
+      productsQ.error?.error ||
       "Failed to load products from server.";
     return <ErrorMessage message={msg} />;
   }
@@ -167,13 +145,17 @@ export default function ShopPage() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* Left rail: Product types (nav) + filters */}
-        <aside className="lg:col-span-3 space-y-4">
+        {/* Left rail: product type nav + filters */}
+        <aside className="space-y-4 lg:col-span-3">
           <ProductTypeNav
             productTypes={productTypes}
             value={productType}
-            onChange={setProductType}
-            disabled={isFetching}
+            onChange={(v) => {
+              // keep page stable / avoid stale results
+              setPage(1);
+              setProductType(v);
+            }}
+            disabled={productsQ.isFetching}
           />
 
           {activeFilterConfig ? (
@@ -182,7 +164,7 @@ export default function ShopPage() {
                 config={activeFilterConfig}
                 selectedFilters={filters}
                 onToggle={toggleFilterValue}
-                disabled={isFetching}
+                disabled={productsQ.isFetching}
                 valueLabelMaps={{ categoryKeys: categoryLabelByKey }}
                 onClearAll={clearAllFilters}
                 hasActiveFilters={hasActiveFilters}
@@ -196,19 +178,16 @@ export default function ShopPage() {
         </aside>
 
         {/* Results */}
-        <section className="lg:col-span-9 space-y-4">
-          {/* Meta row */}
+        <section className="space-y-4 lg:col-span-9">
           <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
             <span className="whitespace-nowrap">{showingText}</span>
-
-            {pagination && (
+            {pagination ? (
               <span className="whitespace-nowrap">
                 Page {pagination.page} / {pagination.totalPages}
               </span>
-            )}
+            ) : null}
           </div>
 
-          {/* Products grid */}
           {products.length === 0 ? (
             <p className="text-sm text-slate-500">
               No products available for this selection.
@@ -221,19 +200,19 @@ export default function ShopPage() {
             </div>
           )}
 
-          {/* Pagination */}
           <div className="flex justify-end">
             <Pagination
+              variant="full"
               pagination={pagination}
-              onPageChange={handlePageChange}
+              onPageChange={setPage}
             />
           </div>
 
-          {isFetching && !isLoadingProducts && (
+          {productsQ.isFetching && !productsQ.isLoading ? (
             <p className="text-[11px] text-right text-slate-400">
               Updating products…
             </p>
-          )}
+          ) : null}
         </section>
       </div>
     </div>

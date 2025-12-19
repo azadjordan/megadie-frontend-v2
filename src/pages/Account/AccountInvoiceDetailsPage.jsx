@@ -1,11 +1,13 @@
 // src/pages/Account/AccountInvoiceDetailsPage.jsx
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FiChevronLeft } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 
 import { useGetInvoiceByIdQuery } from "../../features/invoices/invoicesApiSlice";
+import useAccountHeader from "../../hooks/useAccountHeader";
 
 function formatDateTime(iso) {
   try {
@@ -90,14 +92,30 @@ function StatusBadge({ status }) {
       ? "Paid"
       : "Unpaid";
 
-  return <span className={`${base} ${map[status] || map.Unpaid}`}>{label}</span>;
+  return (
+    <span className={`${base} ${map[status] || map.Unpaid}`}>{label}</span>
+  );
+}
+
+function OverdueBadge() {
+  const base =
+    "inline-flex items-center px-2.5 py-1 text-xs font-semibold ring-1 ring-inset leading-none";
+  return (
+    <span
+      className={`${base} rounded-full bg-rose-50 text-rose-800 ring-rose-200`}
+    >
+      Overdue
+    </span>
+  );
 }
 
 function CancelledBadge() {
   const base =
     "inline-flex items-center px-2.5 py-1 text-xs font-semibold ring-1 ring-inset leading-none";
   return (
-    <span className={`${base} rounded-full bg-rose-50 text-rose-800 ring-rose-200`}>
+    <span
+      className={`${base} rounded-full bg-rose-50 text-rose-800 ring-rose-200`}
+    >
       Cancelled
     </span>
   );
@@ -114,13 +132,27 @@ function MetaItem({ label, value, valueClassName = "" }) {
   );
 }
 
+function BackButton({ onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+    >
+      <FiChevronLeft className="h-4 w-4" aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
+
 export default function AccountInvoiceDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { setAccountHeader, clearAccountHeader } = useAccountHeader();
 
   const { data, isLoading, isError, error } = useGetInvoiceByIdQuery(id);
 
-  const invoice = data;
+  const invoice = data?.data ?? data;
   const payments = Array.isArray(invoice?.payments) ? invoice.payments : [];
 
   const paymentsSorted = useMemo(() => {
@@ -136,6 +168,26 @@ export default function AccountInvoiceDetailsPage() {
 
   const pdfComingSoon = true;
 
+  // ✅ Header: title + subtitle, bottom row back only
+  useEffect(() => {
+    setAccountHeader({
+      back: null,
+      title: "Invoice Details",
+      subtitle: "Review invoice details",
+      right: null,
+      bottom: (
+        <div className="flex items-center justify-between gap-3">
+          <BackButton onClick={() => navigate("/account/billing/invoices")}>
+            Back
+          </BackButton>
+          <span />
+        </div>
+      ),
+    });
+
+    return () => clearAccountHeader();
+  }, [setAccountHeader, clearAccountHeader, navigate]);
+
   if (isLoading) {
     return (
       <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -145,46 +197,18 @@ export default function AccountInvoiceDetailsPage() {
   }
 
   if (isError) {
-    return (
-      <div className="space-y-4">
-        {/* Back outside */}
-        <div>
-          <button
-            type="button"
-            onClick={() => navigate("/account/invoices")}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Back
-          </button>
-        </div>
-
-        <ErrorMessage error={error} />
-      </div>
-    );
+    return <ErrorMessage error={error} />;
   }
 
   if (!invoice) {
     return (
-      <div className="space-y-4">
-        {/* Back outside */}
-        <div>
-          <button
-            type="button"
-            onClick={() => navigate("/account/invoices")}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Back
-          </button>
+      <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <div className="text-sm font-semibold text-slate-900">
+          Invoice not found
         </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <div className="text-sm font-semibold text-slate-900">
-            Invoice not found
-          </div>
-          <p className="mt-1 text-sm text-slate-600">
-            The invoice data is missing from the response.
-          </p>
-        </div>
+        <p className="mt-1 text-sm text-slate-600">
+          The invoice data is missing from the response.
+        </p>
       </div>
     );
   }
@@ -205,20 +229,27 @@ export default function AccountInvoiceDetailsPage() {
   const overdue = isOverdue(invoice);
   const cancelled = invoice?.status === "Cancelled";
 
+  const pdfBtn = pdfComingSoon ? (
+    <button
+      type="button"
+      disabled
+      className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 cursor-not-allowed"
+    >
+      PDF (soon)
+    </button>
+  ) : (
+    <a
+      href={`/api/invoices/${id}/pdf`}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+    >
+      View PDF
+    </a>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Back OUTSIDE the invoice document area */}
-      <div>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-        >
-          Back
-        </button>
-      </div>
-
-      {/* Invoice "document" panel (Header + Meta + Summary together) */}
       <div
         className={[
           "relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200",
@@ -234,33 +265,16 @@ export default function AccountInvoiceDetailsPage() {
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <StatusBadge status={paymentStatus} />
+                {overdue ? <OverdueBadge /> : null}
                 {cancelled ? <CancelledBadge /> : null}
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {pdfComingSoon ? (
-                <button
-                  type="button"
-                  disabled
-                  className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 cursor-not-allowed"
-                >
-                  PDF (soon)
-                </button>
-              ) : (
-                <a
-                  href={`/api/invoices/${id}/pdf`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  View PDF
-                </a>
-              )}
-            </div>
+            {/* ✅ PDF moved to invoice body top-right */}
+            <div className="shrink-0">{pdfBtn}</div>
           </div>
 
-          {/* Meta */}
+          {/* ✅ 3 columns: Created + Due date + Linked order */}
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <MetaItem label="Created" value={formatDateTime(invoice?.createdAt)} />
 
@@ -275,13 +289,23 @@ export default function AccountInvoiceDetailsPage() {
             <MetaItem
               label="Order"
               value={
-                orderId && orderNumber ? (
-                  <Link
-                    to={`/account/orders/${orderId}`}
-                    className="font-semibold text-slate-900 hover:underline"
-                  >
-                    {orderNumber}
-                  </Link>
+                orderId ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Link
+                      to={`/account/billing/orders/${orderId}`}
+                      className="font-semibold text-slate-900 hover:underline truncate"
+                      title={orderNumber || "View order"}
+                    >
+                      {orderNumber || "View order"}
+                    </Link>
+
+                    <Link
+                      to={`/account/billing/orders/${orderId}`}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-50"
+                    >
+                      View
+                    </Link>
+                  </div>
                 ) : (
                   "—"
                 )
@@ -290,7 +314,6 @@ export default function AccountInvoiceDetailsPage() {
           </div>
         </div>
 
-        {/* Summary merged into same panel */}
         <div className="border-t border-slate-200 p-5">
           <div className="text-sm font-semibold text-slate-900">Summary</div>
 
@@ -319,7 +342,6 @@ export default function AccountInvoiceDetailsPage() {
         </div>
       </div>
 
-      {/* Payments */}
       <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200">
           <div className="text-sm font-semibold text-slate-900">Payments</div>

@@ -1,11 +1,15 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+// src/pages/Account/AccountOrderDetailsPage.jsx
+import { useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { FiChevronLeft } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 
 import { useGetOrderByIdQuery } from "../../features/orders/ordersApiSlice";
+import useAccountHeader from "../../hooks/useAccountHeader";
 
-function formatDate(iso) {
+function formatDateTime(iso) {
   try {
     return new Date(iso).toLocaleString(undefined, {
       year: "numeric",
@@ -34,14 +38,66 @@ function StatusBadge({ status }) {
   );
 }
 
+function MetaItem({ label, value }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="text-xs font-semibold text-slate-600">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function BackButton({ onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+    >
+      <FiChevronLeft className="h-4 w-4" aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
+
 export default function AccountOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { setAccountHeader, clearAccountHeader } = useAccountHeader();
 
-  const { data, isLoading, isError, error, refetch, isFetching } =
-    useGetOrderByIdQuery(id);
+  const { data, isLoading, isError, error, refetch } = useGetOrderByIdQuery(id);
 
-  const order = data?.data;
+  // ✅ handle both response shapes (if backend returns order directly)
+  const order = data?.data ?? data;
+
+  // ✅ compute invoiceId BEFORE useEffect so header can use it
+  const invoiceId =
+    order?.invoice?._id ||
+    (typeof order?.invoice === "string" ? order.invoice : null);
+
+  useEffect(() => {
+    const backTarget = () =>
+      invoiceId
+        ? navigate(`/account/billing/invoices/${invoiceId}`)
+        : navigate("/account/billing/invoices");
+
+    setAccountHeader({
+      back: null,
+      title: "Order Details",
+      subtitle: "Review items and order information.",
+      right: null,
+      bottom: (
+        <div className="flex items-center justify-between gap-3">
+          <BackButton onClick={backTarget}>
+            {invoiceId ? "Back to Invoice" : "Back"}
+          </BackButton>
+          <span />
+        </div>
+      ),
+    });
+
+    return () => clearAccountHeader();
+  }, [setAccountHeader, clearAccountHeader, navigate, invoiceId]);
 
   if (isLoading) {
     return (
@@ -54,15 +110,8 @@ export default function AccountOrderDetailsPage() {
   if (isError) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/account/orders")}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Back
-          </button>
-
+        <ErrorMessage error={error} />
+        <div>
           <button
             type="button"
             onClick={() => refetch()}
@@ -71,86 +120,45 @@ export default function AccountOrderDetailsPage() {
             Retry
           </button>
         </div>
-
-        <ErrorMessage error={error} />
       </div>
     );
   }
-
-  const invoiceId =
-    order?.invoice?._id ||
-    (typeof order?.invoice === "string" ? order.invoice : null);
-  const invoiceNumber = order?.invoice?.invoiceNumber || null;
 
   const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {order?.orderNumber || "Order details"}
-          </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <StatusBadge status={order?.status} />
-            <div className="text-sm text-slate-600">
-              Created:{" "}
-              <span className="text-slate-900">
-                {formatDate(order?.createdAt)}
-              </span>
-            </div>
-            {order?.deliveredAt ? (
-              <div className="text-sm text-slate-600">
-                Delivered:{" "}
-                <span className="text-slate-900">
-                  {formatDate(order?.deliveredAt)}
-                </span>
+      <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 overflow-hidden">
+        <div className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-semibold text-slate-900">
+                {order?.orderNumber || "Order details"}
+              </h1>
+
+              {/* ✅ Keep only status here (no dates mixed into the badge row) */}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <StatusBadge status={order?.status} />
               </div>
-            ) : null}
+
+              {/* ✅ Clean meta area: Created + Delivered (if available) */}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <MetaItem
+                  label="Created"
+                  value={order?.createdAt ? formatDateTime(order.createdAt) : "—"}
+                />
+                <MetaItem
+                  label="Delivered"
+                  value={
+                    order?.deliveredAt ? formatDateTime(order.deliveredAt) : "—"
+                  }
+                />
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Back
-          </button>
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
       </div>
 
-      {/* Invoice link */}
-      <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <div className="text-sm font-semibold text-slate-900">Invoice</div>
-        <div className="mt-2 text-sm text-slate-700">
-          {invoiceId ? (
-            <>
-              <Link
-                to={`/account/invoices/${invoiceId}`}
-                className="font-semibold text-slate-900 hover:underline"
-              >
-                {invoiceNumber || "View invoice"}
-              </Link>
-              <span className="text-slate-500"> (payments and PDF inside)</span>
-            </>
-          ) : (
-            <span className="text-slate-600">Not generated yet.</span>
-          )}
-        </div>
-      </div>
-
-      {/* Items */}
       <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
@@ -179,7 +187,7 @@ export default function AccountOrderDetailsPage() {
 
             return (
               <div
-                key={`${order?._id}-${idx}`}
+                key={`${order?._id || "order"}-${idx}`}
                 className="grid grid-cols-12 items-center px-5 py-3 text-sm text-slate-800 border-t border-slate-200"
               >
                 <div className="col-span-9 min-w-0">

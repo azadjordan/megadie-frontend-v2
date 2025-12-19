@@ -1,5 +1,5 @@
 // src/components/layout/Header.jsx
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
@@ -34,6 +34,29 @@ export default function Header() {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const drawerRef = useRef(null)
+
+  // ✅ measure header height -> CSS var for layouts below
+  const headerRef = useRef(null)
+  useLayoutEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+
+    const apply = () => {
+      const h = el.getBoundingClientRect().height
+      document.documentElement.style.setProperty('--app-header-h', `${h}px`)
+    }
+
+    apply()
+
+    const ro = new ResizeObserver(() => apply())
+    ro.observe(el)
+
+    window.addEventListener('resize', apply)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', apply)
+    }
+  }, [])
 
   // Cart count
   const count = useSelector((state) =>
@@ -106,7 +129,7 @@ export default function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-white shadow-sm">
+    <header ref={headerRef} className="sticky top-0 z-50 bg-white shadow-sm">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         {/* Logo */}
         <Link to="/" className="text-xl font-semibold tracking-tight text-slate-900">

@@ -1,5 +1,5 @@
 // src/pages/Account/AccountInvoicesPage.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import Loader from "../../components/common/Loader";
@@ -7,6 +7,7 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
 
 import { useGetMyInvoicesQuery } from "../../features/invoices/invoicesApiSlice";
+import useAccountHeader from "../../hooks/useAccountHeader";
 
 function formatDate(iso) {
   try {
@@ -20,12 +21,11 @@ function formatDate(iso) {
   }
 }
 
-/**
- * Currency-agnostic minor-units formatting
- */
+/** Currency-agnostic minor-units formatting */
 function moneyMinor(amountMinor, currency = "AED", factor = 100) {
   if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
     return "—";
+
   const f = typeof factor === "number" && factor > 0 ? factor : 100;
   const major = amountMinor / f;
 
@@ -44,19 +44,15 @@ function moneyMinor(amountMinor, currency = "AED", factor = 100) {
  * overdue if dueDate < now AND balanceDueMinor > 0 AND invoice.status !== "Cancelled"
  */
 function isOverdue(inv) {
-  if (!inv) return false;
-  if (inv.status === "Cancelled") return false;
+  if (!inv || inv.status === "Cancelled") return false;
 
-  const due = inv.dueDate ? new Date(inv.dueDate).getTime() : null;
-  if (!due || Number.isNaN(due)) return false;
-
-  const paid = typeof inv.paidTotalMinor === "number" ? inv.paidTotalMinor : 0;
-  const amount = typeof inv.amountMinor === "number" ? inv.amountMinor : 0;
+  const due = inv.dueDate ? Date.parse(inv.dueDate) : NaN;
+  if (!Number.isFinite(due)) return false;
 
   const balance =
     typeof inv.balanceDueMinor === "number"
       ? inv.balanceDueMinor
-      : Math.max(amount - paid, 0);
+      : Math.max((inv.amountMinor || 0) - (inv.paidTotalMinor || 0), 0);
 
   if (balance <= 0) return false;
   if (inv.paymentStatus === "Paid") return false;
@@ -86,6 +82,14 @@ function StatusBadge({ status }) {
   );
 }
 
+function Pill({ children }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
+      {children}
+    </span>
+  );
+}
+
 function Toggle({ checked, onChange, label, disabled }) {
   return (
     <label
@@ -103,13 +107,12 @@ function Toggle({ checked, onChange, label, disabled }) {
         aria-disabled={disabled}
         disabled={disabled}
         onClick={() => {
-          if (disabled) return;
-          onChange(!checked);
+          if (!disabled) onChange(!checked);
         }}
         className={[
           "relative inline-flex h-6 w-11 items-center rounded-full transition",
           disabled ? "cursor-not-allowed" : "cursor-pointer",
-          checked ? "bg-slate-900" : "bg-slate-200",
+          checked ? "bg-slate-900" : "bg-slate-300",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
         ].join(" ")}
       >
@@ -124,29 +127,72 @@ function Toggle({ checked, onChange, label, disabled }) {
   );
 }
 
+function invoiceTitle(inv) {
+  if (inv.invoiceNumber) return inv.invoiceNumber;
+  return `Invoice #${String(inv._id).slice(-6).toUpperCase()}`;
+}
+
+// ✅ best-practice: simple, global page scroll (not “scroll to cards”)
+function scrollToPageTop() {
+  window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+}
+
 export default function AccountInvoicesPage() {
+  const { setAccountHeader, clearAccountHeader } = useAccountHeader();
+
   const [page, setPage] = useState(1);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
 
-  const { data, isLoading, isError, error, refetch, isFetching } =
-    useGetMyInvoicesQuery({ page, unpaid: unpaidOnly });
+  const q = useGetMyInvoicesQuery({ page, unpaid: unpaidOnly });
 
-  const invoices = useMemo(() => data?.items || [], [data]);
-
-  const toggleDisabled = !data || invoices.length === 0;
+  const invoices = q.data?.items ?? [];
+  const toggleDisabled = !q.data || invoices.length === 0;
 
   const pagination = useMemo(() => {
-    if (!data) return null;
-
+    if (!q.data) return null;
+    const cur = q.data.page || 1;
+    const total = q.data.pages || 1;
     return {
-      page: data.page || 1,
-      totalPages: data.pages || 1,
-      hasPrev: (data.page || 1) > 1,
-      hasNext: (data.page || 1) < (data.pages || 1),
+      page: cur,
+      totalPages: total,
+      hasPrev: cur > 1,
+      hasNext: cur < total,
     };
-  }, [data]);
+  }, [q.data]);
 
-  if (isLoading) {
+  useEffect(() => {
+    setAccountHeader({
+      title: "Invoices & Orders",
+      subtitle:
+        "Invoices show status, payments, and link to the related order.",
+      right: null,
+      bottom: (
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <Toggle
+            checked={unpaidOnly}
+            onChange={(v) => {
+              if (toggleDisabled) return;
+              scrollToPageTop(); // ✅ very top of the page
+              setPage(1);
+              setUnpaidOnly(v);
+            }}
+            label="Unpaid only"
+            disabled={toggleDisabled}
+          />
+        </div>
+      ),
+    });
+
+    return () => clearAccountHeader();
+  }, [setAccountHeader, clearAccountHeader, unpaidOnly, toggleDisabled]);
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage === page) return;
+    scrollToPageTop(); // ✅ very top of the page
+    setPage(nextPage);
+  };
+
+  if (q.isLoading) {
     return (
       <div className="rounded-2xl bg-white p-6 shadow-sm">
         <Loader />
@@ -154,68 +200,25 @@ export default function AccountInvoicesPage() {
     );
   }
 
-  if (isError) {
+  if (q.isError) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              My Invoices
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              View invoice status and payments.
-            </p>
-          </div>
-
+        <ErrorMessage error={q.error} />
+        <div>
           <button
             type="button"
-            onClick={() => refetch()}
+            onClick={q.refetch}
             className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
           >
             Retry
           </button>
         </div>
-
-        <ErrorMessage error={error} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">My Invoices</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            View invoice status and payments.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <Toggle
-            checked={unpaidOnly}
-            onChange={(v) => {
-              if (toggleDisabled) return;
-              setPage(1);
-              setUnpaidOnly(v);
-            }}
-            label="Show Unpaid only"
-            disabled={toggleDisabled}
-          />
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {isFetching ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-      </div>
-
-      {/* Empty */}
+    <div className="pb-6">
       {invoices.length === 0 ? (
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="text-sm font-semibold text-slate-900">
@@ -247,21 +250,16 @@ export default function AccountInvoicesPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-3">
                         <StatusBadge status={inv.paymentStatus} />
-
+                        {overdue ? <Pill>Overdue</Pill> : null}
                         {inv.status === "Cancelled" ? (
-                          <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200">
-                            Cancelled
-                          </span>
+                          <Pill>Cancelled</Pill>
                         ) : null}
 
                         <Link
-                          to={`/account/invoices/${inv._id}`}
+                          to={`/account/billing/invoices/${inv._id}`}
                           className="text-sm font-semibold text-slate-900 hover:underline"
                         >
-                          {inv.invoiceNumber ||
-                            `Invoice #${String(inv._id)
-                              .slice(-6)
-                              .toUpperCase()}`}
+                          {invoiceTitle(inv)}
                         </Link>
 
                         <div className="text-xs text-slate-500">
@@ -269,30 +267,13 @@ export default function AccountInvoicesPage() {
                         </div>
                       </div>
 
-                      <div className="mt-3 grid gap-2 text-sm text-slate-700">
-                        {/* Balance (primary number) */}
+                      {/* ✅ Compact row: Balance due + Due date */}
+                      <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
                         <div className="text-base font-semibold text-slate-900">
-                          Balance due:{" "}
-                          {moneyMinor(inv.balanceDueMinor, currency, factor)}
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                          <div>
-                            Amount:{" "}
-                            <span className="font-semibold text-slate-900">
-                              {moneyMinor(inv.amountMinor, currency, factor)}
-                            </span>
-                          </div>
-                          <div>
-                            Paid:{" "}
-                            <span className="font-semibold text-slate-900">
-                              {moneyMinor(
-                                inv.paidTotalMinor,
-                                currency,
-                                factor
-                              )}
-                            </span>
-                          </div>
+                          Amount:{" "}
+                          <span className="tabular-nums">
+                            {moneyMinor(inv.amountMinor, currency, factor)}
+                          </span>
                         </div>
 
                         <div
@@ -312,10 +293,10 @@ export default function AccountInvoicesPage() {
 
                     <div className="shrink-0">
                       <Link
-                        to={`/account/invoices/${inv._id}`}
+                        to={`/account/billing/invoices/${inv._id}`}
                         className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                       >
-                        View invoice
+                        Details
                       </Link>
                     </div>
                   </div>
@@ -328,7 +309,7 @@ export default function AccountInvoicesPage() {
             <div className="pt-2">
               <Pagination
                 pagination={pagination}
-                onPageChange={(p) => setPage(p)}
+                onPageChange={handlePageChange}
               />
             </div>
           ) : null}
