@@ -1,24 +1,16 @@
 // src/pages/Admin/AdminRequestDetailsPage.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
 
-/**
- * Procedural Admin Quote Details (UI-first, temp example data)
- *
- * Flow:
- * 1) Select user
- * 2) Modify items (qty + unit price) — no add/remove
- * 3) Notes
- * 4) Answer confirmation question (required every visit) => determines status on update
- * 5) Actions (at bottom): Update Quote + Create Order (only if confirmed AND order not created)
- *
- * Updates per notes:
- * - Actions moved to bottom (after admin reviews everything).
- * - Create Order enabled only if Step 4 answered "Confirmed" AND no order exists yet.
- * - Show clear "Order already created" indicator if an order exists for this request.
- * - No link to view the created order (not referenced in model).
- */
+import Loader from "../../components/common/Loader";
+import ErrorMessage from "../../components/common/ErrorMessage";
+
+import {
+  useGetQuoteByIdQuery,
+  useUpdateQuoteByAdminMutation,
+} from "../../features/quotes/quotesApiSlice";
+import { useGetAdminUsersQuery } from "../../features/auth/usersApiSlice";
 
 function formatDateTime(iso) {
   try {
@@ -66,17 +58,37 @@ function money(amount, currency = "AED") {
   }
 }
 
-function parseNonNegNumber(value) {
+/**
+ * API may return populated docs using { id } instead of { _id }.
+ * This helper safely extracts ids from either shape.
+ */
+function getId(v) {
+  if (!v) return "";
+  if (typeof v === "string") return v;
+  return String(v._id || v.id || "");
+}
+
+/**
+ * ✅ IMPORTANT UX RULE:
+ * Inputs must allow clearing completely while typing ("" is allowed),
+ * and "0" is valid.
+ *
+ * parseNullableNumber:
+ * - "" / null / undefined => null (meaning "incomplete")
+ * - valid number => number
+ */
+function parseNullableNumber(value) {
   if (value === "" || value == null) return null;
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
-  return Math.max(0, n);
+  return n;
 }
 
 function sumItems(items) {
   return (items || []).reduce((sum, it) => {
-    const qty = parseNonNegNumber(it.qtyStr);
-    const unit = parseNonNegNumber(it.unitPriceStr);
+    const qty = parseNullableNumber(it.qtyStr);
+    const unit = parseNullableNumber(it.unitPriceStr);
+    // allow empty while typing; treat empty as 0 for preview only
     const q = qty == null ? 0 : qty;
     const u = unit == null ? 0 : unit;
     return sum + q * u;
@@ -85,20 +97,50 @@ function sumItems(items) {
 
 function Step({ n, title, subtitle, children }) {
   return (
-    <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+    <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
+      <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="grid h-6 w-6 place-items-center rounded-lg bg-slate-900 text-xs font-semibold text-white">
             {n}
           </div>
           <div className="text-sm font-semibold text-slate-900">{title}</div>
         </div>
-        {subtitle ? (
-          <div className="mt-1 text-xs text-slate-500">{subtitle}</div>
-        ) : null}
-      </div>
+        {subtitle ? <div className="mt-1 text-xs text-slate-500">{subtitle}</div> : null}
+      </header>
       <div className="p-4">{children}</div>
-    </div>
+    </section>
+  );
+}
+
+function StatusChoiceButton({ disabled, active, tone, onClick, children }) {
+  const tones = {
+    slate: active
+      ? "bg-slate-900 text-white ring-slate-900"
+      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
+    blue: active
+      ? "bg-blue-50 text-blue-800 ring-blue-200"
+      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
+    emerald: active
+      ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
+    rose: active
+      ? "bg-rose-50 text-rose-800 ring-rose-200"
+      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={[
+        "rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-inset transition",
+        tones[tone] || tones.slate,
+        disabled ? "cursor-not-allowed opacity-60" : "",
+      ].join(" ")}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -106,311 +148,348 @@ export default function AdminRequestDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  /**
-   * TEMP example data for UI prototyping.
-   * Backend later:
-   * - fetch quote by id
-   * - for "order created" indicator: either
-   *   a) backend includes a derived flag (orderCreated: true/false), OR
-   *   b) backend provides orderId reference, OR
-   *   c) backend endpoint checks existence of order by quoteId
-   */
-  const { quote, userOptions } = useMemo(() => {
-    const userOptionsLocal = [
-      {
-        _id: "u1",
-        name: "Ahmed Hassan",
-        email: "ahmed@example.com",
-        phone: "+971 50 000 0000",
-      },
-      {
-        _id: "u2",
-        name: "Sara Ali",
-        email: "sara@example.com",
-        phone: "+971 52 000 0000",
-      },
-      {
-        _id: "u3",
-        name: "Mohamed Youssef",
-        email: "mohamed@example.com",
-        phone: "+971 55 000 0000",
-      },
-    ];
+  const {
+    data: quoteResult,
+    isLoading: isQuoteLoading,
+    isError: isQuoteError,
+    error: quoteError,
+    isFetching: isQuoteFetching,
+  } = useGetQuoteByIdQuery(id, { skip: !id });
 
-    const examples = [
-      {
-        _id: "q_1001",
-        createdAt: "2025-01-18T09:42:00Z",
-        updatedAt: "2025-01-18T10:05:00Z",
-        status: "Processing",
-        deliveryCharge: 50,
-        extraFee: 0,
-        adminToAdminNote: "Customer prefers delivery between 2–5 PM.",
-        clientToAdminNote: "Need it urgently for next week.",
-        adminToClientNote: "",
-        requestedItems: [
-          { product: { _id: "p1", name: "Premium Dates Box (1kg)" }, qty: 2, unitPrice: 300 },
-          { product: { _id: "p2", name: "Arabic Coffee Beans (500g)" }, qty: 1, unitPrice: 650 },
-        ],
-        user: userOptionsLocal[0],
+  const quote = quoteResult?.data;
 
-        // TEMP indicator (since model doesn’t reference order)
-        orderCreated: false,
-      },
-      {
-        _id: "q_1003",
-        createdAt: "2025-01-16T11:30:00Z",
-        updatedAt: "2025-01-16T13:12:00Z",
-        status: "Quoted",
-        deliveryCharge: 0,
-        extraFee: 0,
-        adminToAdminNote: "Waiting for client confirmation via WhatsApp.",
-        clientToAdminNote: "Ok, please send invoice.",
-        adminToClientNote: "Sure—confirm and we’ll proceed.",
-        requestedItems: [
-          { product: { _id: "p3", name: "Mixed Nuts Tray (Large)" }, qty: 5, unitPrice: 400 },
-        ],
-        user: userOptionsLocal[2],
+  const {
+    data: usersResult,
+    isLoading: isUsersLoading,
+    isError: isUsersError,
+    error: usersError,
+  } = useGetAdminUsersQuery();
 
-        // Show the “already created” state
-        orderCreated: true,
-      },
-    ];
+  const users = usersResult?.data || [];
 
-    return {
-      quote: examples.find((x) => x._id === id) || examples[0],
-      userOptions: userOptionsLocal,
-    };
-  }, [id]);
+  const [updateQuoteByAdmin, { isLoading: isUpdating, error: updateError }] =
+    useUpdateQuoteByAdminMutation();
 
-  // Step 1: User selection
-  const [userId, setUserId] = useState(quote.user?._id || "");
-  const selectedUser = useMemo(
-    () => userOptions.find((u) => u._id === userId) || null,
-    [userId, userOptions]
+  // Step 1
+  const [userId, setUserId] = useState("");
+
+  // Step 2: qty + unit price only
+  // Each item: { productId, sku, qtyStr, unitPriceStr }
+  const [items, setItems] = useState([]);
+
+  // Step 2 (charges) - allow "" while typing
+  const [deliveryChargeStr, setDeliveryChargeStr] = useState("0");
+  const [extraFeeStr, setExtraFeeStr] = useState("0");
+
+  // Step 3
+  const [adminToAdminNote, setAdminToAdminNote] = useState("");
+  const [adminToClientNote, setAdminToClientNote] = useState("");
+
+  // Step 4 (required deliberate decision)
+  const [statusDecision, setStatusDecision] = useState("");
+
+  // Init from quote
+  useEffect(() => {
+    if (!quote) return;
+
+    setUserId(getId(quote.user));
+
+    setItems(
+      (quote.requestedItems || []).map((it) => {
+        const productId = getId(it.product);
+        const sku =
+          typeof it.product === "object" && it.product ? it.product.sku || "" : "";
+        return {
+          productId,
+          sku,
+          qtyStr: String(Number(it.qty ?? 0)),
+          unitPriceStr: String(Number(it.unitPrice ?? 0)),
+        };
+      })
+    );
+
+    setDeliveryChargeStr(String(Number(quote.deliveryCharge ?? 0)));
+    setExtraFeeStr(String(Number(quote.extraFee ?? 0)));
+    setAdminToAdminNote(quote.adminToAdminNote || "");
+    setAdminToClientNote(quote.adminToClientNote || "");
+
+    // must be chosen deliberately each visit/update session
+    setStatusDecision("");
+  }, [quote?.id, quote?._id]);
+
+  const selectedUser = useMemo(() => {
+    const uid = String(userId || "");
+    return users.find((u) => String(u._id || u.id) === uid) || null;
+  }, [users, userId]);
+
+  const backendStatus = quote?.status || "Processing";
+
+  // keep for business logic: lock if already converted to order
+  const orderCreated = Boolean(quote?.order);
+  const quoteLocked = orderCreated;
+
+  const hasMissingProductId = useMemo(
+    () => (items || []).some((it) => !it.productId),
+    [items]
   );
 
-  // Step 2: Items (store strings so inputs can be cleared)
-  const [items, setItems] = useState(() =>
-    (quote.requestedItems || []).map((it) => ({
-      product: it.product,
-      qtyStr: String(Number(it.qty || 0)),
-      unitPriceStr: String(Number(it.unitPrice || 0)),
-    }))
-  );
-
-  // Step 3: Notes
-  const [adminToAdminNote, setAdminToAdminNote] = useState(
-    quote.adminToAdminNote || ""
-  );
-  const [adminToClientNote, setAdminToClientNote] = useState(
-    quote.adminToClientNote || ""
-  );
-
-  // Charges (strings to allow clearing)
-  const [deliveryChargeStr, setDeliveryChargeStr] = useState(
-    String(Number(quote.deliveryCharge || 0))
-  );
-  const [extraFeeStr, setExtraFeeStr] = useState(
-    String(Number(quote.extraFee || 0))
-  );
-
-  // Step 4: Confirmation question (required every visit: NO DEFAULT)
-  const [confirmationAnswer, setConfirmationAnswer] = useState("");
-
-  // Derived status for context + actions
-  const derivedStatus = useMemo(() => {
-    if (confirmationAnswer === "cancelled") return "Cancelled";
-    if (confirmationAnswer === "yes") return "Confirmed";
-    if (confirmationAnswer === "no") return "Quoted";
-    // unanswered: show doc status for context only
-    return quote.status || "Processing";
-  }, [confirmationAnswer, quote.status]);
-
+  // Preview totals treat empty as 0 (UX), but update validation treats empty as invalid (incomplete)
   const itemsTotal = sumItems(items);
-  const deliveryCharge = parseNonNegNumber(deliveryChargeStr) ?? 0;
-  const extraFee = parseNonNegNumber(extraFeeStr) ?? 0;
-  const totalPrice = Math.max(0, itemsTotal + deliveryCharge + extraFee);
+
+  const deliveryChargePreview = parseNullableNumber(deliveryChargeStr) ?? 0;
+  const extraFeePreview = parseNullableNumber(extraFeeStr) ?? 0;
+  const totalPreview = Math.max(0, itemsTotal + deliveryChargePreview + extraFeePreview);
 
   const canUpdateQuote = useMemo(() => {
+    const quoteId = quote?.id || quote?._id;
+    if (!quoteId) return false;
+    if (quoteLocked) return false;
+
+    // Step 1
     if (!userId) return false;
+
+    // Step 2
     if (!items.length) return false;
-    if (confirmationAnswer === "") return false;
+    if (hasMissingProductId) return false;
 
     for (const it of items) {
-      const qty = parseNonNegNumber(it.qtyStr);
-      const unit = parseNonNegNumber(it.unitPriceStr);
+      const qty = parseNullableNumber(it.qtyStr);
+      const unit = parseNullableNumber(it.unitPriceStr);
+
+      // ✅ allow 0, but do NOT allow empty at save time
       if (qty == null || unit == null) return false;
-      if (qty < 1) return false;
+
+      // ✅ allow 0 for qty/unitPrice
+      if (qty < 0) return false;
       if (unit < 0) return false;
     }
-    if (parseNonNegNumber(deliveryChargeStr) == null) return false;
-    if (parseNonNegNumber(extraFeeStr) == null) return false;
+
+    // ✅ charges can be 0; but cannot be empty at save time
+    const delivery = parseNullableNumber(deliveryChargeStr);
+    const extra = parseNullableNumber(extraFeeStr);
+    if (delivery == null || extra == null) return false;
+    if (delivery < 0 || extra < 0) return false;
+
+    // Step 4 required deliberate decision
+    if (!statusDecision) return false;
 
     return true;
-  }, [userId, items, deliveryChargeStr, extraFeeStr, confirmationAnswer]);
+  }, [
+    quote?.id,
+    quote?._id,
+    quoteLocked,
+    userId,
+    items,
+    hasMissingProductId,
+    deliveryChargeStr,
+    extraFeeStr,
+    statusDecision,
+  ]);
 
-  const finalStatus = useMemo(() => {
-    if (confirmationAnswer === "yes") return "Confirmed";
-    if (confirmationAnswer === "cancelled") return "Cancelled";
-    if (confirmationAnswer === "no") return "Quoted";
-    return quote.status || "Processing";
-  }, [confirmationAnswer, quote.status]);
+  const onUpdateQuote = async () => {
+    if (!canUpdateQuote) return;
 
-  const orderCreated = Boolean(quote.orderCreated);
-
-  const canCreateOrder = finalStatus === "Confirmed" && !orderCreated;
-
-  const onUpdateQuote = () => {
-    if (!canUpdateQuote) {
-      alert("Please complete the procedure before updating the quote.");
+    if (hasMissingProductId) {
+      alert(
+        "One or more items are missing product IDs. This quote may reference deleted products."
+      );
       return;
     }
 
+    const quoteId = quote?.id || quote?._id;
+
     const payload = {
+      id: quoteId,
       user: userId,
       requestedItems: items.map((it) => ({
-        product: it.product?._id,
-        qty: Number(it.qtyStr),
+        product: it.productId,
+        qty: Number(it.qtyStr), // "" won't pass canUpdateQuote
         unitPrice: Number(it.unitPriceStr),
       })),
       deliveryCharge: Number(deliveryChargeStr),
       extraFee: Number(extraFeeStr),
       adminToAdminNote,
       adminToClientNote,
-      status:
-        confirmationAnswer === "yes"
-          ? "Confirmed"
-          : confirmationAnswer === "cancelled"
-          ? "Cancelled"
-          : "Quoted",
+      status: statusDecision,
     };
 
-    console.log("UPDATE QUOTE payload (UI only):", payload);
-    alert(`Updated (UI only).\nStatus would become: ${payload.status}`);
+    try {
+      await updateQuoteByAdmin(payload).unwrap();
+      setStatusDecision(""); // must be re-chosen on next update
+    } catch {
+      // ErrorMessage will show it
+    }
   };
 
-  const onCreateOrder = () => {
-    if (!canCreateOrder) return;
-    alert("Create order (UI only). Later: POST create order from quote.");
-  };
+  if (isQuoteLoading) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (isQuoteError) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+        <ErrorMessage error={quoteError} />
+      </div>
+    );
+  }
+
+  if (!quote) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+        <div className="text-sm text-slate-700">Quote not found.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      {/* Header (no actions on the right anymore) */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <button
-            type="button"
-            onClick={() => navigate("/admin/requests")}
-            className="mb-2 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
-          >
-            <FiChevronLeft className="h-4 w-4" />
-            Back to requests
-          </button>
+      {/* Header */}
+      <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <button
+          type="button"
+          onClick={() => navigate("/admin/requests")}
+          className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
+        >
+          <FiChevronLeft className="h-4 w-4" />
+          Back to requests
+        </button>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-lg font-semibold text-slate-900">Quote Details</div>
-            <span className="text-xs text-slate-400">•</span>
-            <div className="text-sm font-semibold text-slate-700">{quote._id}</div>
-            <span className="text-xs text-slate-400">•</span>
-            <StatusBadge status={derivedStatus} />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-lg font-semibold text-slate-900">Quote Details</div>
 
-            <span className="text-xs text-slate-400">•</span>
-            <span
-              className={[
-                "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset",
-                orderCreated
-                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                  : "bg-slate-50 text-slate-700 ring-slate-200",
-              ].join(" ")}
-            >
-              {orderCreated ? "Order created" : "No order yet"}
-            </span>
+          <span className="text-xs text-slate-400">•</span>
+          <div className="text-sm font-semibold text-slate-700">
+            {quote?.id || quote?._id}
           </div>
 
-          <div className="mt-1 text-sm text-slate-500">
-            Created {formatDateTime(quote.createdAt)} • Updated {formatDateTime(quote.updatedAt)}
-          </div>
+          <span className="text-xs text-slate-400">•</span>
+          <StatusBadge status={backendStatus} />
+
+          {isQuoteFetching ? (
+            <>
+              <span className="text-xs text-slate-400">•</span>
+              <span className="text-xs text-slate-400">Refreshing…</span>
+            </>
+          ) : null}
         </div>
+
+        <div className="mt-1 text-sm text-slate-500">
+          Created {formatDateTime(quote.createdAt)} • Updated{" "}
+          {formatDateTime(quote.updatedAt)}
+        </div>
+
+        {quoteLocked ? (
+          <div className="mt-3 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+            <div className="text-xs font-semibold text-amber-900">Locked</div>
+            <div className="mt-1 text-xs text-amber-900/80">
+              This quote already has an order, so editing is disabled.
+            </div>
+          </div>
+        ) : null}
+
+        {hasMissingProductId ? (
+          <div className="mt-3 rounded-xl bg-rose-50 p-3 ring-1 ring-rose-200">
+            <div className="text-xs font-semibold text-rose-800">Data issue</div>
+            <div className="mt-1 text-xs text-rose-800/80">
+              One or more items are missing a product reference (product may have been deleted).
+              Updating is blocked until fixed.
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      {/* Two-column: steps + live summary */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
+      {/* Layout */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
         {/* Steps */}
         <div className="space-y-4">
           {/* Step 1 */}
           <Step
             n={1}
             title="Select user"
-            subtitle="Pick who owns this quote. (Admins can update it if needed.)"
+            subtitle="Assign (or re-assign) the owner of this quote."
           >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">User</label>
-                <select
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                >
-                  <option value="">Select a user…</option>
-                  {userOptions.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {u.name} — {u.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                <div className="text-xs font-semibold text-slate-600">Selected user</div>
-                <div className="mt-1 text-sm font-semibold text-slate-900">
-                  {selectedUser?.name || "—"}
+            {isUsersLoading ? (
+              <Loader />
+            ) : isUsersError ? (
+              <ErrorMessage error={usersError} />
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    User
+                  </label>
+                  <select
+                    value={userId}
+                    onChange={(e) => setUserId(e.target.value)}
+                    disabled={quoteLocked}
+                    className={[
+                      "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                      quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
+                    ].join(" ")}
+                  >
+                    <option value="">Select a user…</option>
+                    {users.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.name} — {u.email}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="text-xs text-slate-600">{selectedUser?.email || "—"}</div>
-                <div className="text-xs text-slate-600">{selectedUser?.phone || "—"}</div>
+
+                <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                  <div className="text-xs font-semibold text-slate-600">
+                    Selected user
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {selectedUser?.name || "—"}
+                  </div>
+                  <div className="text-xs text-slate-600">{selectedUser?.email || "—"}</div>
+                  <div className="text-xs text-slate-600">
+                    {selectedUser?.phoneNumber || "—"}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </Step>
 
           {/* Step 2 */}
-          <Step
-            n={2}
-            title="Modify items"
-            subtitle="Update quantity and unit price for each product."
-          >
+          <Step n={2} title="Pricing & quantities" subtitle="All values can be 0.">
             <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
+              <table className="min-w-full table-fixed text-left text-sm">
                 <thead className="text-xs font-semibold text-slate-500">
                   <tr className="border-b border-slate-200">
-                    <th className="py-2 pr-3">Product</th>
-                    <th className="py-2 pr-3">Qty</th>
-                    <th className="py-2 pr-3">Unit price</th>
-                    <th className="py-2 pr-3 text-right">Line total</th>
+                    <th className="w-[62%] py-2 pr-3">SKU</th>
+                    <th className="w-[12%] py-2 pr-3">Qty</th>
+                    <th className="w-[12%] py-2 pr-3">Unit</th>
+                    <th className="w-[14%] py-2 pr-3 text-right">Total</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-200">
                   {items.map((it, idx) => {
-                    const qty = parseNonNegNumber(it.qtyStr) ?? 0;
-                    const unit = parseNonNegNumber(it.unitPriceStr) ?? 0;
+                    const qty = parseNullableNumber(it.qtyStr) ?? 0;
+                    const unit = parseNullableNumber(it.unitPriceStr) ?? 0;
                     const lineTotal = qty * unit;
 
                     return (
-                      <tr key={`${it.product?._id || idx}`} className="hover:bg-slate-50">
+                      <tr key={`${it.productId || idx}`} className="hover:bg-slate-50">
                         <td className="py-3 pr-3">
-                          <div className="font-semibold text-slate-900">
-                            {it.product?.name || "—"}
+                          <div className="text-xs font-semibold text-slate-900">
+                            {it.sku || "—"}
                           </div>
-                          <div className="text-xs text-slate-500">{it.product?._id || ""}</div>
                         </td>
 
                         <td className="py-3 pr-3">
                           <input
                             type="number"
-                            min="1"
+                            min="0"
                             step="1"
                             value={it.qtyStr}
+                            disabled={quoteLocked || !it.productId}
                             onChange={(e) => {
                               setItems((prev) => {
                                 const next = [...prev];
@@ -418,36 +497,38 @@ export default function AdminRequestDetailsPage() {
                                 return next;
                               });
                             }}
-                            className="w-24 rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                            placeholder="Qty"
+                            className={[
+                              "w-16 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                              quoteLocked || !it.productId
+                                ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                                : "",
+                            ].join(" ")}
+                            placeholder="0"
                           />
-                          {it.qtyStr === "" ? (
-                            <div className="mt-1 text-[11px] text-rose-600">Required</div>
-                          ) : null}
                         </td>
 
                         <td className="py-3 pr-3">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={it.unitPriceStr}
-                              onChange={(e) => {
-                                setItems((prev) => {
-                                  const next = [...prev];
-                                  next[idx] = { ...next[idx], unitPriceStr: e.target.value };
-                                  return next;
-                                });
-                              }}
-                              className="w-28 rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                              placeholder="0"
-                            />
-                            <span className="text-xs text-slate-400">AED</span>
-                          </div>
-                          {it.unitPriceStr === "" ? (
-                            <div className="mt-1 text-[11px] text-rose-600">Required</div>
-                          ) : null}
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={it.unitPriceStr}
+                            disabled={quoteLocked || !it.productId}
+                            onChange={(e) => {
+                              setItems((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], unitPriceStr: e.target.value };
+                                return next;
+                              });
+                            }}
+                            className={[
+                              "w-24 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                              quoteLocked || !it.productId
+                                ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                                : "",
+                            ].join(" ")}
+                            placeholder="0.00"
+                          />
                         </td>
 
                         <td className="py-3 pr-3 text-right font-semibold text-slate-900">
@@ -477,55 +558,49 @@ export default function AdminRequestDetailsPage() {
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   Delivery charge
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={deliveryChargeStr}
-                    onChange={(e) => setDeliveryChargeStr(e.target.value)}
-                    className="w-32 rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                    placeholder="0"
-                  />
-                  <span className="text-xs text-slate-400">AED</span>
-                </div>
-                {deliveryChargeStr === "" ? (
-                  <div className="mt-1 text-[11px] text-rose-600">Required</div>
-                ) : null}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={deliveryChargeStr}
+                  disabled={quoteLocked}
+                  onChange={(e) => setDeliveryChargeStr(e.target.value)}
+                  className={[
+                    "w-32 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                    quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
+                  ].join(" ")}
+                  placeholder="0.00"
+                />
               </div>
 
               <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   Extra fee
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={extraFeeStr}
-                    onChange={(e) => setExtraFeeStr(e.target.value)}
-                    className="w-32 rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                    placeholder="0"
-                  />
-                  <span className="text-xs text-slate-400">AED</span>
-                </div>
-                {extraFeeStr === "" ? (
-                  <div className="mt-1 text-[11px] text-rose-600">Required</div>
-                ) : null}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={extraFeeStr}
+                  disabled={quoteLocked}
+                  onChange={(e) => setExtraFeeStr(e.target.value)}
+                  className={[
+                    "w-32 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                    quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
+                  ].join(" ")}
+                  placeholder="0.00"
+                />
               </div>
-            </div>
-
-            <div className="mt-3 text-xs text-slate-500">
-              You can clear numeric fields while editing. Update is blocked until required numbers are filled.
             </div>
           </Step>
 
           {/* Step 3 */}
-          <Step n={3} title="Add notes" subtitle="Internal notes and customer-facing message.">
+          <Step n={3} title="Notes" subtitle="Client note is read-only. Admin notes are optional.">
             <div className="grid grid-cols-1 gap-3">
               <div>
-                <div className="mb-1 text-xs font-semibold text-slate-600">Client → Admin</div>
+                <div className="mb-1 text-xs font-semibold text-slate-600">
+                  Client → Admin
+                </div>
                 <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
                   {quote.clientToAdminNote || "—"}
                 </div>
@@ -537,21 +612,31 @@ export default function AdminRequestDetailsPage() {
                 </div>
                 <textarea
                   value={adminToAdminNote}
+                  disabled={quoteLocked}
                   onChange={(e) => setAdminToAdminNote(e.target.value)}
                   rows={3}
                   placeholder="Internal notes for your team…"
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  className={[
+                    "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                    quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
+                  ].join(" ")}
                 />
               </div>
 
               <div>
-                <div className="mb-1 text-xs font-semibold text-slate-600">Admin → Client</div>
+                <div className="mb-1 text-xs font-semibold text-slate-600">
+                  Admin → Client
+                </div>
                 <textarea
                   value={adminToClientNote}
+                  disabled={quoteLocked}
                   onChange={(e) => setAdminToClientNote(e.target.value)}
                   rows={3}
                   placeholder="Message to the client…"
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  className={[
+                    "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                    quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
+                  ].join(" ")}
                 />
               </div>
             </div>
@@ -560,167 +645,66 @@ export default function AdminRequestDetailsPage() {
           {/* Step 4 */}
           <Step
             n={4}
-            title="Customer confirmation (required)"
-            subtitle="Answer this every visit before updating the quote."
+            title="Set quote status (required)"
+            subtitle="Choose the new status to send when you update."
           >
             <div className="space-y-3">
-              <div className="text-sm text-slate-700">
-                Is the quote confirmed by the user yet?
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button
-                  type="button"
-                  onClick={() => setConfirmationAnswer("no")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-inset transition",
-                    confirmationAnswer === "no"
-                      ? "bg-blue-50 text-blue-800 ring-blue-200"
-                      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
-                  ].join(" ")}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                <StatusChoiceButton
+                  disabled={quoteLocked}
+                  active={statusDecision === "Processing"}
+                  tone="slate"
+                  onClick={() => setStatusDecision("Processing")}
                 >
-                  No (Quoted)
-                </button>
+                  Processing
+                </StatusChoiceButton>
 
-                <button
-                  type="button"
-                  onClick={() => setConfirmationAnswer("yes")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-inset transition",
-                    confirmationAnswer === "yes"
-                      ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
-                  ].join(" ")}
+                <StatusChoiceButton
+                  disabled={quoteLocked}
+                  active={statusDecision === "Quoted"}
+                  tone="blue"
+                  onClick={() => setStatusDecision("Quoted")}
                 >
-                  Yes (Confirmed)
-                </button>
+                  Quoted
+                </StatusChoiceButton>
 
-                <button
-                  type="button"
-                  onClick={() => setConfirmationAnswer("cancelled")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-inset transition",
-                    confirmationAnswer === "cancelled"
-                      ? "bg-rose-50 text-rose-800 ring-rose-200"
-                      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
-                  ].join(" ")}
+                <StatusChoiceButton
+                  disabled={quoteLocked}
+                  active={statusDecision === "Confirmed"}
+                  tone="emerald"
+                  onClick={() => setStatusDecision("Confirmed")}
+                >
+                  Confirmed
+                </StatusChoiceButton>
+
+                <StatusChoiceButton
+                  disabled={quoteLocked}
+                  active={statusDecision === "Cancelled"}
+                  tone="rose"
+                  onClick={() => setStatusDecision("Cancelled")}
                 >
                   Cancelled
-                </button>
+                </StatusChoiceButton>
               </div>
 
-              {confirmationAnswer === "" ? (
-                <div className="rounded-xl bg-amber-50 p-3 text-sm ring-1 ring-amber-200">
-                  <div className="text-xs font-semibold text-amber-800">Action required</div>
+              {!statusDecision && !quoteLocked ? (
+                <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+                  <div className="text-xs font-semibold text-amber-800">
+                    Action required
+                  </div>
                   <div className="mt-1 text-xs text-amber-800/80">
-                    You must answer this question to enable{" "}
-                    <span className="font-semibold">Update Quote</span>.
+                    Choose a status before updating the quote.
                   </div>
                 </div>
-              ) : (
-                <div className="rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
-                  <div className="text-xs font-semibold text-slate-600">Resulting status</div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <StatusBadge status={finalStatus} />
-                    <span className="text-xs text-slate-500">
-                      Updating will set status to{" "}
-                      <span className="font-semibold">{finalStatus}</span>.
-                    </span>
-                  </div>
-                </div>
-              )}
+              ) : null}
             </div>
           </Step>
-
-          {/* Bottom actions */}
-          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-900">Actions</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  Update the quote first. Create order becomes available only when confirmed and not created yet.
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={onUpdateQuote}
-                  disabled={!canUpdateQuote}
-                  className={[
-                    "rounded-xl px-4 py-2 text-sm font-semibold text-white",
-                    canUpdateQuote
-                      ? "bg-slate-900 hover:bg-slate-800"
-                      : "bg-slate-300 cursor-not-allowed",
-                  ].join(" ")}
-                  title={
-                    canUpdateQuote
-                      ? "Update Quote"
-                      : "Complete all steps (including Step 4) to enable update"
-                  }
-                >
-                  Update Quote
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onCreateOrder}
-                  disabled={!canCreateOrder}
-                  className={[
-                    "rounded-xl px-4 py-2 text-sm font-semibold text-white",
-                    canCreateOrder
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : "bg-slate-300 cursor-not-allowed",
-                  ].join(" ")}
-                  title={
-                    orderCreated
-                      ? "Order already created for this request"
-                      : finalStatus !== "Confirmed"
-                      ? "Confirm the quote (Step 4) to enable Create Order"
-                      : "Create an order from this quote"
-                  }
-                >
-                  Create Order
-                </button>
-              </div>
-            </div>
-
-            {/* order created indicator inside actions too (very explicit) */}
-            <div className="mt-3">
-              {orderCreated ? (
-                <div className="rounded-xl bg-emerald-50 p-3 text-sm ring-1 ring-emerald-200">
-                  <div className="text-xs font-semibold text-emerald-800">
-                    Order already created
-                  </div>
-                  <div className="mt-1 text-xs text-emerald-800/80">
-                    This request has already been converted into an order. No further action is needed here.
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
-                  <div className="text-xs font-semibold text-slate-700">
-                    No order created yet
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Once confirmed, use <span className="font-semibold">Create Order</span> to proceed.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
-        {/* Live summary */}
+        {/* Summary + Actions */}
         <aside className="space-y-4">
-          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <div className="text-sm font-semibold text-slate-900">Live summary</div>
-
-            <div className="mt-3 space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-600">Status</span>
-                <StatusBadge status={derivedStatus} />
-              </div>
-
+          <Step n={5} title="Summary" subtitle="Review totals.">
+            <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-600">Items subtotal</span>
                 <span className="font-semibold text-slate-900">{money(itemsTotal)}</span>
@@ -728,27 +712,64 @@ export default function AdminRequestDetailsPage() {
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-600">Delivery</span>
-                <span className="font-semibold text-slate-900">{money(deliveryCharge)}</span>
+                <span className="font-semibold text-slate-900">
+                  {money(deliveryChargePreview)}
+                </span>
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-600">Extra</span>
-                <span className="font-semibold text-slate-900">{money(extraFee)}</span>
+                <span className="font-semibold text-slate-900">
+                  {money(extraFeePreview)}
+                </span>
               </div>
 
               <div className="h-px bg-slate-200" />
 
               <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-700 font-semibold">Total</span>
-                <span className="text-slate-900 font-semibold">{money(totalPrice)}</span>
+                <span className="font-semibold text-slate-700">Total (preview)</span>
+                <span className="font-semibold text-slate-900">{money(totalPreview)}</span>
               </div>
             </div>
-          </div>
+
+            <div className="mt-4 space-y-2">
+              {updateError ? <ErrorMessage error={updateError} /> : null}
+
+              <button
+                type="button"
+                onClick={onUpdateQuote}
+                disabled={!canUpdateQuote || isUpdating}
+                className={[
+                  "w-full rounded-xl px-4 py-2 text-sm font-semibold text-white",
+                  canUpdateQuote && !isUpdating
+                    ? "bg-slate-900 hover:bg-slate-800"
+                    : "cursor-not-allowed bg-slate-300",
+                ].join(" ")}
+                title={
+                  quoteLocked
+                    ? "Quote locked (order exists)"
+                    : !statusDecision
+                    ? "Choose a status in Step 4"
+                    : hasMissingProductId
+                    ? "Missing product references"
+                    : "Update quote"
+                }
+              >
+                {isUpdating ? "Updating..." : "Update Quote"}
+              </button>
+
+              {quoteLocked ? (
+                <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-700 ring-1 ring-slate-200">
+                  This quote has already been converted to an order. Editing is disabled.
+                </div>
+              ) : null}
+            </div>
+          </Step>
         </aside>
       </div>
 
       <div className="text-xs text-slate-400">
-        Procedure: Select user → modify items → notes → confirmation → actions.
+        Flow: user → items & charges → notes → status → summary → update.
       </div>
     </div>
   );

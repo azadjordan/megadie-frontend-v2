@@ -9,7 +9,7 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         method: "POST",
         body: { email, password },
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: [{ type: "User", id: "LIST" }],
     }),
 
     register: builder.mutation({
@@ -18,7 +18,7 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         method: "POST",
         body: { name, phoneNumber, email, password },
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: [{ type: "User", id: "LIST" }],
     }),
 
     logout: builder.mutation({
@@ -26,13 +26,16 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         url: "/users/logout",
         method: "POST",
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: [{ type: "User", id: "LIST" }],
     }),
 
     // Profile (auto + lazy hooks are both generated from this single query)
     getMyProfile: builder.query({
       query: () => "/users/account/profile",
-      providesTags: ["User"],
+      providesTags: (result) => [
+        { type: "User", id: "ME" },
+        ...(result?.data?._id ? [{ type: "User", id: result.data._id }] : []),
+      ],
     }),
 
     updateMyProfile: builder.mutation({
@@ -41,8 +44,18 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         method: "PUT",
         body,
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: (_result) => [{ type: "User", id: "ME" }],
     }),
+
+// ✅ Admin: list users (for assigning quote owner, etc.)
+getAdminUsers: builder.query({
+  query: () => "/users",
+  providesTags: (result) => {
+    const listTag = { type: "User", id: "LIST" };
+    const rows = result?.data || [];
+    return [listTag, ...rows.map((u) => ({ type: "User", id: u._id }))];
+  },
+}),
 
     // Forgot password (email)
     forgotPassword: builder.mutation({
@@ -60,7 +73,7 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         method: "POST",
         body: { password },
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: [{ type: "User", id: "ME" }],
     }),
   }),
 });
@@ -71,9 +84,13 @@ export const {
   useLogoutMutation,
 
   useGetMyProfileQuery,
-  useLazyGetMyProfileQuery, // ✅ correct lazy hook
+  useLazyGetMyProfileQuery,
 
   useUpdateMyProfileMutation,
+
+  // ✅ Admin
+  useGetAdminUsersQuery,
+
   useForgotPasswordMutation,
   useResetPasswordMutation,
 } = usersApiSlice;

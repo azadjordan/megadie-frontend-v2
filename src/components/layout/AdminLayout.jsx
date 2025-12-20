@@ -36,23 +36,6 @@ function NavItem({ to, icon: Icon, label, onClick, end = false }) {
   );
 }
 
-function GhostButton({ onClick, icon: Icon, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2",
-        "text-sm font-semibold text-slate-900",
-        "shadow-sm ring-1 ring-slate-200 hover:bg-slate-50",
-      ].join(" ")}
-    >
-      {Icon ? <Icon className="h-4 w-4" /> : null}
-      {children}
-    </button>
-  );
-}
-
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,46 +59,36 @@ export default function AdminLayout() {
     []
   );
 
-  const goBackToSite = () => {
-    navigate("/", { replace: false });
-  };
-
   return (
     <div className="min-h-[calc(100vh-var(--app-header-h,64px))] bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-4">
         {/* Top bar */}
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {/* Mobile menu button */}
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              className="inline-flex items-center justify-center rounded-xl bg-white p-2 shadow-sm ring-1 ring-slate-200 md:hidden"
-              aria-label="Open admin menu"
-            >
-              <FiMenu />
-            </button>
+        <div className="mb-4 flex items-center gap-3">
+          {/* Back to site button */}
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className={[
+              "inline-flex items-center gap-2 rounded-xl px-3 py-2",
+              "bg-violet-500 text-white",
+              "text-sm font-semibold",
+              "hover:bg-violet-700 transition",
+              "shadow-sm",
+            ].join(" ")}
+          >
+            <FiArrowLeft className="h-4 w-4" />
+            Back to site
+          </button>
 
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-slate-900">Admin</div>
-              <div className="text-xs text-slate-500">
-                Requests • Orders • Invoices • Payments • Users • Inventory
-              </div>
-            </div>
-          </div>
-
-          {/* Right side */}
-          <div className="flex items-center gap-2">
-            <GhostButton onClick={goBackToSite} icon={FiArrowLeft}>
-              Back to site
-            </GhostButton>
-
-            {/* Simple search placeholder (desktop only) */}
-            <div className="hidden md:flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200">
-              <span className="text-xs text-slate-400">⌘K</span>
-              <span className="text-sm text-slate-500">Search (coming soon)</span>
-            </div>
-          </div>
+          {/* Mobile menu button */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="ml-1 inline-flex items-center justify-center rounded-xl bg-white p-2 shadow-sm ring-1 ring-slate-200 md:hidden"
+            aria-label="Open admin menu"
+          >
+            <FiMenu />
+          </button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
@@ -136,14 +109,10 @@ export default function AdminLayout() {
                     end={it.end}
                   />
                 ))}
-
-                <div className="my-2 h-px bg-slate-200" />
-
-                <NavItem to="/" icon={FiArrowLeft} label="Back to site" />
               </nav>
             </div>
 
-            {/* Small helper block */}
+            {/* Helper block */}
             <div className="mt-3 rounded-2xl bg-white p-3 text-sm shadow-sm ring-1 ring-slate-200">
               <div className="text-xs font-semibold text-slate-900">Tip</div>
               <div className="mt-1 text-xs text-slate-500">
@@ -170,11 +139,8 @@ export default function AdminLayout() {
           />
           <div className="absolute left-0 top-0 h-full w-[85%] max-w-[320px] bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">
-                  Admin Menu
-                </div>
-                <div className="text-xs text-slate-500">Quick navigation</div>
+              <div className="text-sm font-semibold text-slate-900">
+                Navigation
               </div>
               <button
                 type="button"
@@ -198,15 +164,6 @@ export default function AdminLayout() {
                     onClick={() => setMobileOpen(false)}
                   />
                 ))}
-
-                <div className="my-2 h-px bg-slate-200" />
-
-                <NavItem
-                  to="/"
-                  icon={FiArrowLeft}
-                  label="Back to site"
-                  onClick={() => setMobileOpen(false)}
-                />
               </nav>
             </div>
           </div>

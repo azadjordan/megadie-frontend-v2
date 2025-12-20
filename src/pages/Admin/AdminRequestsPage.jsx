@@ -1,8 +1,16 @@
 // src/pages/Admin/AdminRequestsPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { FiEdit2, FiTrash2, FiCheck, FiPlus } from "react-icons/fi";
 
 import Pagination from "../../components/common/Pagination";
+import Loader from "../../components/common/Loader";
+import ErrorMessage from "../../components/common/ErrorMessage";
+
+import {
+  useDeleteQuoteByAdminMutation,
+  useGetAdminQuotesQuery,
+} from "../../features/quotes/quotesApiSlice";
 
 function formatDateTime(iso) {
   try {
@@ -30,9 +38,7 @@ function StatusBadge({ status }) {
   };
 
   return (
-    <span className={`${base} ${map[status] || map.Processing}`}>
-      {status}
-    </span>
+    <span className={`${base} ${map[status] || map.Processing}`}>{status}</span>
   );
 }
 
@@ -50,75 +56,64 @@ function money(amount, currency = "AED") {
   }
 }
 
+function friendlyApiError(err) {
+  // RTK Query errors can come in several shapes
+  const msg =
+    err?.data?.message ||
+    err?.error ||
+    err?.message ||
+    "Something went wrong.";
+  return String(msg);
+}
+
 export default function AdminRequestsPage() {
   const [page, setPage] = useState(1);
+  const limit = 20;
 
-  /**
-   * TEMP EXAMPLE DATA
-   * Remove this array once backend is wired.
-   * Shape mirrors Quote model + populated user.
-   */
-  const rows = useMemo(
-    () => [
-      {
-        _id: "q_1001",
-        createdAt: "2025-01-18T09:42:00Z",
-        status: "Processing",
-        totalPrice: 1250,
-        requestedItems: [
-          { qty: 2, unitPrice: 300 },
-          { qty: 1, unitPrice: 650 },
-        ],
-        user: {
-          name: "Ahmed Hassan",
-          email: "ahmed@example.com",
-        },
-      },
-      {
-        _id: "q_1002",
-        createdAt: "2025-01-17T16:10:00Z",
-        status: "Quoted",
-        totalPrice: 980,
-        requestedItems: [
-          { qty: 1, unitPrice: 500 },
-          { qty: 2, unitPrice: 240 },
-        ],
-        user: {
-          name: "Sara Ali",
-          email: "sara@example.com",
-        },
-      },
-      {
-        _id: "q_1003",
-        createdAt: "2025-01-16T11:30:00Z",
-        status: "Confirmed",
-        totalPrice: 2150,
-        orderId: "ord_3001",
-        requestedItems: [
-          { qty: 5, unitPrice: 400 },
-        ],
-        user: {
-          name: "Mohamed Youssef",
-          email: "mohamed@example.com",
-        },
-      },
-      {
-        _id: "q_1004",
-        createdAt: "2025-01-15T08:05:00Z",
-        status: "Cancelled",
-        totalPrice: 0,
-        requestedItems: [{ qty: 1, unitPrice: 0 }],
-        user: {
-          name: "Lina Farouk",
-          email: "lina@example.com",
-        },
-      },
-    ],
-    []
-  );
+  const { data, isLoading, isError, error, isFetching } =
+    useGetAdminQuotesQuery({ page, limit });
 
-  const totalPages = 1;
-  const totalItems = rows.length;
+  const [deleteQuoteByAdmin, { isLoading: isDeleting }] =
+    useDeleteQuoteByAdminMutation();
+
+  // track which row is being deleted (nice UX so we can disable only that row)
+  const [deletingId, setDeletingId] = useState(null);
+
+  const rows = data?.data || [];
+  const pages = data?.pages || 1;
+  const total = data?.total ?? rows.length;
+
+  const itemCountById = useMemo(() => {
+    const map = new Map();
+    for (const q of rows) {
+      const itemCount = (q.requestedItems || []).reduce(
+        (sum, it) => sum + (Number(it.qty) || 0),
+        0
+      );
+      map.set(q._id, itemCount);
+    }
+    return map;
+  }, [rows]);
+
+  async function onDelete(q) {
+    // Backend rule: only Cancelled can be deleted.
+    if (q.status !== "Cancelled") return;
+
+    const ok = window.confirm(
+      `Delete this quote?\n\nThis can only be done for Cancelled quotes.\n\nID: ${q._id}`
+    );
+    if (!ok) return;
+
+    try {
+      setDeletingId(q._id);
+      await deleteQuoteByAdmin(q._id).unwrap();
+      // list will refresh via invalidatesTags
+    } catch (e) {
+      alert(friendlyApiError(e));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -130,15 +125,6 @@ export default function AdminRequestsPage() {
             Newest first • Review, quote, confirm, then create an order.
           </div>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to="/admin/requests/new"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            New Request
-          </Link>
-        </div>
       </div>
 
       {/* Filters placeholder */}
@@ -146,96 +132,168 @@ export default function AdminRequestsPage() {
         <div className="h-10 rounded-xl bg-white/60 ring-1 ring-slate-200" />
       </div>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
-        <div className="overflow-x-auto bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Created</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Owner</th>
-                <th className="px-4 py-3">Order</th>
-                <th className="px-4 py-3">Items</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                <th className="px-4 py-3 text-right">Action</th>
-              </tr>
-            </thead>
+      {/* States */}
+      {isLoading ? (
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <Loader />
+        </div>
+      ) : isError ? (
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <ErrorMessage error={error} />
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
+          <div className="overflow-x-auto bg-white">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Owner</th>
+                  <th className="px-4 py-3">Order</th>
+                  <th className="px-4 py-3">Items</th>
+                  <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
 
-            <tbody className="divide-y divide-slate-200">
-              {rows.map((q) => {
-                const itemCount = q.requestedItems.reduce(
-                  (sum, it) => sum + it.qty,
-                  0
-                );
-                const hasOrder = Boolean(q.orderId);
-
-                return (
-                  <tr key={q._id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">
-                      {formatDateTime(q.createdAt)}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <StatusBadge status={q.status} />
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-900">
-                        {q.user.name}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {q.user.email}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={[
-                          "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset",
-                          hasOrder
-                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                            : "bg-slate-50 text-slate-700 ring-slate-200",
-                        ].join(" ")}
-                      >
-                        {hasOrder ? "Created" : "Not created"}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3 text-slate-700">{itemCount}</td>
-
-                    <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                      {money(q.totalPrice)}
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        to={`/admin/requests/${q._id}`}
-                        className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                      >
-                        Details
-                      </Link>
+              <tbody className="divide-y divide-slate-200">
+                {rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-4 py-10 text-center text-sm text-slate-500"
+                    >
+                      No requests found.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  rows.map((q) => {
+                    const hasOrder = Boolean(q.order);
+                    const canCreateOrder = q.status === "Confirmed" && !hasOrder;
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3">
-          <div className="text-sm text-slate-500">
-            Showing {rows.length} request(s)
+                    const itemCount = itemCountById.get(q._id) ?? 0;
+
+                    const deletable = q.status === "Cancelled";
+                    const rowDeleting = deletingId === q._id;
+                    const disableDelete = !deletable || isDeleting || rowDeleting;
+
+                    return (
+                      <tr key={q._id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-slate-700">
+                          {formatDateTime(q.createdAt)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <StatusBadge status={q.status} />
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">
+                            {q.user?.name || "—"}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {q.user?.email || "—"}
+                          </div>
+                        </td>
+
+                        {/* Order column: Create button OR checkmark */}
+                        <td className="px-4 py-3">
+                          {hasOrder ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                              <FiCheck className="h-4 w-4" />
+                              Created
+                            </span>
+                          ) : canCreateOrder ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                              // NOTE: wire this to your create-order mutation when backend is ready
+                              onClick={() => {
+                                // placeholder
+                                // console.log("Create order for quote", q._id);
+                              }}
+                              title="Create order"
+                            >
+                              <FiPlus className="h-4 w-4" />
+                              Create
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
+                              Not created
+                            </span>
+                          )}
+
+                          {/* Optional: show order number if populated */}
+                          {hasOrder && q.order?.orderNumber ? (
+                            <div className="mt-1 text-xs text-slate-500">
+                              {q.order.orderNumber}
+                            </div>
+                          ) : null}
+                        </td>
+
+                        <td className="px-4 py-3 text-slate-700">{itemCount}</td>
+
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                          {money(q.totalPrice)}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3 text-right">
+                          <div className="inline-flex items-center gap-2">
+                            {/* Edit icon */}
+                            <Link
+                              to={`/admin/requests/${q._id}`}
+                              className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
+                              title="Edit request"
+                              aria-label="Edit request"
+                            >
+                              <FiEdit2 className="h-4 w-4" />
+                            </Link>
+
+                            {/* Delete icon (works) */}
+                            <button
+                              type="button"
+                              className={[
+                                "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
+                                disableDelete
+                                  ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                  : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
+                              ].join(" ")}
+                              title={
+                                deletable
+                                  ? rowDeleting
+                                    ? "Deleting…"
+                                    : "Delete quote"
+                                  : "Only Cancelled quotes can be deleted"
+                              }
+                              aria-label="Delete quote"
+                              disabled={disableDelete}
+                              onClick={() => onDelete(q)}
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
 
-          <Pagination
-            page={page}
-            pages={totalPages}
-            onPageChange={(p) => setPage(p)}
-          />
+          {/* Pagination */}
+          <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3">
+            <div className="text-sm text-slate-500">
+              Showing {rows.length} of {total} request(s)
+              {isFetching ? "…" : ""}
+            </div>
+
+            <Pagination page={page} pages={pages} onPageChange={setPage} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
