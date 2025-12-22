@@ -9,8 +9,13 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
        Paginated list (admin dashboard)
        ========================= */
     getAdminQuotes: builder.query({
-      query: ({ page = 1, limit = 20 } = {}) =>
-        `/quotes/admin?page=${page}&limit=${limit}`,
+      query: ({ page = 1, status = "all", search = "" } = {}) => {
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        if (status && status !== "all") params.set("status", status);
+        if (search) params.set("search", search);
+        return `/quotes/admin?${params.toString()}`;
+      },
       providesTags: (result) => {
         const listTag = { type: "Quote", id: "LIST" };
         const rows = result?.data || [];

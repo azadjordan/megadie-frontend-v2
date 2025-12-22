@@ -1,13 +1,178 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { FiEdit2, FiTrash2 } from "react-icons/fi";
+
+import Loader from "../../components/common/Loader";
+import ErrorMessage from "../../components/common/ErrorMessage";
+import Pagination from "../../components/common/Pagination";
+import useDebouncedValue from "../../hooks/useDebouncedValue";
+
+import {
+  useDeleteInvoiceByAdminMutation,
+  useGetInvoicesAdminQuery,
+} from "../../features/invoices/invoicesApiSlice";
+
+function formatDateTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function formatDate(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function moneyMinor(amountMinor, currency = "AED", factor = 100) {
+  if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
+    return "";
+
+  const f = typeof factor === "number" && factor > 0 ? factor : 100;
+  const major = amountMinor / f;
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(major);
+  } catch {
+    return String(major);
+  }
+}
+
+function balanceDueMinor(inv) {
+  if (!inv) return 0;
+  if (typeof inv.balanceDueMinor === "number") return inv.balanceDueMinor;
+  const amount = typeof inv.amountMinor === "number" ? inv.amountMinor : 0;
+  const paid = typeof inv.paidTotalMinor === "number" ? inv.paidTotalMinor : 0;
+  return Math.max(amount - paid, 0);
+}
+
+function isOverdue(inv) {
+  if (!inv || inv.status === "Cancelled") return false;
+  const due = inv.dueDate ? Date.parse(inv.dueDate) : NaN;
+  if (!Number.isFinite(due)) return false;
+  if (inv.paymentStatus === "Paid") return false;
+  return balanceDueMinor(inv) > 0 && due < Date.now();
+}
+
+function PaymentStatusBadge({ status }) {
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
+
+  const map = {
+    Paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+    PartiallyPaid: "bg-amber-50 text-amber-800 ring-amber-200",
+    Unpaid: "bg-rose-50 text-rose-800 ring-rose-200",
+  };
+
+  const label =
+    status === "PartiallyPaid"
+      ? "Partially paid"
+      : status === "Paid"
+      ? "Paid"
+      : "Unpaid";
+
+  return <span className={`${base} ${map[status] || map.Unpaid}`}>{label}</span>;
+}
+
+function OverdueBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
+      Overdue
+    </span>
+  );
+}
+
+function friendlyApiError(err) {
+  const msg =
+    err?.data?.message || err?.error || err?.message || "Something went wrong.";
+  return String(msg);
+}
 
 export default function AdminInvoicesPage() {
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("unpaid");
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [sort, setSort] = useState("newest");
 
-  const rows = useMemo(() => [], []);
-  const filtered = useMemo(() => rows, [rows]);
+  const trimmedSearch = search.trim();
+  const debouncedSearch = useDebouncedValue(trimmedSearch, 500);
+  const isDebouncing = trimmedSearch !== debouncedSearch;
+  const overdueOnly = paymentStatusFilter === "overdue";
+  const statusFilter = overdueOnly ? "Issued" : "all";
+  const effectivePaymentStatus = overdueOnly ? "all" : paymentStatusFilter;
+
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useGetInvoicesAdminQuery({
+    page,
+    status: statusFilter,
+    paymentStatus: effectivePaymentStatus,
+    overdue: overdueOnly,
+    sort,
+    search: debouncedSearch,
+  });
+
+  const [deleteInvoiceByAdmin, { isLoading: isDeleting }] =
+    useDeleteInvoiceByAdminMutation();
+
+  const [deletingId, setDeletingId] = useState(null);
+
+  const rows = useMemo(() => data?.data || data?.items || [], [data]);
+  const total = data?.pagination?.total ?? data?.total ?? rows.length;
+
+  const pagination = useMemo(() => {
+    if (!data) return null;
+    if (data.pagination) return data.pagination;
+
+    const cur = data.page || 1;
+    const totalPages = data.pages || 1;
+    return {
+      page: cur,
+      totalPages,
+      hasPrev: cur > 1,
+      hasNext: cur < totalPages,
+    };
+  }, [data]);
+
+  async function onDelete(inv) {
+    if (inv.status !== "Cancelled") return;
+    const ok = window.confirm("Delete this cancelled invoice?");
+    if (!ok) return;
+
+    try {
+      setDeletingId(inv._id);
+      await deleteInvoiceByAdmin(inv._id).unwrap();
+    } catch (e) {
+      alert(friendlyApiError(e));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -15,7 +180,7 @@ export default function AdminInvoicesPage() {
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Invoices</div>
           <div className="text-sm text-slate-500">
-            Create/update invoices and record payments.
+            Monitor invoice status, payments, and balances.
           </div>
         </div>
 
@@ -24,19 +189,14 @@ export default function AdminInvoicesPage() {
             type="button"
             className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
             onClick={() => {
-              setQ("");
-              setStatus("unpaid");
+              setSearch("");
+              setPaymentStatusFilter("all");
               setSort("newest");
+              setPage(1);
             }}
           >
             Reset
           </button>
-          <Link
-            to="/admin/invoices/new"
-            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            New Invoice
-          </Link>
         </div>
       </div>
 
@@ -44,61 +204,85 @@ export default function AdminInvoicesPage() {
         <div className="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-center">
           <div className="md:col-span-6">
             <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by invoice #, user, order #..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by invoice #, order #, or user"
               className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             />
           </div>
 
           <div className="md:col-span-3">
             <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              value={paymentStatusFilter}
+              onChange={(e) => {
+                setPaymentStatusFilter(e.target.value);
+                setPage(1);
+              }}
               className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             >
-              <option value="unpaid">Unpaid</option>
-              <option value="partial">Partial</option>
-              <option value="paid">Paid</option>
+              <option value="all">All payments</option>
+              <option value="Paid">Paid</option>
+              <option value="PartiallyPaid">Partially paid</option>
+              <option value="Unpaid">Unpaid</option>
               <option value="overdue">Overdue</option>
-              <option value="all">All</option>
             </select>
           </div>
 
           <div className="md:col-span-3">
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setPage(1);
+              }}
               className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             >
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
-              <option value="dueSoon">Due soon</option>
+              <option value="amountHigh">Amount (high)</option>
+              <option value="amountLow">Amount (low)</option>
             </select>
           </div>
         </div>
-      </div>
 
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
-          <div className="text-sm font-semibold text-slate-900">No invoices yet</div>
-          <div className="mt-1 text-sm text-slate-500">
-            Create invoices after an order is confirmed.
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div>
+            Showing{" "}
+            <span className="font-semibold text-slate-700">{rows.length}</span>{" "}
+            of <span className="font-semibold text-slate-700">{total}</span>{" "}
+            invoice(s)
+            {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
+            {isFetching ? <span className="ml-2">(Updating)</span> : null}
           </div>
 
-          <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-            <Link
-              to="/admin/invoices/new"
-              className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto"
-            >
-              Create an invoice
-            </Link>
-            <Link
-              to="/admin/orders"
-              className="w-full rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50 sm:w-auto"
-            >
-              View orders
-            </Link>
+          {pagination ? (
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              variant="compact"
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <Loader />
+        </div>
+      ) : isError ? (
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <ErrorMessage error={error} />
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
+          <div className="text-sm font-semibold text-slate-900">
+            No invoices found
+          </div>
+          <div className="mt-1 text-sm text-slate-500">
+            Invoices appear once they are created for an order.
           </div>
         </div>
       ) : (
@@ -110,31 +294,128 @@ export default function AdminInvoicesPage() {
                   <th className="px-4 py-3">Invoice</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Balance</th>
+                  <th className="px-4 py-3">Money</th>
+                  <th className="px-4 py-3">Due</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-slate-200">
-                {filtered.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-semibold text-slate-900">
-                      <Link to={`/admin/invoices/${inv.id}`} className="hover:underline">
-                        {inv.number || inv.id}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{inv.userName}</td>
-                    <td className="px-4 py-3 text-slate-700">{inv.status}</td>
-                    <td className="px-4 py-3 text-slate-500">{inv.balance}</td>
-                  </tr>
-                ))}
+                {rows.map((inv) => {
+                  const currency = inv.currency || "AED";
+                  const factor = inv.minorUnitFactor || 100;
+                  const overdue = isOverdue(inv);
+                  const balance = balanceDueMinor(inv);
+                  const rowDeleting = deletingId === inv._id;
+                  const canDelete = inv.status === "Cancelled";
+
+                  return (
+                    <tr key={inv._id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">
+                          {inv.invoiceNumber || inv._id}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span
+                            className={[
+                              "font-semibold",
+                              inv.status === "Cancelled"
+                                ? "text-rose-700"
+                                : "text-emerald-700",
+                            ].join(" ")}
+                          >
+                            {inv.status === "Cancelled" ? "Cancelled" : "Issued"}
+                          </span>
+                          {inv.status === "Cancelled" ? null : (
+                            <span>{formatDateTime(inv.createdAt)}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 text-slate-700">
+                        <div className="font-medium text-slate-900">
+                          {inv.user?.name || ""}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {inv.user?.email || ""}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <PaymentStatusBadge status={inv.paymentStatus} />
+                          {overdue ? <OverdueBadge /> : null}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">
+                          Amount:{" "}
+                          <span className="tabular-nums">
+                            {moneyMinor(inv.amountMinor, currency, factor)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Balance:{" "}
+                          <span className="tabular-nums">
+                            {moneyMinor(balance, currency, factor)}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div
+                          className={[
+                            "text-sm",
+                            overdue
+                              ? "text-rose-700 font-semibold"
+                              : "text-slate-700",
+                          ].join(" ")}
+                        >
+                          {inv.dueDate ? formatDate(inv.dueDate) : "No due date"}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <div className="inline-flex items-center gap-2">
+                          <Link
+                            to={`/admin/invoices/${inv._id}/edit`}
+                            className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white ring-1 ring-slate-900 hover:bg-slate-800"
+                            title="Edit invoice"
+                            aria-label="Edit invoice"
+                          >
+                            <FiEdit2 className="h-4 w-4" />
+                          </Link>
+
+                          <button
+                            type="button"
+                            disabled={!canDelete || rowDeleting || isDeleting}
+                            className={[
+                              "inline-flex items-center justify-center rounded-xl p-2 ring-1 transition",
+                              canDelete && !rowDeleting && !isDeleting
+                                ? "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50"
+                                : "bg-white text-slate-300 ring-slate-200 cursor-not-allowed",
+                            ].join(" ")}
+                            title={
+                              canDelete
+                                ? "Delete invoice"
+                                : "Only cancelled invoices can be deleted"
+                            }
+                            aria-label="Delete invoice"
+                            onClick={() => onDelete(inv)}
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
-
-      <div className="text-xs text-slate-400">
-        Tip: keep invoice actions safe — confirmation on delete, and show payment history clearly.
-      </div>
     </div>
   );
 }

@@ -1,22 +1,55 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import Loader from "../../components/common/Loader";
+import ErrorMessage from "../../components/common/ErrorMessage";
+import Pagination from "../../components/common/Pagination";
+import useDebouncedValue from "../../hooks/useDebouncedValue";
+
+import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
+
 export default function AdminUsersPage() {
-  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
-  const [sort, setSort] = useState("newest");
+  const [sort, setSort] = useState("name");
 
-  // Placeholder rows (wire later)
-  const rows = useMemo(() => [], []);
+  const trimmedSearch = search.trim();
+  const debouncedSearch = useDebouncedValue(trimmedSearch, 500);
+  const isDebouncing = trimmedSearch !== debouncedSearch;
 
-  const filtered = useMemo(() => {
-    // Later: filter by q/role/sort
-    return rows;
-  }, [rows]);
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } = useGetUsersAdminQuery({
+    page,
+    search: debouncedSearch,
+    role,
+    sort,
+  });
+
+  const rows = useMemo(() => data?.data || data?.items || [], [data]);
+  const total = data?.pagination?.total ?? data?.total ?? rows.length;
+
+  const pagination = useMemo(() => {
+    if (!data) return null;
+    if (data.pagination) return data.pagination;
+
+    const cur = data.page || 1;
+    const totalPages = data.pages || 1;
+    return {
+      page: cur,
+      totalPages,
+      hasPrev: cur > 1,
+      hasNext: cur < totalPages,
+    };
+  }, [data]);
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Users</div>
@@ -30,30 +63,26 @@ export default function AdminUsersPage() {
             type="button"
             className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
             onClick={() => {
-              setQ("");
+              setSearch("");
               setRole("all");
-              setSort("newest");
+              setSort("name");
+              setPage(1);
             }}
           >
             Reset
           </button>
-
-          <Link
-            to="/admin/users/new"
-            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            New User
-          </Link>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
         <div className="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-center">
           <div className="md:col-span-6">
             <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search by name, email, phone..."
               className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             />
@@ -62,7 +91,10 @@ export default function AdminUsersPage() {
           <div className="md:col-span-3">
             <select
               value={role}
-              onChange={(e) => setRole(e.target.value)}
+              onChange={(e) => {
+                setRole(e.target.value);
+                setPage(1);
+              }}
               className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             >
               <option value="all">All roles</option>
@@ -74,7 +106,10 @@ export default function AdminUsersPage() {
           <div className="md:col-span-3">
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setPage(1);
+              }}
               className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             >
               <option value="newest">Newest</option>
@@ -83,24 +118,46 @@ export default function AdminUsersPage() {
             </select>
           </div>
         </div>
+
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div>
+            Showing{" "}
+            <span className="font-semibold text-slate-700">{rows.length}</span>{" "}
+            of <span className="font-semibold text-slate-700">{total}</span>{" "}
+            user(s)
+            {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
+            {isFetching ? <span className="ml-2">(Updating)</span> : null}
+          </div>
+
+          {pagination ? (
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              variant="compact"
+            />
+          ) : null}
+        </div>
       </div>
 
-      {/* List */}
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <Loader />
+        </div>
+      ) : isError ? (
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <ErrorMessage error={error} />
+        </div>
+      ) : rows.length === 0 ? (
         <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
-          <div className="text-sm font-semibold text-slate-900">No users found</div>
+          <div className="text-sm font-semibold text-slate-900">
+            No users found
+          </div>
           <div className="mt-1 text-sm text-slate-500">
-            When users register, they’ll appear here. Use this page to quickly jump
-            to their activity.
+            When users register, they&apos;ll appear here. Use this page to
+            quickly jump to their activity.
           </div>
 
           <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-            <Link
-              to="/admin/users/new"
-              className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto"
-            >
-              Create a user
-            </Link>
             <Link
               to="/admin"
               className="w-full rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50 sm:w-auto"
@@ -118,48 +175,39 @@ export default function AdminUsersPage() {
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Quick links</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filtered.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-semibold text-slate-900">
-                      <Link to={`/admin/users/${u.id}`} className="hover:underline">
-                        {u.name || u.id}
-                      </Link>
-                      {u.phone ? (
-                        <div className="mt-0.5 text-xs font-normal text-slate-500">
-                          {u.phone}
+                {rows.map((u) => {
+                  const userId = u._id || u.id;
+                  const roleLabel = u.isAdmin ? "Admin" : "User";
+
+                  return (
+                    <tr key={userId} className="hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">
+                          {u.name || userId}
                         </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{u.email}</td>
-                    <td className="px-4 py-3 text-slate-700">{u.role}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                        {u.phoneNumber ? (
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            {u.phoneNumber}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">{u.email}</td>
+                      <td className="px-4 py-3 text-slate-700">{roleLabel}</td>
+                      <td className="px-4 py-3 text-center">
                         <Link
-                          to={`/admin/requests?user=${u.id}`}
-                          className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
+                          to={`/admin/users/${userId}/edit`}
+                          className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
                         >
-                          Requests
+                          Edit
                         </Link>
-                        <Link
-                          to={`/admin/orders?user=${u.id}`}
-                          className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
-                        >
-                          Orders
-                        </Link>
-                        <Link
-                          to={`/admin/invoices?user=${u.id}`}
-                          className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
-                        >
-                          Invoices
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -167,7 +215,7 @@ export default function AdminUsersPage() {
       )}
 
       <div className="text-xs text-slate-400">
-        Tip: users page is mainly for search + quick navigation (keep it simple).
+        Tip: users page is mainly for search and quick navigation.
       </div>
     </div>
   );

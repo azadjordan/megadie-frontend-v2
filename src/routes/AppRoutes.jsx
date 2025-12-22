@@ -25,9 +25,10 @@ import AdminDashboardPage from "../pages/Admin/AdminDashboardPage";
 import AdminRequestsPage from "../pages/Admin/AdminRequestsPage";
 import AdminOrdersPage from "../pages/Admin/AdminOrdersPage";
 import AdminInvoicesPage from "../pages/Admin/AdminInvoicesPage";
+import AdminInvoiceEditPage from "../pages/Admin/AdminInvoiceEditPage";
 import AdminInventoryPage from "../pages/Admin/AdminInventoryPage";
 import AdminUsersPage from "../pages/Admin/AdminUsersPage";
-import AdminPaymentCreatePage from "../pages/Admin/AdminPaymentCreatePage";
+import AdminUserEditPage from "../pages/Admin/AdminUserEditPage";
 import AdminRequestDetailsPage from "../pages/Admin/AdminRequestDetailsPage";
 
 
@@ -135,9 +136,10 @@ export default function AppRoutes() {
 
     <Route path="orders" element={<AdminOrdersPage />} />
     <Route path="invoices" element={<AdminInvoicesPage />} />
+    <Route path="invoices/:id/edit" element={<AdminInvoiceEditPage />} />
     <Route path="payments" element={<AdminPaymentsPage />} />
-    <Route path="payments/new" element={<AdminPaymentCreatePage />} />
     <Route path="users" element={<AdminUsersPage />} />
+    <Route path="users/:id/edit" element={<AdminUserEditPage />} />
     <Route path="inventory" element={<AdminInventoryPage />} />
   </Route>
 </Route>

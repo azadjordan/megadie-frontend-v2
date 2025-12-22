@@ -7,10 +7,14 @@ import Pagination from "../../components/common/Pagination";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 
+import useDebouncedValue from "../../hooks/useDebouncedValue";
+
 import {
   useDeleteQuoteByAdminMutation,
   useGetAdminQuotesQuery,
 } from "../../features/quotes/quotesApiSlice";
+
+import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
 
 function formatDateTime(iso) {
   try {
@@ -20,6 +24,7 @@ function formatDateTime(iso) {
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
+      hour12: false,
     });
   } catch {
     return iso || "—";
@@ -57,31 +62,46 @@ function money(amount, currency = "AED") {
 }
 
 function friendlyApiError(err) {
-  // RTK Query errors can come in several shapes
   const msg =
-    err?.data?.message ||
-    err?.error ||
-    err?.message ||
-    "Something went wrong.";
+    err?.data?.message || err?.error || err?.message || "Something went wrong.";
   return String(msg);
 }
 
 export default function AdminRequestsPage() {
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+
+  const trimmedSearch = search.trim();
+  const debouncedSearch = useDebouncedValue(trimmedSearch, 500);
+  const isDebouncing = trimmedSearch !== debouncedSearch;
 
   const { data, isLoading, isError, error, isFetching } =
-    useGetAdminQuotesQuery({ page, limit });
+    useGetAdminQuotesQuery({ page, status, search: debouncedSearch });
 
   const [deleteQuoteByAdmin, { isLoading: isDeleting }] =
     useDeleteQuoteByAdminMutation();
 
-  // track which row is being deleted (nice UX so we can disable only that row)
+  const [createOrderFromQuote, { isLoading: isCreatingOrder }] =
+    useCreateOrderFromQuoteMutation();
+
   const [deletingId, setDeletingId] = useState(null);
+  const [creatingId, setCreatingId] = useState(null);
 
   const rows = data?.data || [];
-  const pages = data?.pages || 1;
-  const total = data?.total ?? rows.length;
+  const total = data?.pagination?.total ?? data?.total ?? rows.length;
+
+  const pagination = useMemo(() => {
+    if (data?.pagination) return data.pagination;
+
+    const totalPages = data?.pages || 1;
+    return {
+      page,
+      totalPages,
+      hasPrev: page > 1,
+      hasNext: page < totalPages,
+    };
+  }, [data, page]);
 
   const itemCountById = useMemo(() => {
     const map = new Map();
@@ -96,22 +116,36 @@ export default function AdminRequestsPage() {
   }, [rows]);
 
   async function onDelete(q) {
-    // Backend rule: only Cancelled can be deleted.
     if (q.status !== "Cancelled") return;
 
     const ok = window.confirm(
-      `Delete this quote?\n\nThis can only be done for Cancelled quotes.\n\nID: ${q._id}`
+      `Delete this quote?`
     );
     if (!ok) return;
 
     try {
       setDeletingId(q._id);
       await deleteQuoteByAdmin(q._id).unwrap();
-      // list will refresh via invalidatesTags
     } catch (e) {
       alert(friendlyApiError(e));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function onCreateOrder(quoteId) {
+    const ok = window.confirm(
+      "Create an order from this confirmed quote?"
+    );
+    if (!ok) return;
+
+    try {
+      setCreatingId(quoteId);
+      await createOrderFromQuote(quoteId).unwrap();
+    } catch (e) {
+      alert(friendlyApiError(e));
+    } finally {
+      setCreatingId(null);
     }
   }
 
@@ -122,14 +156,74 @@ export default function AdminRequestsPage() {
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Requests</div>
           <div className="text-sm text-slate-500">
-            Newest first • Review, quote, confirm, then create an order.
+            Newest first - Review, quote, confirm, then create an order.
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
+            onClick={() => {
+              setSearch("");
+              setStatus("all");
+              setPage(1);
+            }}
+          >
+            Reset
+          </button>
         </div>
       </div>
 
-      {/* Filters placeholder */}
+      {/* Filters + Pagination */}
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="h-10 rounded-xl bg-white/60 ring-1 ring-slate-200" />
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-center">
+          <div className="md:col-span-8">
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by user name, email, or quote #"
+              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            />
+          </div>
+
+          <div className="md:col-span-4">
+            <select
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            >
+              <option value="all">All statuses</option>
+              <option value="Processing">Processing</option>
+              <option value="Quoted">Quoted</option>
+              <option value="Confirmed">Confirmed</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <div>
+            Showing{" "}
+            <span className="font-semibold text-slate-700">{rows.length}</span>{" "}
+            of <span className="font-semibold text-slate-700">{total}</span>{" "}
+            request(s)
+            {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
+            {isFetching ? <span className="ml-2">(Updating)</span> : null}
+          </div>
+
+          <Pagination
+            pagination={pagination}
+            onPageChange={setPage}
+            variant="compact"
+          />
+        </div>
       </div>
 
       {/* States */}
@@ -147,150 +241,136 @@ export default function AdminRequestsPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Quote</th>
+                  <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Owner</th>
-                  <th className="px-4 py-3">Order</th>
-                  <th className="px-4 py-3">Items</th>
                   <th className="px-4 py-3 text-right">Total</th>
+                  <th className="px-4 py-3">Order</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-200">
-                {rows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-10 text-center text-sm text-slate-500"
-                    >
-                      No requests found.
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((q) => {
-                    const hasOrder = Boolean(q.order);
-                    const canCreateOrder = q.status === "Confirmed" && !hasOrder;
+                {rows.map((q) => {
+                  const hasOrder = Boolean(q.order);
+                  const canCreateOrder = q.status === "Confirmed" && !hasOrder;
 
-                    const itemCount = itemCountById.get(q._id) ?? 0;
+                  const itemCount = itemCountById.get(q._id) ?? 0;
 
-                    const deletable = q.status === "Cancelled";
-                    const rowDeleting = deletingId === q._id;
-                    const disableDelete = !deletable || isDeleting || rowDeleting;
+                  const rowCreating = creatingId === q._id;
+                  const rowDeleting = deletingId === q._id;
 
-                    return (
-                      <tr key={q._id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 text-slate-700">
+                  return (
+                    <tr key={q._id} className="hover:bg-slate-50">
+                      {/* Quote: quoteNumber + createdAt */}
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">
+                          {q.quoteNumber || "—"}
+                        </div>
+                        <div className="text-xs text-slate-500">
                           {formatDateTime(q.createdAt)}
-                        </td>
+                        </div>
+                      </td>
 
-                        <td className="px-4 py-3">
-                          <StatusBadge status={q.status} />
-                        </td>
+                      {/* User */}
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">
+                          {q.user?.name || "—"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {q.user?.email || "—"}
+                        </div>
+                      </td>
 
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-slate-900">
-                            {q.user?.name || "—"}
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {q.user?.email || "—"}
-                          </div>
-                        </td>
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <StatusBadge status={q.status} />
+                      </td>
 
-                        {/* Order column: Create button OR checkmark */}
-                        <td className="px-4 py-3">
-                          {hasOrder ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                              <FiCheck className="h-4 w-4" />
-                              Created
-                            </span>
-                          ) : canCreateOrder ? (
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
-                              // NOTE: wire this to your create-order mutation when backend is ready
-                              onClick={() => {
-                                // placeholder
-                                // console.log("Create order for quote", q._id);
-                              }}
-                              title="Create order"
-                            >
-                              <FiPlus className="h-4 w-4" />
-                              Create
-                            </button>
-                          ) : (
-                            <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
-                              Not created
-                            </span>
-                          )}
-
-                          {/* Optional: show order number if populated */}
-                          {hasOrder && q.order?.orderNumber ? (
-                            <div className="mt-1 text-xs text-slate-500">
-                              {q.order.orderNumber}
-                            </div>
-                          ) : null}
-                        </td>
-
-                        <td className="px-4 py-3 text-slate-700">{itemCount}</td>
-
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      {/* Total: totalPrice + items below */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-semibold text-slate-900">
                           {money(q.totalPrice)}
-                        </td>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {itemCount} item(s)
+                        </div>
+                      </td>
 
-                        {/* Actions */}
-                        <td className="px-4 py-3 text-right">
-                          <div className="inline-flex items-center gap-2">
-                            {/* Edit icon */}
-                            <Link
-                              to={`/admin/requests/${q._id}`}
-                              className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
-                              title="Edit request"
-                              aria-label="Edit request"
-                            >
-                              <FiEdit2 className="h-4 w-4" />
-                            </Link>
-
-                            {/* Delete icon (works) */}
-                            <button
-                              type="button"
-                              className={[
-                                "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
-                                disableDelete
-                                  ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                                  : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
-                              ].join(" ")}
-                              title={
-                                deletable
-                                  ? rowDeleting
-                                    ? "Deleting…"
-                                    : "Delete quote"
-                                  : "Only Cancelled quotes can be deleted"
-                              }
-                              aria-label="Delete quote"
-                              disabled={disableDelete}
-                              onClick={() => onDelete(q)}
-                            >
-                              <FiTrash2 className="h-4 w-4" />
-                            </button>
+                      {/* Order status */}
+                      <td className="px-4 py-3">
+                        {hasOrder ? (
+                          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                            <span className="text-slate-700">
+                              {q.order?.orderNumber}
+                            </span>
+                            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 ring-1 ring-inset ring-emerald-200">
+                              <FiCheck className="h-3 w-3" />
+                            </span>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+                        ) : (
+                          <button
+                            type="button"
+                            className={[
+                              "rounded-xl px-3 py-2 text-xs font-semibold",
+                              q.status === "Confirmed"
+                                ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                                : "bg-slate-200 text-slate-400 cursor-not-allowed",
+                            ].join(" ")}
+                            onClick={
+                              q.status === "Confirmed"
+                                ? () => onCreateOrder(q._id)
+                                : undefined
+                            }
+                            disabled={
+                              q.status !== "Confirmed" ||
+                              rowCreating ||
+                              isCreatingOrder
+                            }
+                          >
+                            {rowCreating ? "Creating…" : "Create"}
+                          </button>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <Link
+                            to={`/admin/requests/${q._id}`}
+                            className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
+                            title="Edit"
+                          >
+                            <FiEdit2 className="h-4 w-4" />
+                          </Link>
+
+                          <button
+                            type="button"
+                            className={[
+                              "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
+                              q.status !== "Cancelled" ||
+                              rowDeleting ||
+                              isDeleting
+                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
+                            ].join(" ")}
+                            disabled={
+                              q.status !== "Cancelled" ||
+                              rowDeleting ||
+                              isDeleting
+                            }
+                            onClick={() => onDelete(q)}
+                            title="Delete"
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3">
-            <div className="text-sm text-slate-500">
-              Showing {rows.length} of {total} request(s)
-              {isFetching ? "…" : ""}
-            </div>
-
-            <Pagination page={page} pages={pages} onPageChange={setPage} />
           </div>
         </div>
       )}
