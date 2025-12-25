@@ -82,8 +82,8 @@ function buildPaymentDefaults(inv) {
 
   return {
     amount,
-    method: "Cash",
-    receivedBy: "Accounting",
+    method: "",
+    receivedBy: "",
     date: toDateTimeLocalValue(new Date()),
     reference: "",
     note: "",
@@ -180,7 +180,7 @@ export default function AdminInvoiceEditPage() {
   const [paymentForm, setPaymentForm] = useState(() =>
     buildPaymentDefaults(invoice)
   );
-  const [paymentError, setPaymentError] = useState("");
+  const [paymentFieldErrors, setPaymentFieldErrors] = useState({});
 
   useEffect(() => {
     if (!invoice) return;
@@ -191,7 +191,7 @@ export default function AdminInvoiceEditPage() {
     setSaved(false);
     setShowAddPayment(false);
     setPaymentForm(buildPaymentDefaults(invoice));
-    setPaymentError("");
+    setPaymentFieldErrors({});
   }, [invoice?._id, invoice?.id, invoice?.updatedAt]);
 
   const payments = Array.isArray(invoice?.payments) ? invoice.payments : [];
@@ -226,18 +226,23 @@ export default function AdminInvoiceEditPage() {
 
   const updatePaymentForm = (field, value) => {
     setPaymentForm((prev) => ({ ...prev, [field]: value }));
+    setPaymentFieldErrors((prev) => {
+      if (!prev?.[field]) return prev;
+      const { [field]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
   const openAddPayment = () => {
     if (!canAddPayment) return;
     setPaymentForm(buildPaymentDefaults(invoice));
-    setPaymentError("");
+    setPaymentFieldErrors({});
     setShowAddPayment(true);
   };
 
   const closeAddPayment = () => {
     setShowAddPayment(false);
-    setPaymentError("");
+    setPaymentFieldErrors({});
   };
 
   const onSave = async () => {
@@ -264,33 +269,37 @@ export default function AdminInvoiceEditPage() {
     const invoiceId = invoice?._id || invoice?.id;
     if (!invoiceId) return;
 
-    setPaymentError("");
+    const nextErrors = {};
 
     const amountValue = Number(paymentForm.amount);
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      setPaymentError("Amount must be a positive number.");
-      return;
+      nextErrors.amount = "Enter a positive amount.";
     }
 
     if (!paymentForm.method) {
-      setPaymentError("Payment method is required.");
-      return;
+      nextErrors.method = "Required";
     }
 
     if (!paymentForm.receivedBy.trim()) {
-      setPaymentError("Received by is required.");
-      return;
+      nextErrors.receivedBy = "Required";
     }
 
     let paymentDateValue;
     if (paymentForm.date) {
       const parsed = new Date(paymentForm.date);
       if (Number.isNaN(parsed.getTime())) {
-        setPaymentError("Payment date is invalid.");
-        return;
+        nextErrors.date = "Invalid date.";
+      } else {
+        paymentDateValue = parsed.toISOString();
       }
-      paymentDateValue = parsed.toISOString();
     }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setPaymentFieldErrors(nextErrors);
+      return;
+    }
+
+    setPaymentFieldErrors({});
 
     try {
       await addPaymentToInvoice({
@@ -305,7 +314,7 @@ export default function AdminInvoiceEditPage() {
 
       setShowAddPayment(false);
       setPaymentForm(buildPaymentDefaults(invoice));
-      setPaymentError("");
+      setPaymentFieldErrors({});
     } catch {
       // ErrorMessage handles it
     }
@@ -350,7 +359,7 @@ export default function AdminInvoiceEditPage() {
         error={addPaymentError}
         form={paymentForm}
         onFieldChange={updatePaymentForm}
-        paymentError={paymentError}
+        fieldErrors={paymentFieldErrors}
       />
 
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">

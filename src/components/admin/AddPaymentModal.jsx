@@ -12,9 +12,25 @@ export default function AddPaymentModal({
   error,
   form,
   onFieldChange,
-  paymentError,
+  fieldErrors,
 }) {
   if (!open) return null;
+
+  const receivedByOptions = [
+    "Azad",
+    "Momani",
+    "Company Account",
+    "Ahmad Emad",
+  ];
+  const errors = fieldErrors || {};
+
+  const fieldClass = (hasError) =>
+    [
+      "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 focus:outline-none focus:ring-2",
+      hasError
+        ? "ring-rose-300 focus:ring-rose-200"
+        : "ring-slate-200 focus:ring-slate-900/20",
+    ].join(" ");
 
   return (
     <div
@@ -63,8 +79,13 @@ export default function AddPaymentModal({
                 value={form.amount}
                 onChange={(e) => onFieldChange("amount", e.target.value)}
                 placeholder="0.00"
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                className={fieldClass(errors.amount)}
               />
+              {errors.amount ? (
+                <div className="mt-1 text-xs font-semibold text-rose-600">
+                  {errors.amount}
+                </div>
+              ) : null}
             </div>
 
             <div className="md:col-span-3">
@@ -74,27 +95,47 @@ export default function AddPaymentModal({
               <select
                 value={form.method}
                 onChange={(e) => onFieldChange("method", e.target.value)}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                className={fieldClass(errors.method)}
               >
+                <option value="" disabled>
+                  Select method
+                </option>
                 <option value="Cash">Cash</option>
                 <option value="Bank Transfer">Bank transfer</option>
                 <option value="Credit Card">Credit card</option>
                 <option value="Cheque">Cheque</option>
                 <option value="Other">Other</option>
               </select>
+              {errors.method ? (
+                <div className="mt-1 text-xs font-semibold text-rose-600">
+                  {errors.method}
+                </div>
+              ) : null}
             </div>
 
             <div className="md:col-span-3">
               <label className="mb-1 block text-xs font-semibold text-slate-600">
                 Received by
               </label>
-              <input
-                type="text"
+              <select
                 value={form.receivedBy}
                 onChange={(e) => onFieldChange("receivedBy", e.target.value)}
-                placeholder="Accounting"
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              />
+                className={fieldClass(errors.receivedBy)}
+              >
+                <option value="" disabled>
+                  Select receiver
+                </option>
+                {receivedByOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              {errors.receivedBy ? (
+                <div className="mt-1 text-xs font-semibold text-rose-600">
+                  {errors.receivedBy}
+                </div>
+              ) : null}
             </div>
 
             <div className="md:col-span-3">
@@ -105,8 +146,13 @@ export default function AddPaymentModal({
                 type="datetime-local"
                 value={form.date}
                 onChange={(e) => onFieldChange("date", e.target.value)}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                className={fieldClass(errors.date)}
               />
+              {errors.date ? (
+                <div className="mt-1 text-xs font-semibold text-rose-600">
+                  {errors.date}
+                </div>
+              ) : null}
             </div>
 
             <div className="md:col-span-6">
@@ -158,12 +204,6 @@ export default function AddPaymentModal({
               Cancel
             </button>
           </div>
-
-          {paymentError ? (
-            <div className="mt-2 text-xs font-semibold text-rose-600">
-              {paymentError}
-            </div>
-          ) : null}
 
           {error ? (
             <div className="mt-3">

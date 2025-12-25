@@ -17,14 +17,14 @@ import { useLogoutMutation } from '../../features/auth/usersApiSlice'
 
 const desktopLink = ({ isActive }) =>
   `inline-flex items-center gap-2 text-base font-medium transition ${
-    isActive ? 'text-slate-900' : 'text-slate-700 hover:text-slate-900'
+    isActive ? 'text-violet-700' : 'text-slate-700 hover:text-violet-700'
   }`
 
 const drawerLink = ({ isActive }) =>
   `flex items-center justify-between rounded-lg px-3 py-2 text-base font-medium transition ${
     isActive
-      ? 'bg-slate-100 text-slate-900'
-      : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+      ? 'bg-violet-50 text-violet-700'
+      : 'text-slate-700 hover:bg-violet-50 hover:text-violet-700'
   }`
 
 export default function Header() {
@@ -132,7 +132,7 @@ export default function Header() {
     <header ref={headerRef} className="sticky top-0 z-50 bg-white shadow-sm">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         {/* Logo */}
-        <Link to="/" className="text-xl font-semibold tracking-tight text-slate-900">
+        <Link to="/" className="text-2xl font-bold tracking-tight text-violet-700">
           Megadie
         </Link>
 
@@ -149,7 +149,7 @@ export default function Header() {
               {count > 0 && (
                 <span
                   className={[
-                    'absolute -right-2 -top-2 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white',
+                    'absolute -right-2 -top-2 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white',
                     bounce ? 'animate-bounce' : '',
                   ].join(' ')}
                 >
@@ -188,9 +188,9 @@ export default function Header() {
           {/* Admin entry point (desktop) — LAST */}
           {!isInitialized ? null : isAdmin ? (
             <NavLink to="/admin" className={desktopLink}>
-              <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-semibold text-white">
-                Admin
-              </span>
+                <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-semibold text-white">
+                  Admin
+                </span>
             </NavLink>
           ) : null}
         </div>
@@ -209,7 +209,7 @@ export default function Header() {
           {count > 0 && (
             <span
               className={[
-                'absolute -right-3 -top-3 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white',
+                'absolute -right-3 -top-3 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white',
                 bounce ? 'animate-bounce' : '',
               ].join(' ')}
             >
@@ -253,7 +253,7 @@ export default function Header() {
                   <span className="relative">
                     <FaShoppingCart size={20} />
                     {count > 0 && (
-                      <span className="absolute -right-2 -top-2 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      <span className="absolute -right-2 -top-2 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                         {count}
                       </span>
                     )}

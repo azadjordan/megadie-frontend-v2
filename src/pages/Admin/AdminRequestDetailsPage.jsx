@@ -1,4 +1,4 @@
-// src/pages/Admin/AdminRequestDetailsPage.jsx
+﻿// src/pages/Admin/AdminRequestDetailsPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
@@ -22,7 +22,7 @@ function formatDateTime(iso) {
       minute: "2-digit",
     });
   } catch {
-    return iso || "—";
+    return iso || "-";
   }
 }
 
@@ -39,14 +39,14 @@ function StatusBadge({ status }) {
 
   return (
     <span className={`${base} ${map[status] || map.Processing}`}>
-      {status || "—"}
+      {status || "-"}
     </span>
   );
 }
 
 function money(amount, currency = "AED") {
   const n = Number(amount);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
@@ -69,7 +69,7 @@ function getId(v) {
 }
 
 /**
- * ✅ IMPORTANT UX RULE:
+ * Note: IMPORTANT UX RULE:
  * Inputs must allow clearing completely while typing ("" is allowed),
  * and "0" is valid.
  *
@@ -256,15 +256,15 @@ export default function AdminRequestDetailsPage() {
       const qty = parseNullableNumber(it.qtyStr);
       const unit = parseNullableNumber(it.unitPriceStr);
 
-      // ✅ allow 0, but do NOT allow empty at save time
+      // Note: allow 0, but do NOT allow empty at save time
       if (qty == null || unit == null) return false;
 
-      // ✅ allow 0 for qty/unitPrice
+      // Note: allow 0 for qty/unitPrice
       if (qty < 0) return false;
       if (unit < 0) return false;
     }
 
-    // ✅ charges can be 0; but cannot be empty at save time
+    // Note: charges can be 0; but cannot be empty at save time
     const delivery = parseNullableNumber(deliveryChargeStr);
     const extra = parseNullableNumber(extraFeeStr);
     if (delivery == null || extra == null) return false;
@@ -361,24 +361,24 @@ export default function AdminRequestDetailsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-lg font-semibold text-slate-900">Quote Details</div>
 
-          <span className="text-xs text-slate-400">•</span>
+          <span className="text-xs text-slate-400">&bull;</span>
           <div className="text-sm font-semibold text-slate-700">
             {quote?.id || quote?._id}
           </div>
 
-          <span className="text-xs text-slate-400">•</span>
+          <span className="text-xs text-slate-400">&bull;</span>
           <StatusBadge status={backendStatus} />
 
           {isQuoteFetching ? (
             <>
-              <span className="text-xs text-slate-400">•</span>
-              <span className="text-xs text-slate-400">Refreshing…</span>
+              <span className="text-xs text-slate-400">&bull;</span>
+              <span className="text-xs text-slate-400">Refreshing...</span>
             </>
           ) : null}
         </div>
 
         <div className="mt-1 text-sm text-slate-500">
-          Created {formatDateTime(quote.createdAt)} • Updated{" "}
+          Created {formatDateTime(quote.createdAt)} &bull; Updated{" "}
           {formatDateTime(quote.updatedAt)}
         </div>
 
@@ -403,7 +403,12 @@ export default function AdminRequestDetailsPage() {
       </div>
 
       {/* Layout */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
+      <div
+        className={[
+          "grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]",
+          quoteLocked ? "blur-[1px] opacity-70" : "",
+        ].join(" ")}
+      >
         {/* Steps */}
         <div className="space-y-4">
           {/* Step 1 */}
@@ -431,10 +436,10 @@ export default function AdminRequestDetailsPage() {
                       quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
                     ].join(" ")}
                   >
-                    <option value="">Select a user…</option>
+                    <option value="">Select a user...</option>
                     {users.map((u) => (
                       <option key={u._id} value={u._id}>
-                        {u.name} — {u.email}
+                        {u.name} - {u.email}
                       </option>
                     ))}
                   </select>
@@ -445,11 +450,11 @@ export default function AdminRequestDetailsPage() {
                     Selected user
                   </div>
                   <div className="mt-1 text-sm font-semibold text-slate-900">
-                    {selectedUser?.name || "—"}
+                    {selectedUser?.name || "-"}
                   </div>
-                  <div className="text-xs text-slate-600">{selectedUser?.email || "—"}</div>
+                  <div className="text-xs text-slate-600">{selectedUser?.email || "-"}</div>
                   <div className="text-xs text-slate-600">
-                    {selectedUser?.phoneNumber || "—"}
+                    {selectedUser?.phoneNumber || "-"}
                   </div>
                 </div>
               </div>
@@ -479,7 +484,7 @@ export default function AdminRequestDetailsPage() {
                       <tr key={`${it.productId || idx}`} className="hover:bg-slate-50">
                         <td className="py-3 pr-3">
                           <div className="text-xs font-semibold text-slate-900">
-                            {it.sku || "—"}
+                            {it.sku || "-"}
                           </div>
                         </td>
 
@@ -599,23 +604,23 @@ export default function AdminRequestDetailsPage() {
             <div className="grid grid-cols-1 gap-3">
               <div>
                 <div className="mb-1 text-xs font-semibold text-slate-600">
-                  Client → Admin
+                  Client to Admin
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
-                  {quote.clientToAdminNote || "—"}
+                  {quote.clientToAdminNote || "-"}
                 </div>
               </div>
 
               <div>
                 <div className="mb-1 text-xs font-semibold text-slate-600">
-                  Admin → Admin (internal)
+                  Admin to Admin (internal)
                 </div>
                 <textarea
                   value={adminToAdminNote}
                   disabled={quoteLocked}
                   onChange={(e) => setAdminToAdminNote(e.target.value)}
                   rows={3}
-                  placeholder="Internal notes for your team…"
+                  placeholder="Internal notes for your team..."
                   className={[
                     "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
                     quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
@@ -625,14 +630,14 @@ export default function AdminRequestDetailsPage() {
 
               <div>
                 <div className="mb-1 text-xs font-semibold text-slate-600">
-                  Admin → Client
+                  Admin to Client
                 </div>
                 <textarea
                   value={adminToClientNote}
                   disabled={quoteLocked}
                   onChange={(e) => setAdminToClientNote(e.target.value)}
                   rows={3}
-                  placeholder="Message to the client…"
+                  placeholder="Message to the client..."
                   className={[
                     "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
                     quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
@@ -769,8 +774,11 @@ export default function AdminRequestDetailsPage() {
       </div>
 
       <div className="text-xs text-slate-400">
-        Flow: user → items & charges → notes → status → summary → update.
+        Flow: user to items & charges to notes to status to summary to update.
       </div>
     </div>
   );
 }
+
+
+

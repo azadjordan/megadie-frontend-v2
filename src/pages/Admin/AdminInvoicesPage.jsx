@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiEdit2, FiTrash2 } from "react-icons/fi";
+import { FiSettings, FiTrash2, FiRefreshCw } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -10,6 +11,7 @@ import useDebouncedValue from "../../hooks/useDebouncedValue";
 import {
   useDeleteInvoiceByAdminMutation,
   useGetInvoicesAdminQuery,
+  useLazyGetInvoicePdfQuery,
 } from "../../features/invoices/invoicesApiSlice";
 
 function formatDateTime(iso) {
@@ -139,8 +141,11 @@ export default function AdminInvoicesPage() {
 
   const [deleteInvoiceByAdmin, { isLoading: isDeleting }] =
     useDeleteInvoiceByAdminMutation();
+  const [getInvoicePdf, { isFetching: isPdfLoading }] =
+    useLazyGetInvoicePdfQuery();
 
   const [deletingId, setDeletingId] = useState(null);
+  const [pdfId, setPdfId] = useState(null);
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
@@ -161,16 +166,47 @@ export default function AdminInvoicesPage() {
 
   async function onDelete(inv) {
     if (inv.status !== "Cancelled") return;
-    const ok = window.confirm("Delete this cancelled invoice?");
+    const detail = inv.order
+      ? "Invoice and linked payments deleted AND Order unlinked."
+      : "Invoice and linked payments deleted.";
+    const ok = window.confirm(`Delete this cancelled invoice? ${detail}`);
     if (!ok) return;
 
     try {
       setDeletingId(inv._id);
-      await deleteInvoiceByAdmin(inv._id).unwrap();
+      const res = await deleteInvoiceByAdmin(inv._id).unwrap();
+      toast.success(res?.message || detail);
     } catch (e) {
-      alert(friendlyApiError(e));
+      toast.error(friendlyApiError(e));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function onPdf(inv) {
+    try {
+      setPdfId(inv._id);
+      const blob = await getInvoicePdf(inv._id).unwrap();
+      const fileName = inv.invoiceNumber
+        ? `invoice-${inv.invoiceNumber}.pdf`
+        : `invoice-${inv._id}.pdf`;
+      const url = window.URL.createObjectURL(blob);
+      const newTab = window.open(url, "_blank", "noopener,noreferrer");
+
+      if (!newTab) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      toast.error(friendlyApiError(e));
+    } finally {
+      setPdfId(null);
     }
   }
 
@@ -184,26 +220,19 @@ export default function AdminInvoicesPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setPaymentStatusFilter("all");
-              setSort("newest");
-              setPage(1);
-            }}
-          >
-            Reset
-          </button>
-        </div>
       </div>
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-center">
-          <div className="md:col-span-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_200px_200px_auto] md:items-end">
+          <div>
+            <label
+              htmlFor="invoices-search"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Search
+            </label>
             <input
+              id="invoices-search"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -214,8 +243,15 @@ export default function AdminInvoicesPage() {
             />
           </div>
 
-          <div className="md:col-span-3">
+          <div>
+            <label
+              htmlFor="invoices-payment-status"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Payment status
+            </label>
             <select
+              id="invoices-payment-status"
               value={paymentStatusFilter}
               onChange={(e) => {
                 setPaymentStatusFilter(e.target.value);
@@ -231,8 +267,15 @@ export default function AdminInvoicesPage() {
             </select>
           </div>
 
-          <div className="md:col-span-3">
+          <div>
+            <label
+              htmlFor="invoices-sort"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Sort
+            </label>
             <select
+              id="invoices-sort"
               value={sort}
               onChange={(e) => {
                 setSort(e.target.value);
@@ -246,14 +289,29 @@ export default function AdminInvoicesPage() {
               <option value="amountLow">Amount (low)</option>
             </select>
           </div>
+
+          <div className="flex items-end md:justify-end">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+              onClick={() => {
+                setSearch("");
+                setPaymentStatusFilter("all");
+                setSort("newest");
+                setPage(1);
+              }}
+            >
+              <FiRefreshCw className="h-3.5 w-3.5 mr-1 text-slate-400" aria-hidden="true" />
+              Reset filters
+            </button>
+          </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
           <div>
             Showing{" "}
-            <span className="font-semibold text-slate-700">{rows.length}</span>{" "}
-            of <span className="font-semibold text-slate-700">{total}</span>{" "}
-            invoice(s)
+            <span className="font-semibold text-slate-900">{rows.length}</span> of{" "}
+            <span className="font-semibold text-slate-900">{total}</span> items
             {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
             {isFetching ? <span className="ml-2">(Updating)</span> : null}
           </div>
@@ -307,6 +365,7 @@ export default function AdminInvoicesPage() {
                   const overdue = isOverdue(inv);
                   const balance = balanceDueMinor(inv);
                   const rowDeleting = deletingId === inv._id;
+                  const rowPdf = pdfId === inv._id;
                   const canDelete = inv.status === "Cancelled";
 
                   return (
@@ -378,13 +437,28 @@ export default function AdminInvoicesPage() {
 
                       <td className="px-4 py-3 text-center">
                         <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            className={[
+                              "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                              rowPdf || isPdfLoading
+                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                            ].join(" ")}
+                            disabled={rowPdf || isPdfLoading}
+                            onClick={() => onPdf(inv)}
+                            title="PDF"
+                          >
+                            {rowPdf ? "PDF.." : "PDF"}
+                          </button>
+
                           <Link
                             to={`/admin/invoices/${inv._id}/edit`}
                             className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white ring-1 ring-slate-900 hover:bg-slate-800"
                             title="Edit invoice"
                             aria-label="Edit invoice"
                           >
-                            <FiEdit2 className="h-4 w-4" />
+                            <FiSettings className="h-4 w-4" />
                           </Link>
 
                           <button

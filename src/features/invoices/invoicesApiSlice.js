@@ -1,5 +1,9 @@
 import { apiSlice } from "../../app/apiSlice";
 
+const ADMIN_INVOICE_STATUSES = ["Issued", "Cancelled"];
+const ADMIN_PAYMENT_STATUSES = ["Unpaid", "PartiallyPaid", "Paid"];
+const ADMIN_INVOICE_SORTS = ["newest", "oldest", "amountHigh", "amountLow"];
+
 export const invoicesApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     // Admin: list invoices (paginated)
@@ -14,11 +18,20 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       } = {}) => {
         const params = new URLSearchParams();
         params.set("page", String(page));
-        if (status && status !== "all") params.set("status", status);
-        if (paymentStatus && paymentStatus !== "all")
+        if (status && status !== "all" && ADMIN_INVOICE_STATUSES.includes(status)) {
+          params.set("status", status);
+        }
+        if (
+          paymentStatus &&
+          paymentStatus !== "all" &&
+          ADMIN_PAYMENT_STATUSES.includes(paymentStatus)
+        ) {
           params.set("paymentStatus", paymentStatus);
+        }
         if (overdue) params.set("overdue", "true");
-        if (sort && sort !== "newest") params.set("sort", sort);
+        if (sort && sort !== "newest" && ADMIN_INVOICE_SORTS.includes(sort)) {
+          params.set("sort", sort);
+        }
         if (search) params.set("search", search);
         return `/invoices?${params.toString()}`;
       },
@@ -51,6 +64,15 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: "Invoice", id }],
     }),
 
+    getInvoicePdf: builder.query({
+      query: (id) => ({
+        url: `/invoices/${id}/pdf`,
+        method: "GET",
+        responseHandler: (response) => response.blob(),
+      }),
+      keepUnusedDataFor: 0,
+    }),
+
     updateInvoiceByAdmin: builder.mutation({
       query: ({ id, ...body }) => ({
         url: `/invoices/${id}`,
@@ -73,6 +95,18 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
         { type: "Invoice", id },
       ],
     }),
+
+    createInvoiceFromOrder: builder.mutation({
+      query: ({ orderId, ...body }) => ({
+        url: `/invoices/from-order/${orderId}`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Invoice", id: "LIST" },
+        { type: "Order", id: arg?.orderId },
+      ],
+    }),
   }),
 });
 
@@ -80,6 +114,8 @@ export const {
   useGetInvoicesAdminQuery,
   useGetMyInvoicesQuery,
   useGetInvoiceByIdQuery,
+  useLazyGetInvoicePdfQuery,
   useUpdateInvoiceByAdminMutation,
   useDeleteInvoiceByAdminMutation,
+  useCreateInvoiceFromOrderMutation,
 } = invoicesApiSlice;

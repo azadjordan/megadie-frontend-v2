@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { FiRefreshCw } from "react-icons/fi";
 
 export default function AdminInventoryPage() {
   const [tab, setTab] = useState("products"); // products | slots | moves
@@ -8,6 +9,8 @@ export default function AdminInventoryPage() {
 
   const rows = useMemo(() => [], []);
   const filtered = useMemo(() => rows, [rows]);
+  const totalItems = rows.length;
+  const visibleItems = filtered.length;
 
   return (
     <div className="space-y-4">
@@ -47,7 +50,7 @@ export default function AdminInventoryPage() {
 
       {/* Tabs + Filters */}
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3">
           {/* Tabs */}
           <div className="flex flex-wrap gap-2">
             {[
@@ -75,7 +78,7 @@ export default function AdminInventoryPage() {
           </div>
 
           {/* Filter controls */}
-          <div className="grid w-full grid-cols-1 gap-2 md:w-auto md:grid-cols-2">
+          <div className="grid w-full grid-cols-1 gap-2 md:grid-cols-[1fr_200px_auto] md:items-end">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -98,6 +101,28 @@ export default function AdminInventoryPage() {
               <option value="oldest">Oldest</option>
               <option value="name">Name</option>
             </select>
+
+            <div className="flex items-end md:justify-end">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                onClick={() => {
+                  setQ("");
+                  setSort("newest");
+                }}
+              >
+                <FiRefreshCw className="h-3.5 w-3.5 mr-1 text-slate-400" aria-hidden="true" />
+                Reset filters
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+            <div>
+              Showing{" "}
+              <span className="font-semibold text-slate-900">{visibleItems}</span> of{" "}
+              <span className="font-semibold text-slate-900">{totalItems}</span> items
+            </div>
           </div>
         </div>
       </div>

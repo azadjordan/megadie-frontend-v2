@@ -30,6 +30,7 @@ import AdminInventoryPage from "../pages/Admin/AdminInventoryPage";
 import AdminUsersPage from "../pages/Admin/AdminUsersPage";
 import AdminUserEditPage from "../pages/Admin/AdminUserEditPage";
 import AdminRequestDetailsPage from "../pages/Admin/AdminRequestDetailsPage";
+import AdminOrderDetailsPage from "../pages/Admin/AdminOrderDetailsPage";
 
 
 
@@ -39,23 +40,23 @@ import RequireAuth from "../components/auth/RequireAuth";
 
 // Account layout + pages
 import AccountLayout from "../components/layout/AccountLayout";
+import AccountOverviewPage from "../pages/Account/AccountOverviewPage";
 import AccountProfilePage from "../pages/Account/AccountProfilePage";
 import AccountRequestsPage from "../pages/Account/AccountRequestsPage";
+import AccountOrdersPage from "../pages/Account/AccountOrdersPage";
 
 // ✅ Billing (Invoices list + Invoice details + Order details)
 import AccountInvoicesPage from "../pages/Account/AccountInvoicesPage";
 import AccountInvoiceDetailsPage from "../pages/Account/AccountInvoiceDetailsPage";
-import AccountOrderDetailsPage from "../pages/Account/AccountOrderDetailsPage";
 import AdminPaymentsPage from "../pages/Admin/AdminPaymentsPage";
 
 // ✅ Backward-compat param redirects (Navigate can't keep ":id" by itself)
 function InvoiceRedirect() {
   const { id } = useParams();
-  return <Navigate to={`/account/billing/invoices/${id}`} replace />;
+  return <Navigate to={`/account/invoices/${id}`} replace />;
 }
 function OrderRedirect() {
-  const { id } = useParams();
-  return <Navigate to={`/account/billing/orders/${id}`} replace />;
+  return <Navigate to="/account/orders" replace />;
 }
 
 export default function AppRoutes() {
@@ -73,40 +74,39 @@ export default function AppRoutes() {
             {/* Default account landing */}
             <Route
               path="/account"
-              element={<Navigate to="/account/requests" replace />}
+              element={<Navigate to="/account/overview" replace />}
             />
 
             {/* Account */}
+            <Route path="/account/overview" element={<AccountOverviewPage />} />
             <Route path="/account/profile" element={<AccountProfilePage />} />
             <Route path="/account/requests" element={<AccountRequestsPage />} />
+            <Route path="/account/orders" element={<AccountOrdersPage />} />
+            <Route path="/account/invoices" element={<AccountInvoicesPage />} />
+            <Route
+              path="/account/invoices/:id"
+              element={<AccountInvoiceDetailsPage />}
+            />
 
             {/* ✅ Billing section (single sidebar item) */}
             <Route
               path="/account/billing"
-              element={<Navigate to="/account/billing/invoices" replace />}
+              element={<Navigate to="/account/invoices" replace />}
             />
             <Route
               path="/account/billing/invoices"
-              element={<AccountInvoicesPage />}
+              element={<Navigate to="/account/invoices" replace />}
             />
             <Route
               path="/account/billing/invoices/:id"
-              element={<AccountInvoiceDetailsPage />}
+              element={<InvoiceRedirect />}
             />
             <Route
               path="/account/billing/orders/:id"
-              element={<AccountOrderDetailsPage />}
+              element={<OrderRedirect />}
             />
 
-            {/* ✅ Backward-compat redirects (old URLs) */}
-            <Route
-              path="/account/invoices"
-              element={<Navigate to="/account/billing/invoices" replace />}
-            />
-            <Route path="/account/invoices/:id" element={<InvoiceRedirect />} />
-            <Route path="/account/orders/:id" element={<OrderRedirect />} />
 
-            {/* ✅ IMPORTANT: We intentionally DO NOT have /account/orders anymore */}
           </Route>
         </Route>
 
@@ -135,6 +135,7 @@ export default function AppRoutes() {
     <Route path="requests/:id" element={<AdminRequestDetailsPage />} />
 
     <Route path="orders" element={<AdminOrdersPage />} />
+    <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
     <Route path="invoices" element={<AdminInvoicesPage />} />
     <Route path="invoices/:id/edit" element={<AdminInvoiceEditPage />} />
     <Route path="payments" element={<AdminPaymentsPage />} />

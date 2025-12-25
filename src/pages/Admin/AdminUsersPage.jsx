@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { FiRefreshCw, FiSettings } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -58,26 +59,19 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setRole("all");
-              setSort("name");
-              setPage(1);
-            }}
-          >
-            Reset
-          </button>
-        </div>
       </div>
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-center">
-          <div className="md:col-span-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_200px_200px_auto] md:items-end">
+          <div>
+            <label
+              htmlFor="users-search"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Search
+            </label>
             <input
+              id="users-search"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -88,8 +82,15 @@ export default function AdminUsersPage() {
             />
           </div>
 
-          <div className="md:col-span-3">
+          <div>
+            <label
+              htmlFor="users-role"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Role
+            </label>
             <select
+              id="users-role"
               value={role}
               onChange={(e) => {
                 setRole(e.target.value);
@@ -103,8 +104,15 @@ export default function AdminUsersPage() {
             </select>
           </div>
 
-          <div className="md:col-span-3">
+          <div>
+            <label
+              htmlFor="users-sort"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Sort
+            </label>
             <select
+              id="users-sort"
               value={sort}
               onChange={(e) => {
                 setSort(e.target.value);
@@ -117,14 +125,29 @@ export default function AdminUsersPage() {
               <option value="name">Name</option>
             </select>
           </div>
+
+          <div className="flex items-end md:justify-end">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+              onClick={() => {
+                setSearch("");
+                setRole("all");
+                setSort("name");
+                setPage(1);
+              }}
+            >
+              <FiRefreshCw className="h-3.5 w-3.5 mr-1 text-slate-400" aria-hidden="true" />
+              Reset filters
+            </button>
+          </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
           <div>
             Showing{" "}
-            <span className="font-semibold text-slate-700">{rows.length}</span>{" "}
-            of <span className="font-semibold text-slate-700">{total}</span>{" "}
-            user(s)
+            <span className="font-semibold text-slate-900">{rows.length}</span> of{" "}
+            <span className="font-semibold text-slate-900">{total}</span> items
             {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
             {isFetching ? <span className="ml-2">(Updating)</span> : null}
           </div>
@@ -200,8 +223,9 @@ export default function AdminUsersPage() {
                       <td className="px-4 py-3 text-center">
                         <Link
                           to={`/admin/users/${userId}/edit`}
-                          className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
                         >
+                          <FiSettings className="h-3.5 w-3.5" />
                           Edit
                         </Link>
                       </td>

@@ -11,7 +11,7 @@ const baseQueryWithAuth = async (args, api, extraOptions) => {
   const result = await rawBaseQuery(args, api, extraOptions)
 
   // If session expired / cookie invalid, clear client auth + cached data.
-  if (result?.error?.status === 401 || result?.error?.status === 403) {
+  if (result?.error?.status === 401) {
     api.dispatch(logoutAction())
     api.dispatch(apiSlice.util.resetApiState())
   }

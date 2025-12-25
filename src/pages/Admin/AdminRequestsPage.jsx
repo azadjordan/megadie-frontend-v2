@@ -1,17 +1,18 @@
-// src/pages/Admin/AdminRequestsPage.jsx
+﻿// src/pages/Admin/AdminRequestsPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiEdit2, FiTrash2, FiCheck, FiPlus } from "react-icons/fi";
+import { FiEdit2, FiTrash2, FiCheck, FiRefreshCw, FiCopy } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 import Pagination from "../../components/common/Pagination";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 
-import useDebouncedValue from "../../hooks/useDebouncedValue";
-
 import {
   useDeleteQuoteByAdminMutation,
   useGetAdminQuotesQuery,
+  useLazyGetQuoteShareQuery,
+  useLazyGetQuotePdfQuery,
 } from "../../features/quotes/quotesApiSlice";
 
 import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
@@ -24,10 +25,21 @@ function formatDateTime(iso) {
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
     });
   } catch {
-    return iso || "—";
+    return iso || "-";
+  }
+}
+
+function formatDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  } catch {
+    return iso || "-";
   }
 }
 
@@ -67,29 +79,91 @@ function friendlyApiError(err) {
   return String(msg);
 }
 
+function buildQuoteShareText(q) {
+  const quoteNo = q?.quoteNumber || q?._id || "-";
+  const createdAt = q?.createdAt ? formatDate(q.createdAt) : "-";
+  const clientName = q?.user?.name || "Unnamed";
+  const clientEmail = q?.user?.email || "-";
+  const status = q?.status || "-";
+  const items = Array.isArray(q?.requestedItems) ? q.requestedItems : [];
+
+  const lines = [];
+  lines.push(`Quote #: ${quoteNo}`);
+  lines.push(`Date: ${createdAt}`);
+  lines.push(`Client: ${clientName}`);
+  lines.push(`Email: ${clientEmail}`);
+  lines.push(`Status: ${status}`);
+  lines.push("");
+
+  lines.push("Items:");
+  if (!items.length) {
+    lines.push("- None");
+  } else {
+    items.forEach((item, idx) => {
+      const qty = Number(item?.qty) || 0;
+      const unit = Number(item?.unitPrice) || 0;
+      const lineTotal = Math.max(0, unit * qty);
+      const label = item?.product?.name || "Unnamed";
+      lines.push(`${idx + 1}. ${label}`);
+      lines.push(`Qty: ${qty}`);
+      lines.push(`Total: ${money(lineTotal)}`);
+    });
+  }
+
+  lines.push("");
+  lines.push(`Delivery Charge: ${money(q?.deliveryCharge)}`);
+  lines.push(`Extra Fee: ${money(q?.extraFee)}`);
+  lines.push(`Total Price: ${money(q?.totalPrice)}`);
+
+  return lines.join("\n");
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const ok = document.execCommand("copy");
+  textarea.remove();
+
+  if (!ok) {
+    throw new Error("Copy failed.");
+  }
+}
+
 export default function AdminRequestsPage() {
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
-
-  const trimmedSearch = search.trim();
-  const debouncedSearch = useDebouncedValue(trimmedSearch, 500);
-  const isDebouncing = trimmedSearch !== debouncedSearch;
 
   const { data, isLoading, isError, error, isFetching } =
-    useGetAdminQuotesQuery({ page, status, search: debouncedSearch });
+    useGetAdminQuotesQuery({ page });
 
   const [deleteQuoteByAdmin, { isLoading: isDeleting }] =
     useDeleteQuoteByAdminMutation();
+
+  const [getQuoteShare] = useLazyGetQuoteShareQuery();
+  const [getQuotePdf, { isFetching: isPdfLoading }] = useLazyGetQuotePdfQuery();
 
   const [createOrderFromQuote, { isLoading: isCreatingOrder }] =
     useCreateOrderFromQuoteMutation();
 
   const [deletingId, setDeletingId] = useState(null);
   const [creatingId, setCreatingId] = useState(null);
+  const [pdfId, setPdfId] = useState(null);
+  const [copyId, setCopyId] = useState(null);
 
   const rows = data?.data || [];
-  const total = data?.pagination?.total ?? data?.total ?? rows.length;
+  const total = data?.total ?? rows.length;
 
   const pagination = useMemo(() => {
     if (data?.pagination) return data.pagination;
@@ -125,9 +199,10 @@ export default function AdminRequestsPage() {
 
     try {
       setDeletingId(q._id);
-      await deleteQuoteByAdmin(q._id).unwrap();
+      const res = await deleteQuoteByAdmin(q._id).unwrap();
+      toast.success(res?.message || "Quote deleted.");
     } catch (e) {
-      alert(friendlyApiError(e));
+      toast.error(friendlyApiError(e));
     } finally {
       setDeletingId(null);
     }
@@ -149,6 +224,49 @@ export default function AdminRequestsPage() {
     }
   }
 
+  async function onPdf(q) {
+    try {
+      setPdfId(q._id);
+      const blob = await getQuotePdf(q._id).unwrap();
+      const fileName = q.quoteNumber
+        ? `quote-${q.quoteNumber}.pdf`
+        : `quote-${q._id}.pdf`;
+      const url = window.URL.createObjectURL(blob);
+      const newTab = window.open(url, "_blank", "noopener,noreferrer");
+
+      if (!newTab) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      toast.error("Failed to download PDF.");
+    } finally {
+      setPdfId(null);
+    }
+  }
+
+  async function onCopy(q) {
+    try {
+      if (q.status !== "Quoted") return;
+      setCopyId(q._id);
+      const res = await getQuoteShare(q._id).unwrap();
+      const quote = res?.data ?? res ?? q;
+      const text = buildQuoteShareText(quote);
+      await copyTextToClipboard(text);
+      toast.success("Quote copied to clipboard.");
+    } catch (e) {
+      toast.error("Failed to copy quote.");
+    } finally {
+      setCopyId(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -159,63 +277,30 @@ export default function AdminRequestsPage() {
             Newest first - Review, quote, confirm, then create an order.
           </div>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
-            onClick={() => {
-              setSearch("");
-              setStatus("all");
-              setPage(1);
-            }}
-          >
-            Reset
-          </button>
-        </div>
       </div>
 
       {/* Filters + Pagination */}
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-12 md:items-center">
-          <div className="md:col-span-8">
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by user name, email, or quote #"
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            />
-          </div>
-
-          <div className="md:col-span-4">
-            <select
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="h-10 rounded-xl bg-white/60 ring-1 ring-slate-200" />
+          <div className="flex items-end md:justify-end">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+              onClick={() => setPage(1)}
             >
-              <option value="all">All statuses</option>
-              <option value="Processing">Processing</option>
-              <option value="Quoted">Quoted</option>
-              <option value="Confirmed">Confirmed</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
+              <FiRefreshCw className="h-3.5 w-3.5 mr-1 text-slate-400" aria-hidden="true" />
+              Reset filters
+            </button>
           </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
           <div>
             Showing{" "}
-            <span className="font-semibold text-slate-700">{rows.length}</span>{" "}
-            of <span className="font-semibold text-slate-700">{total}</span>{" "}
-            request(s)
-            {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
-            {isFetching ? <span className="ml-2">(Updating)</span> : null}
+            <span className="font-semibold text-slate-900">{rows.length}</span> of{" "}
+            <span className="font-semibold text-slate-900">{total}</span> items
+            {isFetching ? <span className="ml-2">(Updating...)</span> : null}
           </div>
 
           <Pagination
@@ -254,11 +339,15 @@ export default function AdminRequestsPage() {
                 {rows.map((q) => {
                   const hasOrder = Boolean(q.order);
                   const canCreateOrder = q.status === "Confirmed" && !hasOrder;
+                  const canPdf = q.status === "Quoted";
+                  const canCopy = q.status === "Quoted";
 
                   const itemCount = itemCountById.get(q._id) ?? 0;
 
                   const rowCreating = creatingId === q._id;
                   const rowDeleting = deletingId === q._id;
+                  const rowPdf = pdfId === q._id;
+                  const rowCopy = copyId === q._id;
 
                   return (
                     <tr key={q._id} className="hover:bg-slate-50">
@@ -336,10 +425,44 @@ export default function AdminRequestsPage() {
                       {/* Actions */}
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            className={[
+                              "inline-flex items-center justify-center rounded-full px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                              !canCopy || rowCopy
+                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                            ].join(" ")}
+                            disabled={!canCopy || rowCopy}
+                            onClick={() => onCopy(q)}
+                            title={
+                              canCopy ? "Copy quote" : "Copy is available for Quoted requests only"
+                            }
+                          >
+                            <FiCopy className="h-3.5 w-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            className={[
+                              "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                              !canPdf || rowPdf || isPdfLoading
+                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                            ].join(" ")}
+                            disabled={!canPdf || rowPdf || isPdfLoading}
+                            onClick={() => onPdf(q)}
+                            title={
+                              canPdf ? "PDF" : "PDF is available for Quoted requests only"
+                            }
+                          >
+                            {rowPdf ? "PDF.." : "PDF"}
+                          </button>
+
                           <Link
                             to={`/admin/requests/${q._id}`}
                             className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
-                            title="Edit"
+                            title="Quote"
                           >
                             <FiEdit2 className="h-4 w-4" />
                           </Link>
@@ -377,3 +500,4 @@ export default function AdminRequestsPage() {
     </div>
   );
 }
+

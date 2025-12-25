@@ -33,6 +33,20 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: "Quote", id }],
     }),
 
+    getQuoteShare: builder.query({
+      query: (id) => `/quotes/${id}/share`,
+      keepUnusedDataFor: 0,
+    }),
+
+    getQuotePdf: builder.query({
+      query: (id) => ({
+        url: `/quotes/${id}/pdf`,
+        method: "GET",
+        responseHandler: (response) => response.blob(),
+      }),
+      keepUnusedDataFor: 0,
+    }),
+
     /* =========================
        PUT /api/quotes/admin/:id
        Private/Admin
@@ -72,8 +86,13 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
        My quotes (paginated)
        ========================= */
     getMyQuotes: builder.query({
-      query: ({ page = 1, limit = 5 } = {}) =>
-        `/quotes/my?page=${page}&limit=${limit}`,
+      query: ({ page = 1, limit = 5, status } = {}) => {
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("limit", String(limit));
+        if (status) params.set("status", status);
+        return `/quotes/my?${params.toString()}`;
+      },
       providesTags: (result) => {
         const listTag = { type: "Quote", id: "LIST" };
         const rows = result?.data || [];
@@ -132,6 +151,8 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
 export const {
   useGetAdminQuotesQuery,
   useGetQuoteByIdQuery,
+  useLazyGetQuoteShareQuery,
+  useLazyGetQuotePdfQuery,
 
   // Admin
   useUpdateQuoteByAdminMutation,

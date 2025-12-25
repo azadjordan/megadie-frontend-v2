@@ -2,12 +2,12 @@ import { Link } from 'react-router-dom'
 
 export default function Footer() {
   return (
-    <footer className="mt-10 border-t bg-slate-50">
+    <footer className="mt-10 bg-slate-50">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 md:flex-row md:gap-6">
         {/* Brand */}
         <Link
           to="/"
-          className="text-lg font-semibold tracking-tight text-slate-900 hover:text-slate-950"
+          className="text-lg font-semibold tracking-tight text-violet-700 hover:text-violet-800"
         >
           Megadie
         </Link>
@@ -31,7 +31,7 @@ export default function Footer() {
 
 function FooterLink({ to, children }) {
   return (
-    <Link to={to} className="hover:text-slate-900 hover:underline">
+    <Link to={to} className="hover:text-violet-700 hover:underline">
       {children}
     </Link>
   )

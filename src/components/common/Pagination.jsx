@@ -1,10 +1,10 @@
-// src/components/common/Pagination.jsx
 export default function Pagination({
   pagination,
   onPageChange,
   variant = "full", // "full" | "compact"
   showNumbers,
   showSummary,
+  tone = "neutral",
 }) {
   if (!pagination) return null;
 
@@ -25,11 +25,11 @@ export default function Pagination({
     onPageChange(p);
   };
 
+  const isViolet = tone === "violet";
+
   const btnClass = (disabled) =>
     [
-      // ✅ more minimal sizing
       "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition",
-      // ✅ lighter, cleaner base
       "border border-slate-200 bg-white text-slate-700",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
       disabled
@@ -42,12 +42,13 @@ export default function Pagination({
       "inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold transition",
       "border",
       active
-        ? "border-slate-900 bg-slate-900 text-white"
+        ? isViolet
+          ? "border-violet-200 bg-violet-100 text-slate-900"
+          : "border-slate-900 bg-slate-900 text-white"
         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
     ].join(" ");
 
-  // show: 1 ... (page-1) page (page+1) ... totalPages (max 5 numbers)
   const pages = (() => {
     const set = new Set([1, totalPages, page - 1, page, page + 1]);
     const arr = [...set]
@@ -58,11 +59,44 @@ export default function Pagination({
     for (let i = 0; i < arr.length; i++) {
       const cur = arr[i];
       const prev = arr[i - 1];
-      if (i > 0 && cur - prev > 1) out.push("…");
+      if (i > 0 && cur - prev > 1) out.push("...");
       out.push(cur);
     }
     return out;
   })();
+
+  const prevButton = (
+    <button
+      type="button"
+      onClick={() => goTo(page - 1)}
+      disabled={!hasPrev}
+      className={btnClass(!hasPrev)}
+    >
+      Prev
+    </button>
+  );
+
+  const nextButton = (
+    <button
+      type="button"
+      onClick={() => goTo(page + 1)}
+      disabled={!hasNext}
+      className={btnClass(!hasNext)}
+    >
+      Next
+    </button>
+  );
+
+  const pageLabel = (
+    <div className="px-1 text-xs font-semibold text-slate-600">
+      Page <span className="text-slate-900">{page}</span> of{" "}
+      <span className="text-slate-900">{totalPages}</span>
+    </div>
+  );
+
+  const separator = <span className="text-xs text-slate-400">|</span>;
+
+  const showCompactLabelFirst = isCompact && !_showNumbers;
 
   return (
     <div
@@ -71,52 +105,42 @@ export default function Pagination({
         isCompact ? "justify-start" : "",
       ].join(" ")}
     >
-      <button
-        type="button"
-        onClick={() => goTo(page - 1)}
-        disabled={!hasPrev}
-        className={btnClass(!hasPrev)}
-      >
-        Prev
-      </button>
-
-      {_showNumbers ? (
-        <div className="inline-flex items-center gap-1">
-          {pages.map((p, idx) =>
-            p === "…" ? (
-              <span key={`dots-${idx}`} className="px-2 text-sm text-slate-400">
-                …
-              </span>
-            ) : (
-              <button
-                key={p}
-                type="button"
-                onClick={() => goTo(p)}
-                className={numClass(p === page)}
-                aria-current={p === page ? "page" : undefined}
-              >
-                {p}
-              </button>
-            )
-          )}
-        </div>
+      {showCompactLabelFirst ? (
+        <>
+          {pageLabel}
+          {separator}
+          {prevButton}
+          {nextButton}
+        </>
       ) : (
-        // ✅ compact middle indicator (tiny + neutral)
-        <div className="px-1 text-xs font-semibold text-slate-600">
-          <span className="text-slate-900">{page}</span>
-          <span className="text-slate-400"> / </span>
-          <span className="text-slate-900">{totalPages}</span>
-        </div>
+        <>
+          {prevButton}
+          {_showNumbers ? (
+            <div className="inline-flex items-center gap-1">
+              {pages.map((p, idx) =>
+                p === "..." ? (
+                  <span key={`dots-${idx}`} className="px-2 text-sm text-slate-400">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => goTo(p)}
+                    className={numClass(p === page)}
+                    aria-current={p === page ? "page" : undefined}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+            </div>
+          ) : (
+            pageLabel
+          )}
+          {nextButton}
+        </>
       )}
-
-      <button
-        type="button"
-        onClick={() => goTo(page + 1)}
-        disabled={!hasNext}
-        className={btnClass(!hasNext)}
-      >
-        Next
-      </button>
 
       {_showSummary ? (
         <div className="ml-1 text-xs text-slate-500">

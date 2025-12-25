@@ -1,5 +1,13 @@
 import { apiSlice } from "../../app/apiSlice";
 
+const ADMIN_PAYMENT_METHODS = [
+  "Cash",
+  "Bank Transfer",
+  "Credit Card",
+  "Cheque",
+  "Other",
+];
+
 export const paymentsApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getPaymentsAdmin: builder.query({
@@ -7,7 +15,9 @@ export const paymentsApiSlice = apiSlice.injectEndpoints({
         const params = new URLSearchParams();
         params.set("page", String(page));
         if (search) params.set("search", search);
-        if (method && method !== "all") params.set("method", method);
+        if (method && method !== "all" && ADMIN_PAYMENT_METHODS.includes(method)) {
+          params.set("method", method);
+        }
         if (sort && sort !== "newest") params.set("sort", sort);
         return `/payments?${params.toString()}`;
       },
@@ -30,8 +40,29 @@ export const paymentsApiSlice = apiSlice.injectEndpoints({
         { type: "Payment", id: "LIST" },
       ],
     }),
+
+    deletePaymentByAdmin: builder.mutation({
+      query: (paymentId) => ({
+        url: `/payments/${paymentId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (result) => {
+        const tags = [{ type: "Payment", id: "LIST" }];
+        if (result?.paymentId) {
+          tags.push({ type: "Payment", id: result.paymentId });
+        }
+        if (result?.invoiceId) {
+          tags.push({ type: "Invoice", id: result.invoiceId });
+          tags.push({ type: "Invoice", id: "LIST" });
+        }
+        return tags;
+      },
+    }),
   }),
 });
 
-export const { useGetPaymentsAdminQuery, useAddPaymentToInvoiceMutation } =
-  paymentsApiSlice;
+export const {
+  useGetPaymentsAdminQuery,
+  useAddPaymentToInvoiceMutation,
+  useDeletePaymentByAdminMutation,
+} = paymentsApiSlice;

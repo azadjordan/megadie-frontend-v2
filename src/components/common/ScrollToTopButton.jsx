@@ -30,7 +30,7 @@ const ScrollToTopButton = () => {
   if (!showButton) return null;
 
   return (
-    <div className="fixed bottom-4 right-6 z-50">
+    <div className="fixed right-6 z-50 bottom-[calc(5rem+env(safe-area-inset-bottom))] sm:bottom-6 lg:bottom-4">
       <button
         onClick={scrollToTop}
         className="cursor-pointer relative flex items-center justify-center w-10 h-10 rounded-full bg-purple-200 shadow-lg transition-all hover:bg-purple-500"

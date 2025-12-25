@@ -1,13 +1,12 @@
-// src/components/account/AccountSidebar.jsx
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
 
-const itemClass = ({ isActive }) =>
+const navItem = ({ isActive }) =>
   [
-    "flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition",
+    "flex items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-semibold transition",
     isActive
-      ? "bg-slate-900 text-white"
-      : "text-slate-700 hover:bg-slate-50 hover:text-slate-900",
+      ? "bg-violet-600 text-white shadow-sm shadow-violet-200/60"
+      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
   ].join(" ");
 
 function initialsFrom(userInfo) {
@@ -22,69 +21,85 @@ function initialsFrom(userInfo) {
 
 export default function AccountSidebar() {
   const { userInfo } = useSelector((state) => state.auth);
-  const location = useLocation();
 
   const name = userInfo?.name || "My Account";
   const email = userInfo?.email || "";
   const initials = initialsFrom(userInfo);
 
-  // ✅ Keep this sidebar item active for ALL billing routes
-  const billingActive = location.pathname.startsWith("/account/billing");
-
   return (
-    <aside className="h-full min-h-0 flex flex-col gap-4">
-      {/* Top: identity */}
-      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <aside className="flex h-full flex-col">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-sm font-semibold">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-600 text-sm font-semibold text-white">
             {initials}
           </div>
-
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-slate-900">
               {name}
             </div>
             {email ? (
-              <div className="truncate text-xs text-slate-600">{email}</div>
+              <div className="truncate text-xs text-slate-500">{email}</div>
             ) : (
-              <div className="text-xs text-slate-600">Manage your activity</div>
+              <div className="text-xs text-slate-500">
+                Manage your activity
+              </div>
             )}
           </div>
         </div>
 
-        <div className="mt-3 text-xs text-slate-500">
-          View requests and billing documents.
+        <div className="mt-4 text-xs text-slate-500">
+          Your account shortcuts.
         </div>
-      </div>
 
-      {/* Nav */}
-      <div className="flex-1 min-h-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 flex flex-col">
-        <nav className="space-y-1">
-          <NavLink to="/account/profile" className={itemClass}>
-            Profile
-          </NavLink>
+        <div className="mt-6 space-y-5">
+          <div>
+            <div className="text-xs font-semibold text-slate-500">
+              Overview
+            </div>
+            <div className="mt-2 space-y-1">
+              <NavLink to="/account/overview" className={navItem} end>
+                Overview
+              </NavLink>
+            </div>
+          </div>
 
-          <NavLink to="/account/requests" className={itemClass}>
-            Requests
-          </NavLink>
+          <div>
+            <div className="text-xs font-semibold text-slate-500">
+              Activity
+            </div>
+            <div className="mt-2 space-y-1">
+              <NavLink to="/account/requests" className={navItem}>
+                Requests
+              </NavLink>
+              <NavLink to="/account/orders" className={navItem}>
+                Orders
+              </NavLink>
+              <NavLink to="/account/invoices" className={navItem}>
+                Invoices
+              </NavLink>
+            </div>
+          </div>
 
-          {/* ✅ One item that stays active on:
-              /account/billing/invoices
-              /account/billing/invoices/:id
-              /account/billing/orders/:id
-          */}
-          <NavLink
-            to="/account/billing"
-            className={() => itemClass({ isActive: billingActive })}
+          <div>
+            <div className="text-xs font-semibold text-slate-500">
+              Account
+            </div>
+            <div className="mt-2 space-y-1">
+              <NavLink to="/account/profile" className={navItem}>
+                Profile
+              </NavLink>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-violet-100 bg-violet-50/70 p-4 text-xs text-slate-600">
+          Need help?{" "}
+          <a
+            href="/contact"
+            className="font-semibold text-violet-700 hover:text-violet-800 hover:underline"
           >
-            Invoices &amp; Orders
-          </NavLink>
-        </nav>
-
-        <div className="mt-auto pt-4 border-t border-slate-200">
-          <p className="text-xs text-slate-500">
-            Orders are accessible from inside invoices.
-          </p>
+            Contact Us
+          </a>
         </div>
       </div>
     </aside>
