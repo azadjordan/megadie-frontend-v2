@@ -48,19 +48,103 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
     }),
 
     /* =========================
-       PUT /api/quotes/admin/:id
+       PUT /api/quotes/admin/:id/owner
        Private/Admin
-       Steps UI endpoint
+       Update owner only
        ========================= */
-    updateQuoteByAdmin: builder.mutation({
-      query: ({ id, ...body }) => ({
-        url: `/quotes/admin/${id}`,
+    updateQuoteOwnerByAdmin: builder.mutation({
+      query: ({ id, user }) => ({
+        url: `/quotes/admin/${id}/owner`,
         method: "PUT",
-        body,
+        body: { user },
       }),
       invalidatesTags: (_result, _error, arg) => [
         { type: "Quote", id: "LIST" },
         { type: "Quote", id: arg?.id },
+      ],
+    }),
+
+    /* =========================
+       PUT /api/quotes/admin/:id/quantities
+       Private/Admin
+       Update quantities only
+       ========================= */
+    updateQuoteQuantitiesByAdmin: builder.mutation({
+      query: ({ id, requestedItems }) => ({
+        url: `/quotes/admin/${id}/quantities`,
+        method: "PUT",
+        body: { requestedItems },
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Quote", id: "LIST" },
+        { type: "Quote", id: arg?.id },
+      ],
+    }),
+
+    /* =========================
+       PUT /api/quotes/admin/:id/pricing
+       Private/Admin
+       Update pricing only
+       ========================= */
+    updateQuotePricingByAdmin: builder.mutation({
+      query: ({ id, requestedItems, deliveryCharge, extraFee }) => ({
+        url: `/quotes/admin/${id}/pricing`,
+        method: "PUT",
+        body: { requestedItems, deliveryCharge, extraFee },
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Quote", id: "LIST" },
+        { type: "Quote", id: arg?.id },
+      ],
+    }),
+
+    /* =========================
+       PUT /api/quotes/admin/:id/notes
+       Private/Admin
+       Update notes only
+       ========================= */
+    updateQuoteNotesByAdmin: builder.mutation({
+      query: ({ id, adminToAdminNote, adminToClientNote }) => ({
+        url: `/quotes/admin/${id}/notes`,
+        method: "PUT",
+        body: { adminToAdminNote, adminToClientNote },
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Quote", id: "LIST" },
+        { type: "Quote", id: arg?.id },
+      ],
+    }),
+
+    /* =========================
+       PUT /api/quotes/admin/:id/status
+       Private/Admin
+       Update status only
+       ========================= */
+    updateQuoteStatusByAdmin: builder.mutation({
+      query: ({ id, status }) => ({
+        url: `/quotes/admin/${id}/status`,
+        method: "PUT",
+        body: { status },
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Quote", id: "LIST" },
+        { type: "Quote", id: arg?.id },
+      ],
+    }),
+
+    /* =========================
+       PUT /api/quotes/admin/:id/recheck-availability
+       Private/Admin
+       Refresh availability snapshot
+       ========================= */
+    recheckQuoteAvailabilityByAdmin: builder.mutation({
+      query: (id) => ({
+        url: `/quotes/admin/${id}/recheck-availability`,
+        method: "PUT",
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: "Quote", id: "LIST" },
+        { type: "Quote", id },
       ],
     }),
 
@@ -145,6 +229,24 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
         { type: "Quote", id },
       ],
     }),
+
+    /* =========================
+       PUT /api/quotes/:id/update-quantities
+       Private
+       User updates quantities while Processing
+       ========================= */
+    updateQuoteQuantities: builder.mutation({
+      query: ({ id, requestedItems }) => ({
+        url: `/quotes/${id}/update-quantities`,
+        method: "PUT",
+        body: { requestedItems },
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Quote", id: "LIST" },
+        { type: "Quote", id: arg?.id },
+      ],
+    }),
+
   }),
 });
 
@@ -155,7 +257,12 @@ export const {
   useLazyGetQuotePdfQuery,
 
   // Admin
-  useUpdateQuoteByAdminMutation,
+  useUpdateQuoteOwnerByAdminMutation,
+  useUpdateQuoteQuantitiesByAdminMutation,
+  useUpdateQuotePricingByAdminMutation,
+  useUpdateQuoteNotesByAdminMutation,
+  useUpdateQuoteStatusByAdminMutation,
+  useRecheckQuoteAvailabilityByAdminMutation,
   useDeleteQuoteByAdminMutation,
 
   // User
@@ -163,4 +270,5 @@ export const {
   useCreateQuoteMutation,
   useCancelQuoteMutation,
   useConfirmQuoteMutation,
+  useUpdateQuoteQuantitiesMutation,
 } = quotesApiSlice;

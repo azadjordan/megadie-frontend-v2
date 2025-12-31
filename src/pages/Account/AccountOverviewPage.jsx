@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { FiCheckCircle, FiClock } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -25,15 +26,15 @@ function statusLabel(status) {
   return status || "-";
 }
 
-function StatusPill({ status }) {
+function StatusPill({ status, label, showIcon = false }) {
   const map = {
-    Processing: "bg-amber-50 text-amber-700 ring-amber-200",
-    Quoted: "bg-violet-50 text-violet-700 ring-violet-200",
+    Processing: "bg-slate-50 text-slate-700 ring-slate-200",
+    Quoted: "bg-violet-50 text-violet-700 ring-violet-300",
     Confirmed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
     Paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    PartiallyPaid: "bg-amber-50 text-amber-700 ring-amber-200",
+    PartiallyPaid: "bg-slate-50 text-slate-700 ring-slate-200",
     Unpaid: "bg-rose-50 text-rose-700 ring-rose-200",
     Issued: "bg-slate-50 text-slate-700 ring-slate-200",
   };
@@ -41,23 +42,29 @@ function StatusPill({ status }) {
   return (
     <span
       className={[
-        "inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
         map[status] || "bg-slate-50 text-slate-600 ring-slate-200",
       ].join(" ")}
     >
-      {statusLabel(status)}
+      {showIcon && status === "Processing" ? (
+        <FiClock className="h-3 w-3" />
+      ) : null}
+      {label || statusLabel(status)}
     </span>
   );
 }
 
-function StatCard({ label, value, hint, to, actionLabel = "Review now" }) {
+function StatCard({ label, value, hint, to, actionLabel = "Review now", valueIcon }) {
   return (
     <div className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-sm shadow-slate-200/40">
       <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
         {label}
       </div>
       <div className="mt-3 text-2xl font-semibold text-slate-900">
-        {value}
+        <span className="inline-flex items-center gap-2">
+          <span>{value}</span>
+          {valueIcon ? <span className="inline-flex">{valueIcon}</span> : null}
+        </span>
       </div>
       <div className="mt-1 text-sm text-slate-500">{hint}</div>
       {actionLabel && to ? (
@@ -158,13 +165,23 @@ export default function AccountOverviewPage() {
         <StatCard
           label="Ready quotes"
           value={quotedQuotes.length}
+          valueIcon={
+            quotedQuotes.length > 0 ? (
+              <FiCheckCircle className="text-lg text-violet-500" aria-hidden="true" />
+            ) : null
+          }
           hint="Awaiting your confirmation."
           to="/account/requests"
           actionLabel="Check Quotes"
         />
         <StatCard
-          label="Pending quotes"
+          label="Preparing quotes"
           value={processingQuotes.length}
+          valueIcon={
+            processingQuotes.length > 0 ? (
+              <FiClock className="text-lg text-slate-500" aria-hidden="true" />
+            ) : null
+          }
           hint="We are preparing a quote."
           to="/account/requests"
           actionLabel={null}
@@ -203,7 +220,11 @@ export default function AccountOverviewPage() {
                     {formatDate(q.createdAt)}
                   </div>
                 </div>
-                <StatusPill status={q.status} />
+                <StatusPill
+                  status={q.status}
+                  label={q.status === "Processing" ? "Preparing" : null}
+                  showIcon
+                />
               </div>
             )}
           />

@@ -1,7 +1,15 @@
 ﻿// src/pages/Admin/AdminRequestsPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiEdit2, FiTrash2, FiCheck, FiRefreshCw, FiCopy } from "react-icons/fi";
+import {
+  FiAlertTriangle,
+  FiCheck,
+  FiClock,
+  FiCopy,
+  FiEdit2,
+  FiRefreshCw,
+  FiTrash2,
+} from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import Pagination from "../../components/common/Pagination";
@@ -45,23 +53,54 @@ function formatDate(iso) {
 
 function StatusBadge({ status }) {
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
+    "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
 
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
-    Quoted: "bg-blue-50 text-blue-700 ring-blue-200",
+    Quoted: "bg-violet-50 text-violet-700 ring-violet-300",
     Confirmed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
   };
 
   return (
-    <span className={`${base} ${map[status] || map.Processing}`}>{status}</span>
+    <span className={`${base} ${map[status] || map.Processing}`}>
+      {status === "Processing" ? <FiClock className="h-3 w-3" /> : null}
+      {status}
+    </span>
   );
+}
+
+function AvailabilityBadge({ status }) {
+  const base =
+    "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+  const map = {
+    AVAILABLE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    SHORTAGE: "bg-amber-50 text-amber-700 ring-amber-200",
+    NOT_AVAILABLE: "bg-rose-50 text-rose-700 ring-rose-200",
+    NOT_CHECKED: "bg-slate-50 text-slate-600 ring-slate-200",
+  };
+  const labelMap = {
+    AVAILABLE: "Available",
+    SHORTAGE: "Shortage",
+    NOT_AVAILABLE: "Not available",
+    NOT_CHECKED: "Not checked",
+  };
+  return (
+    <span className={`${base} ${map[status] || map.NOT_CHECKED}`}>
+      {status === "SHORTAGE" ? <FiAlertTriangle className="h-3 w-3" /> : null}
+      {labelMap[status] || labelMap.NOT_CHECKED}
+    </span>
+  );
+}
+
+function normalizeAvailabilityStatus(status) {
+  if (status === "PARTIAL") return "SHORTAGE";
+  return status;
 }
 
 function money(amount, currency = "AED") {
   const n = Number(amount);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
@@ -77,6 +116,38 @@ function friendlyApiError(err) {
   const msg =
     err?.data?.message || err?.error || err?.message || "Something went wrong.";
   return String(msg);
+}
+
+function getAvailabilityTotal(q) {
+  const items = Array.isArray(q?.requestedItems) ? q.requestedItems : [];
+  let subtotal = 0;
+  let hasUnitPrice = false;
+
+  for (const it of items) {
+    const qty = Math.max(0, Number(it?.qty) || 0);
+    const unit = Number(it?.unitPrice);
+    if (!Number.isFinite(unit)) {
+      continue;
+    }
+    hasUnitPrice = true;
+    const availableNow = Number(it?.availableNow);
+    const shortage = Number.isFinite(Number(it?.shortage))
+      ? Math.max(0, Number(it.shortage))
+      : Number.isFinite(availableNow)
+      ? Math.max(0, qty - availableNow)
+      : 0;
+    const availabilityQty =
+      Number.isFinite(availableNow) && shortage > 0 ? Math.max(0, availableNow) : qty;
+    subtotal += Math.max(0, unit) * availabilityQty;
+  }
+
+  if (!hasUnitPrice) {
+    return null;
+  }
+
+  const delivery = Math.max(0, Number(q?.deliveryCharge) || 0);
+  const extra = Math.max(0, Number(q?.extraFee) || 0);
+  return subtotal + delivery + extra;
 }
 
 function buildQuoteShareText(q) {
@@ -176,18 +247,6 @@ export default function AdminRequestsPage() {
       hasNext: page < totalPages,
     };
   }, [data, page]);
-
-  const itemCountById = useMemo(() => {
-    const map = new Map();
-    for (const q of rows) {
-      const itemCount = (q.requestedItems || []).reduce(
-        (sum, it) => sum + (Number(it.qty) || 0),
-        0
-      );
-      map.set(q._id, itemCount);
-    }
-    return map;
-  }, [rows]);
 
   async function onDelete(q) {
     if (q.status !== "Cancelled") return;
@@ -329,6 +388,7 @@ export default function AdminRequestsPage() {
                   <th className="px-4 py-3">Quote</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Availability</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3">Order</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -341,8 +401,32 @@ export default function AdminRequestsPage() {
                   const canCreateOrder = q.status === "Confirmed" && !hasOrder;
                   const canPdf = q.status === "Quoted";
                   const canCopy = q.status === "Quoted";
+                  const isCancelled = q.status === "Cancelled";
 
-                  const itemCount = itemCountById.get(q._id) ?? 0;
+                  const availabilityItems = (q.requestedItems || [])
+                    .map((it) => normalizeAvailabilityStatus(it?.availabilityStatus))
+                    .filter(Boolean);
+                  const showAvailability = !isCancelled;
+                  const hasAvailability = showAvailability && availabilityItems.length > 0;
+                  const notAvailableCount = availabilityItems.filter(
+                    (s) => s === "NOT_AVAILABLE"
+                  ).length;
+                  const shortageCount = availabilityItems.filter(
+                    (s) => s === "SHORTAGE"
+                  ).length;
+                  const availableCount = availabilityItems.filter(
+                    (s) => s === "AVAILABLE"
+                  ).length;
+                  const totalAvailabilityCount = availabilityItems.length;
+                  const availabilityStatus = !showAvailability
+                    ? null
+                    : !hasAvailability
+                    ? "NOT_CHECKED"
+                    : notAvailableCount === totalAvailabilityCount
+                    ? "NOT_AVAILABLE"
+                    : availableCount === totalAvailabilityCount
+                    ? "AVAILABLE"
+                    : "SHORTAGE";
 
                   const rowCreating = creatingId === q._id;
                   const rowDeleting = deletingId === q._id;
@@ -376,14 +460,31 @@ export default function AdminRequestsPage() {
                         <StatusBadge status={q.status} />
                       </td>
 
-                      {/* Total: totalPrice + items below */}
+                      {/* Availability */}
+                      <td className="px-4 py-3">
+                        {showAvailability ? (
+                          <AvailabilityBadge status={availabilityStatus} />
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+
+                      {/* Total */}
                       <td className="px-4 py-3 text-right">
-                        <div className="font-semibold text-slate-900">
-                          {money(q.totalPrice)}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {itemCount} item(s)
-                        </div>
+                        {(() => {
+                          const availabilityTotal = getAvailabilityTotal(q);
+                          const displayTotal = Number.isFinite(availabilityTotal)
+                            ? availabilityTotal
+                            : q.totalPrice;
+
+                          return (
+                            <>
+                              <div className="font-semibold text-slate-900">
+                                {money(displayTotal)}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </td>
 
                       {/* Order status */}

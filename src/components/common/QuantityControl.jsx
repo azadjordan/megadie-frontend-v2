@@ -1,105 +1,111 @@
-// src/components/common/QuantityControl.jsx
-import { FaPlus, FaMinus } from 'react-icons/fa'
+import { FiMinus, FiPlus } from "react-icons/fi";
+
+const clampValue = (val, min, max) => {
+  const next = Number(val);
+  if (!Number.isFinite(next)) return min;
+  if (max != null && Number.isFinite(max)) {
+    return Math.min(Math.max(next, min), max);
+  }
+  return Math.max(next, min);
+};
 
 export default function QuantityControl({
   quantity,
   setQuantity,
   min = 1,
-  size = 'md', // 'sm' | 'md' | 'lg'
-  compact = false, // slightly tighter corners for dense rows
+  max,
+  size = "md",
+  compact = false,
+  disabled = false,
 }) {
-  const handleChange = (e) => {
-    const val = e.target.value
-    if (val === '') {
-      setQuantity('')
-      return
-    }
-    const parsed = parseInt(val, 10)
-    if (Number.isNaN(parsed)) {
-      setQuantity('')
-      return
-    }
-    setQuantity(Math.max(parsed, min))
-  }
-
-  const handleBlur = () => {
-    const parsed = parseInt(quantity, 10)
-    if (quantity === '' || Number.isNaN(parsed)) setQuantity(min)
-    else if (parsed < min) setQuantity(min)
-  }
-
-  const decrement = () => {
-    const current = parseInt(quantity, 10) || min
-    setQuantity(Math.max(min, current - 1))
-  }
-
-  const increment = () => {
-    const current = parseInt(quantity, 10) || min
-    setQuantity(current + 1)
-  }
-
-  const currentNum = parseInt(quantity, 10) || min
+  const numericQty = Number.isFinite(Number(quantity)) ? Number(quantity) : min;
+  const clampedQty = clampValue(numericQty, min, max);
+  const canDecrease = clampedQty > min;
+  const canIncrease =
+    max == null || !Number.isFinite(Number(max)) ? true : clampedQty < max;
 
   const sizes = {
-    sm: { btn: 'px-2', input: 'w-10 text-xs', icon: 10, wrap: 'h-8' },
-    md: { btn: 'px-3', input: 'w-12 text-sm', icon: 12, wrap: 'h-9' },
-    lg: { btn: 'px-4', input: 'w-14 text-base', icon: 14, wrap: 'h-10' },
-  }
+    sm: {
+      btn: "h-8 w-8",
+      input: compact ? "h-8 w-10 text-xs" : "h-8 w-12 text-xs",
+      icon: "h-3 w-3",
+    },
+    md: {
+      btn: "h-9 w-9",
+      input: compact ? "h-9 w-12 text-sm" : "h-9 w-14 text-sm",
+      icon: "h-3.5 w-3.5",
+    },
+  };
 
-  const s = sizes[size] || sizes.md
+  const sizeStyle = sizes[size] || sizes.md;
+
+  const handleDecrease = () => {
+    if (disabled || !canDecrease) return;
+    setQuantity(clampValue(clampedQty - 1, min, max));
+  };
+
+  const handleIncrease = () => {
+    if (disabled || !canIncrease) return;
+    setQuantity(clampValue(clampedQty + 1, min, max));
+  };
+
+  const handleChange = (event) => {
+    const raw = event.target.value;
+    const parsed = parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return;
+    setQuantity(clampValue(parsed, min, max));
+  };
 
   return (
-    <div
-      className={[
-        'flex overflow-hidden bg-white ring-1 ring-slate-200',
-        'focus-within:ring-2 focus-within:ring-slate-400',
-        compact ? 'rounded-md' : 'rounded-lg',
-        s.wrap,
-      ].join(' ')}
-    >
+    <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
       <button
         type="button"
-        onClick={decrement}
-        disabled={currentNum <= min}
-        aria-label="Decrease quantity"
-        title="Decrease quantity"
+        onClick={handleDecrease}
+        disabled={disabled || !canDecrease}
         className={[
-          'bg-slate-100 text-slate-600 transition',
-          'hover:bg-slate-200 hover:text-slate-900',
-          'disabled:cursor-not-allowed disabled:opacity-30',
-          s.btn,
-        ].join(' ')}
+          "inline-flex items-center justify-center text-slate-600 transition",
+          sizeStyle.btn,
+          disabled || !canDecrease
+            ? "cursor-not-allowed bg-slate-100 text-slate-400"
+            : "bg-white hover:bg-slate-50",
+        ].join(" ")}
+        aria-label="Decrease quantity"
       >
-        <FaMinus size={s.icon} />
+        <FiMinus className={sizeStyle.icon} />
       </button>
 
       <input
         type="number"
         min={min}
-        value={quantity}
+        max={max}
+        value={clampedQty}
         onChange={handleChange}
-        onBlur={handleBlur}
-        aria-label="Product quantity"
-        title="Product quantity"
+        disabled={disabled}
         className={[
-          'h-full bg-white py-1 text-center font-semibold text-slate-900 outline-none',
-          s.input,
-        ].join(' ')}
+          "text-center font-semibold text-slate-900 outline-none",
+          "border-x border-slate-200 bg-white",
+          sizeStyle.input,
+          disabled ? "bg-slate-100 text-slate-400" : "",
+        ].join(" ")}
+        inputMode="numeric"
+        aria-label="Quantity"
       />
 
       <button
         type="button"
-        onClick={increment}
-        aria-label="Increase quantity"
-        title="Increase quantity"
+        onClick={handleIncrease}
+        disabled={disabled || !canIncrease}
         className={[
-          'bg-slate-100 text-slate-600 transition',
-          'hover:bg-slate-200 hover:text-slate-900',
-          s.btn,
-        ].join(' ')}
+          "inline-flex items-center justify-center text-slate-600 transition",
+          sizeStyle.btn,
+          disabled || !canIncrease
+            ? "cursor-not-allowed bg-slate-100 text-slate-400"
+            : "bg-white hover:bg-slate-50",
+        ].join(" ")}
+        aria-label="Increase quantity"
       >
-        <FaPlus size={s.icon} />
+        <FiPlus className={sizeStyle.icon} />
       </button>
     </div>
-  )
+  );
 }

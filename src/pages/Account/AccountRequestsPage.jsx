@@ -1,60 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiCheck, FiChevronDown, FiChevronUp, FiX } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
+import AccountRequestCard from "./account-requests/AccountRequestCard";
 
 import {
   useGetMyQuotesQuery,
   useCancelQuoteMutation,
   useConfirmQuoteMutation,
+  useUpdateQuoteQuantitiesMutation,
 } from "../../features/quotes/quotesApiSlice";
 
-function formatDate(iso) {
-  if (!iso) return "-";
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function money(amount) {
-  if (amount === null || amount === undefined) return "-";
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return "-";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: "AED",
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return String(n);
-  }
-}
-
-function StatusBadge({ status }) {
-  const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
-  const map = {
-    Processing: "bg-amber-50 text-amber-700 ring-amber-200",
-    Quoted: "bg-violet-50 text-violet-700 ring-violet-200",
-    Confirmed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
-  };
-  return (
-    <span className={`${base} ${map[status] || map.Processing}`}>
-      {status || "-"}
-    </span>
-  );
-}
 
 export default function AccountRequestsPage() {
   const [page, setPage] = useState(1);
@@ -69,20 +27,189 @@ export default function AccountRequestsPage() {
 
   const [cancelQuote, { isLoading: isCancelling }] = useCancelQuoteMutation();
   const [confirmQuote, { isLoading: isConfirming }] = useConfirmQuoteMutation();
+  const [
+    updateQuoteQuantities,
+    { isLoading: isUpdatingQuantities, error: updateQuantitiesError },
+  ] = useUpdateQuoteQuantitiesMutation();
 
   const [open, setOpen] = useState({});
+  const [editingQuoteId, setEditingQuoteId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
+  const [editLocalError, setEditLocalError] = useState("");
+  const [editMaxHit, setEditMaxHit] = useState({});
+  const maxHitTimers = useRef({});
 
   const quotes = useMemo(() => data?.data || [], [data]);
   const pagination = data?.pagination;
   useEffect(() => {
     setOpen({});
+    setEditingQuoteId(null);
+    setEditDraft({});
+    setEditLocalError("");
+    setEditMaxHit({});
   }, [page, filterStatus]);
 
-  const toggle = (id) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (id) =>
+    setOpen((prev) => {
+      const nextOpen = !prev[id];
+      if (!nextOpen) {
+        setEditingQuoteId((current) => (current === id ? null : current));
+        setEditDraft((current) => {
+          if (!current[id]) return current;
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+        setEditLocalError("");
+      }
+      return { ...prev, [id]: nextOpen };
+    });
+
+  useEffect(
+    () => () => {
+      Object.values(maxHitTimers.current).forEach(clearTimeout);
+      maxHitTimers.current = {};
+    },
+    []
+  );
+
+  const triggerMaxHit = (key) => {
+    if (!key) return;
+    setEditMaxHit((prev) => ({ ...prev, [key]: true }));
+    const timers = maxHitTimers.current;
+    if (timers[key]) clearTimeout(timers[key]);
+    timers[key] = setTimeout(() => {
+      setEditMaxHit((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      delete timers[key];
+    }, 1500);
+  };
+
+  const adjustDraftQty = (
+    quoteId,
+    productId,
+    delta,
+    maxQty,
+    fallbackQty,
+    options = {}
+  ) => {
+    if (!quoteId || !productId) return;
+    const key = `${quoteId}:${productId}`;
+    setEditingQuoteId(quoteId);
+    setEditDraft((prev) => {
+      const quoteDraft = prev[quoteId] ? { ...prev[quoteId] } : {};
+      const max = Math.max(0, Number(maxQty) || 0);
+      const fallback = Math.max(0, Number(fallbackQty) || 0);
+      const currentRaw = Number(quoteDraft[productId]);
+      const base = Number.isFinite(currentRaw)
+        ? currentRaw
+        : Math.min(fallback, max);
+      const rawNext = base + delta;
+      const upperBound = options.allowAboveMax ? Number.POSITIVE_INFINITY : max;
+      const clamped = Math.max(0, Math.min(rawNext, upperBound));
+      if (delta > 0 && rawNext >= max) {
+        triggerMaxHit(key);
+      }
+      quoteDraft[productId] = clamped;
+      return { ...prev, [quoteId]: quoteDraft };
+    });
+    setEditLocalError("");
+  };
+
+  const buildQuantityPayload = (quote) => {
+    const items = Array.isArray(quote?.requestedItems)
+      ? quote.requestedItems
+      : [];
+    return items.map((it) => {
+      const productId = it?.product?._id || it?.product;
+      const draftQty = Number(editDraft?.[quote._id]?.[String(productId)]);
+      const requestedQty = Math.max(0, Number(it?.qty) || 0);
+      const availableNow = Math.max(0, Number(it?.availableNow) || 0);
+      const shortage = Number(it?.shortage);
+      const hasItemShortage =
+        Number.isFinite(shortage) && shortage > 0 && Number.isFinite(availableNow);
+      const fallbackQty = hasItemShortage ? availableNow : requestedQty;
+      const nextQty = Number.isFinite(draftQty) ? draftQty : fallbackQty;
+      return {
+        product: productId,
+        qty: nextQty,
+      };
+    });
+  };
+
+  const applyQuantityUpdate = async (quote, { refetchAfter = true } = {}) => {
+    if (!quote?._id) return false;
+    setEditingQuoteId(quote._id);
+    const payloadItems = buildQuantityPayload(quote);
+
+    const hasAnyQty = payloadItems.some((item) => Number(item.qty) > 0);
+    if (!hasAnyQty) {
+      setEditLocalError("At least one item must remain.");
+      return false;
+    }
+
+    try {
+      await updateQuoteQuantities({
+        id: quote._id,
+        requestedItems: payloadItems,
+      }).unwrap();
+      setEditingQuoteId(null);
+      setEditDraft((current) => {
+        if (!current[quote._id]) return current;
+        const next = { ...current };
+        delete next[quote._id];
+        return next;
+      });
+      setEditLocalError("");
+      setEditMaxHit({});
+      if (refetchAfter) {
+        refetch();
+      }
+      return true;
+    } catch (e) {
+      const status = e?.status || e?.originalStatus;
+      const message = String(e?.data?.message || e?.error || "");
+      if (status === 409 && message.toLowerCase().includes("locked")) {
+        setEditLocalError(message);
+        refetch();
+      }
+      console.error(e);
+      return false;
+    }
+  };
+
+  const onConfirmQty = async (quote) => {
+    await applyQuantityUpdate(quote);
+  };
+
+  const onCancelEdit = (quoteId) => {
+    if (!quoteId) return;
+    setEditingQuoteId((current) => (current === quoteId ? null : current));
+    setEditDraft((current) => {
+      if (!current[quoteId]) return current;
+      const next = { ...current };
+      delete next[quoteId];
+      return next;
+    });
+    setEditLocalError("");
+    setEditMaxHit((current) => {
+      const prefix = `${quoteId}:`;
+      const next = {};
+      Object.entries(current).forEach(([key, value]) => {
+        if (!key.startsWith(prefix)) {
+          next[key] = value;
+        }
+      });
+      return next;
+    });
+  };
 
   const onCancel = async (id) => {
     // eslint-disable-next-line no-restricted-globals
-    const ok = confirm("Cancel this request?");
+    const ok = confirm("Cancel this quote?");
     if (!ok) return;
     try {
       await cancelQuote(id).unwrap();
@@ -207,282 +334,28 @@ export default function AccountRequestsPage() {
       ) : (
         <>
           <div className="space-y-4">
-            {quotes.map((q) => {
-              const status = q.status;
-              const isQuoted = status === "Quoted";
-              const isConfirmed = status === "Confirmed";
-              const isCancelled = status === "Cancelled";
-
-              const canCancel = status === "Processing" || isQuoted;
-              const canConfirm = isQuoted;
-
-              const requestedItems = Array.isArray(q.requestedItems)
-                ? q.requestedItems
-                : [];
-              const itemCount = requestedItems.reduce(
-                (sum, it) => sum + (Number(it?.qty) || 0),
-                0
-              );
-
-              const showFullPricing = isQuoted;
-              const showOnlyTotal = isConfirmed;
-              const showNoPricing = status === "Processing" || isCancelled;
-              const showPricingColumn = showFullPricing || showNoPricing;
-
-              const isOpen = !!open[q._id];
-
-              return (
-                <div
-                  key={q._id}
-                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="grid gap-4 sm:grid-cols-1">
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                            Quote no
-                          </div>
-                          <div className="mt-1 text-lg font-semibold text-slate-900">
-                            {q.quoteNumber || q._id.slice(-6).toUpperCase()}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-                        <div className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                            Items
-                          </div>
-                          <div className="mt-1 text-sm font-semibold text-slate-900">
-                            {itemCount} unit{itemCount === 1 ? "" : "s"}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white px-3 py-2">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                            Total
-                          </div>
-                          <div className="mt-1 text-sm font-semibold text-slate-900">
-                            {showNoPricing
-                              ? "Pending"
-                              : money(q.totalPrice)}
-                          </div>
-                        </div>
-                        <div className="col-span-2 rounded-2xl border border-slate-100 bg-white px-3 py-2 md:col-span-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                            Status
-                          </div>
-                          <div className="mt-1">
-                            <StatusBadge status={status} />
-                          </div>
-                        </div>
-                        <div className="col-span-2 rounded-2xl border border-slate-100 bg-white px-3 py-2 md:col-span-1">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                            Date
-                          </div>
-                          <div className="mt-1 text-sm font-semibold text-slate-900">
-                            {formatDate(q.createdAt)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="hidden lg:flex lg:flex-col lg:items-end lg:gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggle(q._id)}
-                        className="inline-flex w-28 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        {isOpen ? "Hide" : "Details"}
-                        {isOpen ? <FiChevronUp /> : <FiChevronDown />}
-                      </button>
-                      {canConfirm ? (
-                        <button
-                          type="button"
-                          onClick={() => onConfirm(q._id)}
-                          disabled={isConfirming || isCancelling}
-                          className="inline-flex w-28 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm shadow-emerald-100/60 transition hover:bg-emerald-600 hover:text-white disabled:opacity-60"
-                        >
-                          <FiCheck className="h-4 w-4" />
-                          {isConfirming ? "Confirming..." : "Confirm"}
-                        </button>
-                      ) : null}
-                      {canCancel ? (
-                        <button
-                          type="button"
-                          onClick={() => onCancel(q._id)}
-                          disabled={isCancelling || isConfirming}
-                          className="inline-flex w-28 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-600 shadow-sm shadow-rose-100/60 transition hover:bg-rose-600 hover:text-white disabled:opacity-60"
-                        >
-                          <FiX className="h-4 w-4" />
-                          {isCancelling ? "Cancelling..." : "Cancel"}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {isOpen ? (
-                    <div className="mt-5 space-y-4 border-t border-slate-200 pt-4">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          Requested items
-                        </div>
-                        <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                          <div className="grid grid-cols-12 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600">
-                            <div className={showPricingColumn ? "col-span-7" : "col-span-9"}>
-                              Product
-                            </div>
-                            <div className={showPricingColumn ? "col-span-2 text-right" : "col-span-3 text-right"}>
-                              Qty
-                            </div>
-                            {showPricingColumn ? (
-                              <div className="col-span-3 text-right">
-                                {showFullPricing ? "Total" : "Pricing"}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          {requestedItems.map((it, idx) => {
-                            const name =
-                              it?.product?.name ||
-                              (typeof it?.product === "string"
-                                ? it.product
-                                : "") ||
-                              "Unnamed item";
-                            const qty = it?.qty ?? 0;
-                            const unitPrice =
-                              typeof it?.unitPrice === "number"
-                                ? it.unitPrice
-                                : null;
-                            const lineTotal =
-                              showFullPricing && unitPrice != null
-                                ? unitPrice * Number(qty || 0)
-                                : null;
-
-                            return (
-                              <div
-                                key={`${q._id}-${idx}`}
-                                className="grid grid-cols-12 items-center border-t border-slate-200 px-4 py-2 text-sm text-slate-800"
-                              >
-                                <div className={showPricingColumn ? "col-span-7 truncate" : "col-span-9 truncate"}>
-                                  {name}
-                                </div>
-                                <div className={showPricingColumn ? "col-span-2 text-right tabular-nums" : "col-span-3 text-right tabular-nums"}>
-                                  {qty}
-                                </div>
-                                {showPricingColumn ? (
-                                  <div className="col-span-3 text-right tabular-nums">
-                                    {showFullPricing ? money(lineTotal) : "Pending"}
-                                  </div>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {(q.clientToAdminNote ||
-                        (isQuoted && q.adminToClientNote)) && (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {q.clientToAdminNote ? (
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                              <div className="text-xs font-semibold text-slate-500">
-                                Your note
-                              </div>
-                              <div className="mt-2 whitespace-pre-wrap text-sm text-slate-800">
-                                {q.clientToAdminNote}
-                              </div>
-                            </div>
-                          ) : null}
-                          {isQuoted && q.adminToClientNote ? (
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                              <div className="text-xs font-semibold text-slate-500">
-                                Seller note
-                              </div>
-                              <div className="mt-2 text-sm text-slate-800 whitespace-pre-wrap">
-                                <span className="rounded-md bg-amber-50 px-2 py-1 box-decoration-clone">
-                                  {q.adminToClientNote}
-                                </span>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      )}
-
-                      {!showNoPricing && (showFullPricing || showOnlyTotal) ? (
-                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                          <div className="text-sm font-semibold text-slate-900">
-                            Summary
-                          </div>
-                          <div className="mt-3 space-y-2 text-sm text-slate-700">
-                            {showFullPricing ? (
-                              <>
-                                <div className="flex items-center justify-between">
-                                  <span>Delivery</span>
-                                  <span className="tabular-nums">
-                                    {money(q.deliveryCharge)}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span>Extra fee</span>
-                                  <span className="tabular-nums">
-                                    {money(q.extraFee)}
-                                  </span>
-                                </div>
-                              </>
-                            ) : null}
-                            <div className="flex items-center justify-between border-t border-slate-200 pt-2">
-                              <span className="font-semibold text-slate-900">
-                                Total
-                              </span>
-                              <span className="font-semibold tabular-nums">
-                                {money(q.totalPrice)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-5 grid grid-cols-[1fr_auto] items-end gap-3 lg:hidden">
-                    <button
-                      type="button"
-                      onClick={() => toggle(q._id)}
-                      className="inline-flex w-28 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      {isOpen ? "Hide" : "Details"}
-                      {isOpen ? <FiChevronUp /> : <FiChevronDown />}
-                    </button>
-
-                    <div className="flex flex-col items-end gap-2 sm:items-end">
-                      {canConfirm ? (
-                        <button
-                          type="button"
-                          onClick={() => onConfirm(q._id)}
-                          disabled={isConfirming || isCancelling}
-                          className="inline-flex w-28 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm shadow-emerald-100/60 transition hover:bg-emerald-600 hover:text-white disabled:opacity-60"
-                        >
-                          <FiCheck className="h-4 w-4" />
-                          {isConfirming ? "Confirming..." : "Confirm"}
-                        </button>
-                      ) : null}
-                      {canCancel ? (
-                        <button
-                          type="button"
-                          onClick={() => onCancel(q._id)}
-                          disabled={isCancelling || isConfirming}
-                          className="inline-flex w-28 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-600 shadow-sm shadow-rose-100/60 transition hover:bg-rose-600 hover:text-white disabled:opacity-60"
-                        >
-                          <FiX className="h-4 w-4" />
-                          {isCancelling ? "Cancelling..." : "Cancel"}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {quotes.map((quote) => (
+              <AccountRequestCard
+                key={quote._id}
+                quote={quote}
+                isOpen={!!open[quote._id]}
+                isEditing={editingQuoteId === quote._id}
+                editDraft={editDraft}
+                editMaxHit={editMaxHit}
+                editLocalError={editLocalError}
+                updateQuantitiesError={updateQuantitiesError}
+                isCancelling={isCancelling}
+                isConfirming={isConfirming}
+                isUpdatingQuantities={isUpdatingQuantities}
+                onToggle={toggle}
+                onStartEdit={setEditingQuoteId}
+                onCancel={onCancel}
+                onCancelEdit={onCancelEdit}
+                onConfirm={onConfirm}
+                onConfirmQty={onConfirmQty}
+                onAdjustDraftQty={adjustDraftQty}
+              />
+            ))}
           </div>
 
           {pagination ? (
@@ -494,6 +367,7 @@ export default function AccountRequestsPage() {
           ) : null}
         </>
       )}
+
     </div>
   );
 }
