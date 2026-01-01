@@ -53,7 +53,7 @@ function formatDate(iso) {
 
 function StatusBadge({ status }) {
   const base =
-    "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
 
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
@@ -72,7 +72,7 @@ function StatusBadge({ status }) {
 
 function AvailabilityBadge({ status }) {
   const base =
-    "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
   const map = {
     AVAILABLE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     SHORTAGE: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -389,8 +389,8 @@ export default function AdminRequestsPage() {
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Availability</th>
-                  <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3">Order</th>
+                  <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -403,7 +403,15 @@ export default function AdminRequestsPage() {
                   const canCopy = q.status === "Quoted";
                   const isCancelled = q.status === "Cancelled";
 
-                  const availabilityItems = (q.requestedItems || [])
+                  const requestedItems = Array.isArray(q.requestedItems)
+                    ? q.requestedItems
+                    : [];
+                  const itemsCount = requestedItems.length;
+                  const unitsCount = requestedItems.reduce(
+                    (sum, item) => sum + Math.max(0, Number(item?.qty) || 0),
+                    0
+                  );
+                  const availabilityItems = requestedItems
                     .map((it) => normalizeAvailabilityStatus(it?.availabilityStatus))
                     .filter(Boolean);
                   const showAvailability = !isCancelled;
@@ -469,25 +477,7 @@ export default function AdminRequestsPage() {
                         )}
                       </td>
 
-                      {/* Total */}
-                      <td className="px-4 py-3 text-right">
-                        {(() => {
-                          const availabilityTotal = getAvailabilityTotal(q);
-                          const displayTotal = Number.isFinite(availabilityTotal)
-                            ? availabilityTotal
-                            : q.totalPrice;
-
-                          return (
-                            <>
-                              <div className="font-semibold text-slate-900">
-                                {money(displayTotal)}
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Order status */}
+                      {/* Order */}
                       <td className="px-4 py-3">
                         {hasOrder ? (
                           <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
@@ -502,7 +492,7 @@ export default function AdminRequestsPage() {
                           <button
                             type="button"
                             className={[
-                              "rounded-xl px-3 py-2 text-xs font-semibold",
+                              "rounded-md px-2.5 py-1 text-[10px] font-semibold",
                               q.status === "Confirmed"
                                 ? "bg-emerald-600 text-white hover:bg-emerald-700"
                                 : "bg-slate-200 text-slate-400 cursor-not-allowed",
@@ -518,9 +508,30 @@ export default function AdminRequestsPage() {
                               isCreatingOrder
                             }
                           >
-                            {rowCreating ? "Creating…" : "Create"}
+                            {rowCreating ? "Creating..." : "Create"}
                           </button>
                         )}
+                      </td>
+
+                      {/* Total */}
+                      <td className="px-4 py-3 text-right">
+                        {(() => {
+                          const availabilityTotal = getAvailabilityTotal(q);
+                          const displayTotal = Number.isFinite(availabilityTotal)
+                            ? availabilityTotal
+                            : q.totalPrice;
+
+                          return (
+                            <>
+                              <div className="font-semibold text-slate-900">
+                                {money(displayTotal)}
+                              </div>
+                              <div className="mt-0.5 text-[10px] text-slate-500">
+                                {itemsCount} items / {unitsCount} units
+                              </div>
+                            </>
+                          );
+                        })()}
                       </td>
 
                       {/* Actions */}

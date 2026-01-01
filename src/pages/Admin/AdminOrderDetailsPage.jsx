@@ -47,6 +47,7 @@ function StatusBadge({ status }) {
 
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
+    Shipping: "bg-blue-50 text-blue-700 ring-blue-200",
     Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
   };
@@ -280,6 +281,7 @@ export default function AdminOrderDetailsPage() {
                   className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="Processing">Processing</option>
+                  <option value="Shipping">Shipping</option>
                   <option value="Delivered">Delivered</option>
                   <option value="Cancelled">Cancelled</option>
                 </select>

@@ -20,27 +20,49 @@ export default function AccountProfilePage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
   const [saved, setSaved] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const profileName = profile?.name || "";
+  const profilePhone = profile?.phoneNumber || "";
+  const profileAddress = profile?.address || "";
 
   useEffect(() => {
     if (!profile) return;
-    setName(profile.name || "");
-    setPhoneNumber(profile.phoneNumber || "");
-    setAddress(profile.address || "");
+    setName(profileName);
+    setPhoneNumber(profilePhone);
+    setAddress(profileAddress);
+    setSaved(false);
+    setIsEditing(false);
   }, [profile]);
 
   const onSave = async (e) => {
     e.preventDefault();
+    if (!isEditing || isSaving) return;
     setSaved(false);
 
     try {
       const res = await updateProfile({ name, phoneNumber, address }).unwrap();
       dispatch(setCredentials(res.data));
       setSaved(true);
+      setIsEditing(false);
       refetch();
       setTimeout(() => setSaved(false), 1500);
     } catch {
       // inline error below
     }
+  };
+
+  const onEdit = () => {
+    setIsEditing(true);
+    setSaved(false);
+  };
+
+  const onCancel = () => {
+    setName(profileName);
+    setPhoneNumber(profilePhone);
+    setAddress(profileAddress);
+    setIsEditing(false);
+    setSaved(false);
   };
 
   const loadErrMsg = error?.data?.message || error?.error;
@@ -69,6 +91,15 @@ export default function AccountProfilePage() {
           </div>
         ) : (
           <form onSubmit={onSave} className="space-y-6">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={isEditing ? onCancel : onEdit}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {isEditing ? "Cancel Edit" : "Edit Profile"}
+              </button>
+            </div>
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-4">
                 <div className="text-sm font-semibold text-slate-900">
@@ -80,7 +111,7 @@ export default function AccountProfilePage() {
                     Email
                   </label>
                   <input
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 disabled:cursor-default"
                     value={profile?.email || ""}
                     disabled
                   />
@@ -91,10 +122,11 @@ export default function AccountProfilePage() {
                     Name
                   </label>
                   <input
-                    className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none"
+                    className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
+                    disabled={!isEditing}
                   />
                 </div>
               </div>
@@ -109,10 +141,11 @@ export default function AccountProfilePage() {
                     Phone
                   </label>
                   <input
-                    className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none"
+                    className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+971..."
+                    disabled={!isEditing}
                   />
                 </div>
 
@@ -121,11 +154,12 @@ export default function AccountProfilePage() {
                     Address
                   </label>
                   <textarea
-                    className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none"
+                    className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500"
                     rows={4}
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="Street, building, city, country"
+                    disabled={!isEditing}
                   />
                 </div>
               </div>
@@ -138,13 +172,15 @@ export default function AccountProfilePage() {
             ) : null}
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="rounded-2xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700 disabled:opacity-60"
-              >
-                {isSaving ? "Saving..." : "Save changes"}
-              </button>
+              {isEditing ? (
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="rounded-2xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700 disabled:opacity-60"
+                >
+                  {isSaving ? "Saving..." : "Save changes"}
+                </button>
+              ) : null}
               {saved ? (
                 <span className="text-sm font-medium text-violet-700">
                   Saved

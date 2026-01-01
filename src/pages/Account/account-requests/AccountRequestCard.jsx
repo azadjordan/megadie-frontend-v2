@@ -308,6 +308,11 @@ export default function AccountRequestCard({
                 Your Order is being Prepared...
               </div>
             ) : null}
+            {isQuoted && hasShortage ? (
+              <div className="mt-1 text-xs font-semibold text-violet-600">
+                Please edit quantities to see prices.
+              </div>
+            ) : null}
 
             <RequestedItemsTable
               quoteId={quote._id}

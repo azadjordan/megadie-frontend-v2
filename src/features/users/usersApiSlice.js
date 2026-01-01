@@ -34,6 +34,14 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         { type: "User", id: arg?.id },
       ],
     }),
+
+    updateUserPasswordByAdmin: builder.mutation({
+      query: ({ id, password }) => ({
+        url: `/users/${id}/password`,
+        method: "PUT",
+        body: { password },
+      }),
+    }),
   }),
 });
 
@@ -41,4 +49,5 @@ export const {
   useGetUsersAdminQuery,
   useGetUserByIdQuery,
   useUpdateUserMutation,
+  useUpdateUserPasswordByAdminMutation,
 } = usersApiSlice;

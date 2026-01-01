@@ -1,7 +1,7 @@
 // src/features/orders/ordersApiSlice.js
 import { apiSlice } from "../../app/apiSlice";
 
-const ADMIN_ORDER_STATUSES = ["Processing", "Delivered", "Cancelled"];
+const ADMIN_ORDER_STATUSES = ["Processing", "Shipping", "Delivered", "Cancelled"];
 
 export const ordersApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({

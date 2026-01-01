@@ -17,7 +17,7 @@ import {
 export default function AccountRequestsPage() {
   const [page, setPage] = useState(1);
   const [filterStatus, setFilterStatus] = useState("all");
-  const limit = 5;
+  const limit = 3;
 
   const { data, isLoading, isError, error, refetch } = useGetMyQuotesQuery({
     page,

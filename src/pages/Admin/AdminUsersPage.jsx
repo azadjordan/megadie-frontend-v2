@@ -223,11 +223,10 @@ export default function AdminUsersPage() {
                       <td className="px-4 py-3 text-center">
                         <Link
                           to={`/admin/users/${userId}/edit`}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
                         >
                           <FiSettings className="h-3.5 w-3.5" />
-                          Edit
-                        </Link>
+                          </Link>
                       </td>
                     </tr>
                   );

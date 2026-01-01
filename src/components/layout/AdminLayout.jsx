@@ -11,6 +11,7 @@ import {
   FiDollarSign,
   FiUsers,
   FiBox,
+  FiTag,
   FiArrowLeft,
 } from "react-icons/fi";
 
@@ -55,6 +56,7 @@ export default function AdminLayout() {
       { to: "/admin/payments", label: "Payments", icon: FiDollarSign },
       { to: "/admin/users", label: "Users", icon: FiUsers },
       { to: "/admin/inventory", label: "Inventory", icon: FiBox },
+      { to: "/admin/price-rules", label: "Pricing Rules", icon: FiTag },
     ],
     []
   );

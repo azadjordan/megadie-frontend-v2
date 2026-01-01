@@ -1,5 +1,5 @@
 // src/routes/AppRoutes.jsx
-import { Routes, Route, Navigate, useParams } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
@@ -28,9 +28,10 @@ import AdminInvoicesPage from "../pages/Admin/AdminInvoicesPage";
 import AdminInvoiceEditPage from "../pages/Admin/AdminInvoiceEditPage";
 import AdminInventoryPage from "../pages/Admin/AdminInventoryPage";
 import AdminUsersPage from "../pages/Admin/AdminUsersPage";
-import AdminUserEditPage from "../pages/Admin/AdminUserEditPage";
+import AdminUserDetailsPage from "../pages/Admin/AdminUserDetailsPage";
 import AdminRequestDetailsPage from "../pages/Admin/AdminRequestDetailsPage";
 import AdminOrderDetailsPage from "../pages/Admin/AdminOrderDetailsPage";
+import AdminPriceRulesPage from "../pages/Admin/AdminPriceRulesPage";
 
 
 
@@ -46,14 +47,12 @@ import AccountRequestsPage from "../pages/Account/AccountRequestsPage";
 import AccountOrdersPage from "../pages/Account/AccountOrdersPage";
 
 // ✅ Billing (Invoices list + Invoice details + Order details)
-import AccountInvoicesPage from "../pages/Account/AccountInvoicesPage";
-import AccountInvoiceDetailsPage from "../pages/Account/AccountInvoiceDetailsPage";
+import AccountInvoicesReceiptPage from "../pages/Account/AccountInvoicesReceiptPage";
 import AdminPaymentsPage from "../pages/Admin/AdminPaymentsPage";
 
 // ✅ Backward-compat param redirects (Navigate can't keep ":id" by itself)
 function InvoiceRedirect() {
-  const { id } = useParams();
-  return <Navigate to={`/account/invoices/${id}`} replace />;
+  return <Navigate to="/account/invoices" replace />;
 }
 function OrderRedirect() {
   return <Navigate to="/account/orders" replace />;
@@ -82,10 +81,9 @@ export default function AppRoutes() {
             <Route path="/account/profile" element={<AccountProfilePage />} />
             <Route path="/account/requests" element={<AccountRequestsPage />} />
             <Route path="/account/orders" element={<AccountOrdersPage />} />
-            <Route path="/account/invoices" element={<AccountInvoicesPage />} />
             <Route
-              path="/account/invoices/:id"
-              element={<AccountInvoiceDetailsPage />}
+              path="/account/invoices"
+              element={<AccountInvoicesReceiptPage />}
             />
 
             {/* ✅ Billing section (single sidebar item) */}
@@ -140,8 +138,9 @@ export default function AppRoutes() {
     <Route path="invoices/:id/edit" element={<AdminInvoiceEditPage />} />
     <Route path="payments" element={<AdminPaymentsPage />} />
     <Route path="users" element={<AdminUsersPage />} />
-    <Route path="users/:id/edit" element={<AdminUserEditPage />} />
+    <Route path="users/:id/edit" element={<AdminUserDetailsPage />} />
     <Route path="inventory" element={<AdminInventoryPage />} />
+    <Route path="price-rules" element={<AdminPriceRulesPage />} />
   </Route>
 </Route>
 

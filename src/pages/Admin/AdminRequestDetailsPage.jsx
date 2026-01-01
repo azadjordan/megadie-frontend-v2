@@ -11,6 +11,7 @@ import {
   useUpdateQuoteOwnerByAdminMutation,
   useUpdateQuoteQuantitiesByAdminMutation,
   useUpdateQuotePricingByAdminMutation,
+  useAssignUserPricesByAdminMutation,
   useUpdateQuoteNotesByAdminMutation,
   useUpdateQuoteStatusByAdminMutation,
   useRecheckQuoteAvailabilityByAdminMutation,
@@ -72,6 +73,10 @@ export default function AdminRequestDetailsPage() {
     updateQuotePricingByAdmin,
     { isLoading: isUpdatingPricing, error: updatePricingError },
   ] = useUpdateQuotePricingByAdminMutation();
+  const [
+    assignUserPricesByAdmin,
+    { isLoading: isAssigningUserPrices },
+  ] = useAssignUserPricesByAdminMutation();
   const [
     updateQuoteNotesByAdmin,
     { isLoading: isUpdatingNotes, error: updateNotesError },
@@ -360,6 +365,7 @@ export default function AdminRequestDetailsPage() {
     isUpdatingOwner ||
     isUpdatingQuantities ||
     isUpdatingPricing ||
+    isAssigningUserPrices ||
     isUpdatingNotes ||
     isUpdatingStatus ||
     isRecheckingAvailability ||
@@ -631,6 +637,7 @@ export default function AdminRequestDetailsPage() {
             setExtraFeeStr={setExtraFeeStr}
             quoteLocked={quoteLocked}
             showAvailability={showAvailability}
+            onAssignUserPrices={onAssignUserPrices}
             canUpdatePricing={canUpdatePricing}
             onUpdatePricing={onUpdatePricing}
             isBusy={isBusy}
@@ -676,6 +683,18 @@ export default function AdminRequestDetailsPage() {
         );
       default:
         return null;
+    }
+  };
+
+  const onAssignUserPrices = async () => {
+    if (!quoteId || quoteLocked) return;
+
+    try {
+      await assignUserPricesByAdmin(quoteId).unwrap();
+      await refetchQuote();
+      toast.success("User prices assigned.");
+    } catch (err) {
+      toast.error(resolveToastError(err, "Failed to assign user prices."));
     }
   };
 

@@ -13,16 +13,13 @@ import {
   useGetPaymentsAdminQuery,
 } from "../../features/payments/paymentsApiSlice";
 
-function formatDateTime(iso) {
+function formatDate(iso) {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    return new Date(iso).toLocaleDateString(undefined, {
       year: "numeric",
       month: "short",
       day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
     });
   } catch {
     return iso;
@@ -262,12 +259,11 @@ export default function AdminPaymentsPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Payment</th>
-                  <th className="px-4 py-3">Invoice</th>
+                  <th className="px-4 py-3 w-[170px]">Payment</th>
+                  <th className="px-4 py-3 min-w-[150px]">Invoice</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Method</th>
                   <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -284,26 +280,21 @@ export default function AdminPaymentsPage() {
 
                   return (
                     <tr key={p._id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
+                      <td className="px-4 py-3 w-[170px]">
+                        <div className="mt-0.5 font-semibold text-slate-900">
                           {p.reference || p._id}
                         </div>
-                        {p.receivedBy ? (
-                          <div className="text-xs text-slate-500">
-                            Received by: {p.receivedBy}
-                          </div>
-                        ) : null}
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          Paid: {formatDate(p.paymentDate) || "-"}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-700">
+                      <td className="px-4 py-3 text-slate-700 min-w-[150px]">
                         {invoiceId ? (
-                          <Link
-                            to={`/admin/invoices/${invoiceId}/edit`}
-                            className="font-semibold text-slate-900 hover:underline"
-                          >
+                          <span className="text-xs text-slate-700">
                             {invoice?.invoiceNumber || invoiceId}
-                          </Link>
+                          </span>
                         ) : (
-                          <span className="text-slate-500">No invoice</span>
+                          <span className="text-xs text-slate-500">No invoice</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-700">
@@ -319,14 +310,11 @@ export default function AdminPaymentsPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-700 tabular-nums">
                         {moneyMinor(p.amountMinor, currency, factor)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-xs text-slate-700">
-                          Created: {formatDateTime(p.createdAt) || "-"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          Paid: {formatDateTime(p.paymentDate) || "-"}
-                        </div>
+                        {p.receivedBy ? (
+                          <div className="text-xs text-slate-500">
+                            Received by: {p.receivedBy}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button

@@ -11,6 +11,7 @@ export default function PricingStep({
   setExtraFeeStr,
   quoteLocked,
   showAvailability,
+  onAssignUserPrices,
   canUpdatePricing,
   onUpdatePricing,
   isBusy,
@@ -30,6 +31,22 @@ export default function PricingStep({
           Totals use available quantities when shortage exists. Adjust in Quantities.
         </div>
       ) : null}
+
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={onAssignUserPrices}
+          disabled={quoteLocked || isBusy}
+          className={[
+            "rounded-xl border px-4 py-2 text-xs font-semibold transition",
+            quoteLocked || isBusy
+              ? "cursor-not-allowed border-slate-200 bg-white text-slate-400"
+              : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50",
+          ].join(" ")}
+        >
+          Assign User Prices
+        </button>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-full table-fixed text-left text-sm">
@@ -153,7 +170,7 @@ export default function PricingStep({
         </div>
       ) : null}
 
-      <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
         <button
           type="button"
           onClick={onUpdatePricing}

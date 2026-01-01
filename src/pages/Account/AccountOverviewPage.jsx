@@ -31,6 +31,7 @@ function StatusPill({ status, label, showIcon = false }) {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
     Quoted: "bg-violet-50 text-violet-700 ring-violet-300",
     Confirmed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    Shipping: "bg-blue-50 text-blue-700 ring-blue-200",
     Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
     Paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
@@ -130,6 +131,7 @@ export default function AccountOverviewPage() {
   const processingQuotes = quotes.filter((q) => q.status === "Processing");
   const quotedQuotes = quotes.filter((q) => q.status === "Quoted");
   const unpaidTotal = unpaidQuery.data?.total ?? unpaidInvoices.length;
+  const showReadyQuotes = quotedQuotes.length > 0;
 
   if (isLoading) {
     return (
@@ -162,30 +164,33 @@ export default function AccountOverviewPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          label="Ready quotes"
-          value={quotedQuotes.length}
-          valueIcon={
-            quotedQuotes.length > 0 ? (
-              <FiCheckCircle className="text-lg text-violet-500" aria-hidden="true" />
-            ) : null
-          }
-          hint="Awaiting your confirmation."
-          to="/account/requests"
-          actionLabel="Check Quotes"
-        />
-        <StatCard
-          label="Preparing quotes"
-          value={processingQuotes.length}
-          valueIcon={
-            processingQuotes.length > 0 ? (
-              <FiClock className="text-lg text-slate-500" aria-hidden="true" />
-            ) : null
-          }
-          hint="We are preparing a quote."
-          to="/account/requests"
-          actionLabel={null}
-        />
+        {showReadyQuotes ? (
+          <StatCard
+            label="Ready quotes"
+            value={quotedQuotes.length}
+            valueIcon={
+              quotedQuotes.length > 0 ? (
+                <FiCheckCircle className="text-lg text-violet-500" aria-hidden="true" />
+              ) : null
+            }
+            hint="Awaiting your confirmation."
+            to="/account/requests"
+            actionLabel="Check Quotes"
+          />
+        ) : (
+          <StatCard
+            label="Preparing quotes"
+            value={processingQuotes.length}
+            valueIcon={
+              processingQuotes.length > 0 ? (
+                <FiClock className="text-lg text-slate-500" aria-hidden="true" />
+              ) : null
+            }
+            hint="We are preparing a quote."
+            to="/account/requests"
+            actionLabel={null}
+          />
+        )}
         <StatCard
           label="Unpaid invoices"
           value={unpaidTotal}

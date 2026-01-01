@@ -99,6 +99,22 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
     }),
 
     /* =========================
+       POST /api/quotes/admin/:id/assign-user-prices
+       Private/Admin
+       Assign unit prices from user-specific rules
+       ========================= */
+    assignUserPricesByAdmin: builder.mutation({
+      query: (id) => ({
+        url: `/quotes/admin/${id}/assign-user-prices`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: "Quote", id: "LIST" },
+        { type: "Quote", id },
+      ],
+    }),
+
+    /* =========================
        PUT /api/quotes/admin/:id/notes
        Private/Admin
        Update notes only
@@ -260,6 +276,7 @@ export const {
   useUpdateQuoteOwnerByAdminMutation,
   useUpdateQuoteQuantitiesByAdminMutation,
   useUpdateQuotePricingByAdminMutation,
+  useAssignUserPricesByAdminMutation,
   useUpdateQuoteNotesByAdminMutation,
   useUpdateQuoteStatusByAdminMutation,
   useRecheckQuoteAvailabilityByAdminMutation,

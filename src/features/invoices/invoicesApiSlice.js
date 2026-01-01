@@ -44,10 +44,10 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
     }),
 
     getMyInvoices: builder.query({
-      query: ({ page = 1, unpaid = false } = {}) => {
+      query: ({ page = 1, unpaid = false, limit = 10 } = {}) => {
         const params = new URLSearchParams();
         params.set("page", String(page));
-        params.set("limit", "10");
+        params.set("limit", String(limit));
         if (unpaid) params.set("unpaid", "true");
         return `/invoices/my?${params.toString()}`;
       },

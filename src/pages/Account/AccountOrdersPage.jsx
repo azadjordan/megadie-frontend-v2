@@ -41,6 +41,7 @@ function StatusBadge({ status }) {
     "inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
+    Shipping: "bg-blue-50 text-blue-700 ring-blue-200",
     Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
   };
@@ -54,7 +55,7 @@ function StatusBadge({ status }) {
 export default function AccountOrdersPage() {
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState({});
-  const limit = 5;
+  const limit = 4;
 
   const { data, isLoading, isError, error } = useGetMyOrdersQuery({
     page,
@@ -232,12 +233,7 @@ export default function AccountOrdersPage() {
                           </div>
                           <div className="mt-1 text-sm font-semibold text-slate-900">
                             {invoiceId ? (
-                              <Link
-                                to={`/account/invoices/${invoiceId}`}
-                                className="text-violet-600 hover:text-violet-700"
-                              >
-                                View Invoice
-                              </Link>
+                              <span>{invoice?.invoiceNumber || invoiceId}</span>
                             ) : (
                               "None"
                             )}

@@ -43,7 +43,7 @@ function formatDate(iso) {
   }
 }
 
-function moneyMinor(amountMinor, currency = "AED", factor = 100) {
+function moneyMinorRounded(amountMinor, currency = "AED", factor = 100) {
   if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
     return "";
 
@@ -54,10 +54,26 @@ function moneyMinor(amountMinor, currency = "AED", factor = 100) {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 0,
     }).format(major);
   } catch {
-    return String(major);
+    return `${Math.round(major)} ${currency}`;
+  }
+}
+
+function numberMinorRounded(amountMinor, factor = 100) {
+  if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
+    return "";
+
+  const f = typeof factor === "number" && factor > 0 ? factor : 100;
+  const major = amountMinor / f;
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      maximumFractionDigits: 0,
+    }).format(major);
+  } catch {
+    return String(Math.round(major));
   }
 }
 
@@ -79,7 +95,7 @@ function isOverdue(inv) {
 
 function PaymentStatusBadge({ status }) {
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
+    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
 
   const map = {
     Paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
@@ -99,7 +115,7 @@ function PaymentStatusBadge({ status }) {
 
 function OverdueBadge() {
   return (
-    <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
+    <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
       Overdue
     </span>
   );
@@ -352,8 +368,7 @@ export default function AdminInvoicesPage() {
                   <th className="px-4 py-3">Invoice</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Money</th>
-                  <th className="px-4 py-3">Due</th>
+                  <th className="px-4 py-3">Amount</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -371,10 +386,7 @@ export default function AdminInvoicesPage() {
                   return (
                     <tr key={inv._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
-                          {inv.invoiceNumber || inv._id}
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                           <span
                             className={[
                               "font-semibold",
@@ -386,8 +398,21 @@ export default function AdminInvoicesPage() {
                             {inv.status === "Cancelled" ? "Cancelled" : "Issued"}
                           </span>
                           {inv.status === "Cancelled" ? null : (
-                            <span>{formatDateTime(inv.createdAt)}</span>
+                            <span>{formatDate(inv.createdAt)}</span>
                           )}
+                        </div>
+                        <div className="mt-0.5 font-semibold text-slate-900">
+                          {inv.invoiceNumber || inv._id}
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          <span className="font-semibold text-slate-500">Due:</span>{" "}
+                          <span
+                            className={
+                              overdue ? "font-semibold text-rose-700" : "text-slate-500"
+                            }
+                          >
+                            {inv.dueDate ? formatDate(inv.dueDate) : "No due date"}
+                          </span>
                         </div>
                       </td>
 
@@ -409,29 +434,15 @@ export default function AdminInvoicesPage() {
 
                       <td className="px-4 py-3">
                         <div className="font-semibold text-slate-900">
-                          Amount:{" "}
                           <span className="tabular-nums">
-                            {moneyMinor(inv.amountMinor, currency, factor)}
+                            {moneyMinorRounded(inv.amountMinor, currency, factor)}
                           </span>
                         </div>
                         <div className="text-xs text-slate-500">
-                          Balance:{" "}
+                          <span className="font-semibold text-slate-500">Balance:</span>{" "}
                           <span className="tabular-nums">
-                            {moneyMinor(balance, currency, factor)}
+                            {numberMinorRounded(balance, factor)}
                           </span>
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div
-                          className={[
-                            "text-sm",
-                            overdue
-                              ? "text-rose-700 font-semibold"
-                              : "text-slate-700",
-                          ].join(" ")}
-                        >
-                          {inv.dueDate ? formatDate(inv.dueDate) : "No due date"}
                         </div>
                       </td>
 

@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiSettings, FiTrash2, FiRefreshCw, FiCheck } from "react-icons/fi";
+import { FiSettings, FiTrash2, FiRefreshCw } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -14,6 +14,7 @@ import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
   useMarkOrderDeliveredMutation,
+  useUpdateOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
 import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
@@ -53,53 +54,59 @@ function formatItemCount(items) {
   return `${count} item${count === 1 ? "" : "s"}`;
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, size = "default" }) {
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
+    "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
+
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
 
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
+    Shipping: "bg-blue-50 text-blue-700 ring-blue-200",
     Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
   };
 
   return (
-    <span className={`${base} ${map[status] || map.Processing}`}>{status}</span>
+    <span
+      className={`${base} ${sizes[size] || sizes.default} ${
+        map[status] || map.Processing
+      }`}
+    >
+      {status}
+    </span>
   );
 }
 
 function InvoiceCell({ order, onCreateInvoice }) {
   const hasInvoice = Boolean(order?.invoice);
   const canCreate =
-    !hasInvoice && ["Processing", "Delivered"].includes(order?.status || "");
+    !hasInvoice &&
+    ["Shipping", "Delivered"].includes(order?.status || "");
+
+  const invoiceNo =
+    order?.invoice?.invoiceNumber || order?.invoice?.number || order?.invoice?._id;
 
   if (hasInvoice) {
-    const invoiceNo =
-      order?.invoice?.invoiceNumber || order?.invoice?.number || order?.invoice?._id;
-
     return (
-      <div className="flex items-center justify-center gap-2">
-        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"><FiCheck className="h-3 w-3" aria-hidden="true" /></span>
-        <div className="min-w-0 text-left">
-          <div className="text-xs font-semibold text-slate-800">Invoice</div>
-          <div className="text-xs text-slate-500 truncate">
-            {invoiceNo ? String(invoiceNo) : "-"}
-          </div>
-        </div>
+      <div className="text-[10px] font-semibold text-slate-500">
+        {invoiceNo ? String(invoiceNo) : "Invoice"}
       </div>
     );
   }
 
-  // No invoice
   return (
     <button
       type="button"
       disabled={!canCreate}
       className={[
-        "rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition",
+        "inline-flex h-6 w-20 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition",
         canCreate
-          ? "bg-slate-900 text-white ring-slate-900 hover:bg-slate-800"
-          : "bg-white text-slate-400 ring-slate-200 cursor-not-allowed",
+          ? "bg-violet-600 text-white ring-violet-600 hover:bg-violet-700"
+          : "bg-violet-600 text-white opacity-50 ring-violet-600 cursor-not-allowed",
       ].join(" ")}
       onClick={() => {
         if (!canCreate || !onCreateInvoice) return;
@@ -108,10 +115,12 @@ function InvoiceCell({ order, onCreateInvoice }) {
       title={
         canCreate
           ? "Create invoice"
-          : "Invoice can be created only for Processing or Delivered orders."
+          : hasInvoice && invoiceNo
+          ? `Invoice ${invoiceNo}`
+          : "Invoice can be created only for Shipping or Delivered orders."
       }
     >
-      Create invoice
+      Invoice
     </button>
   );
 }
@@ -193,6 +202,7 @@ export default function AdminOrdersPage() {
 
   const [deletingId, setDeletingId] = useState(null);
   const [deliveringId, setDeliveringId] = useState(null);
+  const [shippingId, setShippingId] = useState(null);
   const [deliverTarget, setDeliverTarget] = useState(null);
   const [deliveredBy, setDeliveredBy] = useState("");
   const [deliverFormError, setDeliverFormError] = useState("");
@@ -208,6 +218,8 @@ export default function AdminOrdersPage() {
     useDeleteOrderByAdminMutation();
   const [markOrderDelivered, { isLoading: isDelivering }] =
     useMarkOrderDeliveredMutation();
+  const [updateOrderByAdmin, { isLoading: isShipping }] =
+    useUpdateOrderByAdminMutation();
   const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
     useCreateInvoiceFromOrderMutation();
 
@@ -232,13 +244,33 @@ export default function AdminOrdersPage() {
   };
 
   const handleMarkDelivered = async (order) => {
-    if (!order || order.status !== "Processing") return;
+    if (
+      !order ||
+      order.status !== "Shipping"
+    ) {
+      return;
+    }
 
     setDeliverTarget(order);
     setDeliveredBy(order.deliveredBy || "");
     setDeliverFormError("");
   };
 
+  const handleMarkShipping = async (order) => {
+    if (!order || order.status !== "Processing") return;
+
+    try {
+      setShippingId(order._id);
+      await updateOrderByAdmin({
+        id: order._id,
+        status: "Shipping",
+      }).unwrap();
+    } catch (err) {
+      toast.error(err?.data?.message || err?.error || "Failed to mark shipping.");
+    } finally {
+      setShippingId(null);
+    }
+  };
   const closeDeliverModal = () => {
     if (isDelivering) return;
     setDeliverTarget(null);
@@ -381,6 +413,7 @@ export default function AdminOrdersPage() {
             >
               <option value="all">All statuses</option>
               <option value="Processing">Processing</option>
+              <option value="Shipping">Shipping</option>
               <option value="Delivered">Delivered</option>
               <option value="Cancelled">Cancelled</option>
             </select>
@@ -441,8 +474,8 @@ export default function AdminOrdersPage() {
                   <th className="px-4 py-3">Order</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-center">Workflow</th>
                   <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3 text-center">Invoice</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -470,15 +503,37 @@ export default function AdminOrdersPage() {
                     </td>
 
                     <td className="px-4 py-3">
-                      <div className="flex flex-col items-center gap-2 text-center">
+                      <div className="flex justify-center">
+                        <StatusBadge status={o.status} size="compact" />
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-center gap-2">
                         {o.status === "Processing" ? (
                           <button
                             type="button"
                             className={[
-                              "rounded-sm px-1.5 py-1 text-[10px] font-semibold ring-1 transition",
+                              "inline-flex h-6 w-20 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition",
+                              isShipping && shippingId === o._id
+                                ? "cursor-not-allowed bg-blue-600 text-white opacity-50 ring-blue-600"
+                                : "bg-blue-600 text-white ring-blue-600 hover:bg-blue-700",
+                            ].join(" ")}
+                            disabled={isShipping && shippingId === o._id}
+                            onClick={() => handleMarkShipping(o)}
+                            title="Mark Shipping"
+                          >
+                            {isShipping && shippingId === o._id ? "Shipping..." : "Ship"}
+                          </button>
+                        ) : null}
+                        {o.status === "Shipping" ? (
+                          <button
+                            type="button"
+                            className={[
+                              "inline-flex h-6 w-20 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition",
                               isDelivering && deliveringId === o._id
-                                ? "cursor-not-allowed bg-slate-200 text-slate-500 ring-slate-200"
-                                : "bg-white text-slate-700 ring-slate-400 hover:bg-green-800 hover:text-white",
+                                ? "cursor-not-allowed bg-emerald-600 text-white opacity-50 ring-emerald-600"
+                                : "bg-emerald-600 text-white ring-emerald-600 hover:bg-emerald-700",
                             ].join(" ")}
                             disabled={isDelivering && deliveringId === o._id}
                             onClick={() => handleMarkDelivered(o)}
@@ -486,11 +541,10 @@ export default function AdminOrdersPage() {
                           >
                             {isDelivering && deliveringId === o._id
                               ? "Delivering..."
-                              : "Mark Delivered"}
+                              : "Deliver"}
                           </button>
-                        ) : (
-                          <StatusBadge status={o.status} />
-                        )}
+                        ) : null}
+                        <InvoiceCell order={o} onCreateInvoice={openCreateModal} />
                       </div>
                     </td>
 
@@ -502,15 +556,13 @@ export default function AdminOrdersPage() {
                     </td>
 
                     <td className="px-4 py-3 text-center">
-                      <InvoiceCell order={o} onCreateInvoice={openCreateModal} />
-                    </td>
-
-                    <td className="px-4 py-3 text-center">
-                      <ActionsCell
-                        order={o}
-                        onDelete={() => handleDelete(o)}
-                        isDeleting={isDeleting && deletingId === o._id}
-                      />
+                      <div className="flex flex-col items-center gap-2">
+                        <ActionsCell
+                          order={o}
+                          onDelete={() => handleDelete(o)}
+                          isDeleting={isDeleting && deletingId === o._id}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
