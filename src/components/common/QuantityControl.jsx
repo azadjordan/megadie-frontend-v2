@@ -82,7 +82,7 @@ export default function QuantityControl({
         onChange={handleChange}
         disabled={disabled}
         className={[
-          "text-center font-semibold text-slate-900 outline-none",
+          "text-center font-semibold text-slate-900 outline-none appearance-none [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0",
           "border-x border-slate-200 bg-white",
           sizeStyle.input,
           disabled ? "bg-slate-100 text-slate-400" : "",

@@ -1,5 +1,6 @@
 // src/pages/Public/ShopPage.jsx
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useLocation, useNavigationType } from "react-router-dom";
 
 import { useGetProductsQuery } from "../../features/products/productsApiSlice";
 import { useGetFilterConfigsQuery } from "../../features/filters/filterConfigsApiSlice";
@@ -15,9 +16,11 @@ import ProductTypeNav from "../../components/shop/ProductTypeNav";
 import useShopQueryState from "../../hooks/useShopQueryState";
 
 const DEFAULT_PRODUCT_TYPE = "Ribbon";
-const PAGE_LIMIT = 48;
+const PAGE_LIMIT = 16;
 
 export default function ShopPage() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
   const {
     productType,
     setProductType,
@@ -83,12 +86,16 @@ export default function ShopPage() {
     configsQ.isError ||
     (needsCategories && (categoriesQ.isLoading || categoriesQ.isError));
 
-  const productsQ = useGetProductsQuery(productsQueryParams, {
-    skip: shouldSkipProducts,
-  });
+  const productsQ = useGetProductsQuery(
+    { ...productsQueryParams, featuredFirst: true },
+    { skip: shouldSkipProducts }
+  );
 
   const products = productsQ.data?.products ?? [];
   const pagination = productsQ.data?.pagination ?? null;
+
+  const scrollKey = `shop-scroll:${location.pathname}${location.search}`;
+  const hasRestoredScroll = useRef(false);
 
   const hasActiveFilters =
     Object.values(filters || {}).some((arr) => Array.isArray(arr) && arr.length);
@@ -110,6 +117,35 @@ export default function ShopPage() {
     const end = Math.min(start + products.length - 1, total);
     return `Showing ${start} – ${end} of ${total} item${total !== 1 ? "s" : ""}`;
   }, [pagination, products.length, productsQueryParams?.limit]);
+
+  useEffect(() => {
+    return () => {
+      sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
+    };
+  }, [scrollKey]);
+
+  useEffect(() => {
+    if (hasRestoredScroll.current) return;
+    if (navigationType !== "POP") return;
+    if (productsQ.isLoading || productsQ.isFetching) return;
+
+    const raw = sessionStorage.getItem(scrollKey);
+    const y = raw ? parseInt(raw, 10) : 0;
+
+    if (Number.isFinite(y)) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, y);
+      });
+    }
+
+    hasRestoredScroll.current = true;
+  }, [
+    navigationType,
+    productsQ.isLoading,
+    productsQ.isFetching,
+    products.length,
+    scrollKey,
+  ]);
 
   // ---- Early returns (kept predictable) ----
   if (configsQ.isLoading || (needsCategories && categoriesQ.isLoading)) {
@@ -179,12 +215,19 @@ export default function ShopPage() {
 
         {/* Results */}
         <section className="space-y-4 lg:col-span-9">
-          <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-            <span className="whitespace-nowrap">{showingText}</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="whitespace-nowrap text-xs text-slate-500">
+              {showingText}
+            </span>
             {pagination ? (
-              <span className="whitespace-nowrap">
-                Page {pagination.page} / {pagination.totalPages}
-              </span>
+              <Pagination
+                pagination={pagination}
+                onPageChange={setPage}
+                variant="compact"
+                showSummary={false}
+                showNumbers={false}
+                tone="violet"
+              />
             ) : null}
           </div>
 
@@ -205,6 +248,7 @@ export default function ShopPage() {
               variant="full"
               pagination={pagination}
               onPageChange={setPage}
+              tone="violet"
             />
           </div>
 

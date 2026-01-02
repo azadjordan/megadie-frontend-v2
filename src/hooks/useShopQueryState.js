@@ -67,9 +67,12 @@ export default function useShopQueryState(options = {}) {
 
   const setProductType = useCallback(
     (nextProductType) => {
-      const next = new URLSearchParams(searchParams);
+      const next = new URLSearchParams();
       next.set("productType", String(nextProductType || defaultProductType));
       next.set("page", "1");
+
+      const sort = searchParams.get("sort");
+      if (sort) next.set("sort", sort);
       setSearchParams(next, { replace: true });
     },
     [searchParams, setSearchParams, defaultProductType]

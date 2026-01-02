@@ -42,8 +42,8 @@ export default function SelectFilter({
         onChange={handleChange}
         className={[
           'w-full rounded-md bg-white px-3 py-2 text-sm ring-1 ring-slate-200 transition',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
-          disabled ? 'cursor-not-allowed opacity-60' : 'hover:ring-slate-300',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
+          disabled ? 'cursor-not-allowed opacity-60' : 'hover:ring-violet-200',
         ].join(' ')}
       >
         {!multi && <option value="">All</option>}

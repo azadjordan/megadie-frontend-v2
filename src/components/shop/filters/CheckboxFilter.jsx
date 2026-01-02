@@ -32,8 +32,8 @@ export default function CheckboxFilter({
                 checked={checked}
                 onChange={() => onToggle(field.key, v, multi)}
                 className={[
-                  'h-4 w-4 rounded border-slate-300 text-slate-900',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+                  'h-4 w-4 rounded border-slate-300 text-violet-600',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
                 ].join(' ')}
               />
               <span className="text-slate-700">{v}</span>

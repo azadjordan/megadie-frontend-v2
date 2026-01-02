@@ -64,8 +64,8 @@ export default function SearchFilter({
         placeholder={`Search ${field.label.toLowerCase()}…`}
         className={[
           'w-full rounded-md bg-white px-3 py-2 text-sm ring-1 ring-slate-200 transition',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
-          disabled ? 'cursor-not-allowed opacity-60' : 'hover:ring-slate-300',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
+          disabled ? 'cursor-not-allowed opacity-60' : 'hover:ring-violet-200',
         ].join(' ')}
       />
 
@@ -80,8 +80,8 @@ export default function SearchFilter({
               onClick={() => onToggle(field.key, v, multi)}
               className={[
                 'rounded-full px-3 py-1 text-xs ring-1 transition',
-                'bg-slate-900 text-white ring-slate-900 hover:bg-slate-800',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+                'bg-violet-600 text-white ring-violet-600 hover:bg-violet-700',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
                 disabled ? 'cursor-not-allowed opacity-60' : '',
               ].join(' ')}
               title="Remove"
@@ -111,7 +111,7 @@ export default function SearchFilter({
                   'block w-full px-3 py-2 text-left text-sm transition',
                   disabled
                     ? 'cursor-not-allowed opacity-60'
-                    : 'text-slate-700 hover:bg-slate-50',
+                    : 'text-slate-700 hover:bg-violet-50',
                 ].join(' ')}
               >
                 {v}

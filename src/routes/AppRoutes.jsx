@@ -9,6 +9,7 @@ import AdminLayout from "../components/layout/AdminLayout";
 
 import HomePage from "../pages/Public/HomePage";
 import ShopPage from "../pages/Public/ShopPage";
+import ProductDetailsPage from "../pages/Public/ProductDetailsPage";
 import CartPage from "../pages/Public/CartPage";
 
 import AboutPage from "../pages/Public/AboutPage";
@@ -65,6 +66,7 @@ export default function AppRoutes() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/shop" element={<ShopPage />} />
+        <Route path="/shop/:id" element={<ProductDetailsPage />} />
         <Route path="/cart" element={<CartPage />} />
 
         {/* Protected user routes */}

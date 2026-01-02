@@ -26,12 +26,15 @@ export default function Pagination({
   };
 
   const isViolet = tone === "violet";
+  const focusRingClass = isViolet
+    ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2"
+    : "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2";
 
   const btnClass = (disabled) =>
     [
       "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition",
       "border border-slate-200 bg-white text-slate-700",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+      focusRingClass,
       disabled
         ? "cursor-not-allowed opacity-50"
         : "hover:bg-slate-50 hover:border-slate-300",
@@ -46,7 +49,7 @@ export default function Pagination({
           ? "border-violet-200 bg-violet-100 text-slate-900"
           : "border-slate-900 bg-slate-900 text-white"
         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2",
+      focusRingClass,
     ].join(" ");
 
   const pages = (() => {
