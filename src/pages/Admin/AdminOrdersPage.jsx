@@ -179,7 +179,7 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(1);
 
   const trimmedSearch = search.trim();
-  const debouncedSearch = useDebouncedValue(trimmedSearch, 500);
+  const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const searchParam = debouncedSearch;
   const isDebouncing = trimmedSearch !== debouncedSearch;
 

@@ -57,7 +57,7 @@ export default function AdminPaymentsPage() {
   const [sort, setSort] = useState("newest");
 
   const trimmedSearch = search.trim();
-  const debouncedSearch = useDebouncedValue(trimmedSearch, 500);
+  const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const isDebouncing = trimmedSearch !== debouncedSearch;
 
   const {

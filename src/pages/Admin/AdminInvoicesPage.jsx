@@ -134,7 +134,7 @@ export default function AdminInvoicesPage() {
   const [sort, setSort] = useState("newest");
 
   const trimmedSearch = search.trim();
-  const debouncedSearch = useDebouncedValue(trimmedSearch, 500);
+  const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const isDebouncing = trimmedSearch !== debouncedSearch;
   const overdueOnly = paymentStatusFilter === "overdue";
   const statusFilter = overdueOnly ? "Issued" : "all";
