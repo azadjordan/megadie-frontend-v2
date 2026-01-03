@@ -36,6 +36,7 @@ export const userPricesApiSlice = apiSlice.injectEndpoints({
 
 export const {
   useGetUserPricesQuery,
+  useLazyGetUserPricesQuery,
   useUpsertUserPriceMutation,
   useDeleteUserPriceMutation,
 } = userPricesApiSlice;

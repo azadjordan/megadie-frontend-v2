@@ -11,13 +11,14 @@ import {
   useUpdateQuoteOwnerByAdminMutation,
   useUpdateQuoteQuantitiesByAdminMutation,
   useUpdateQuotePricingByAdminMutation,
-  useAssignUserPricesByAdminMutation,
   useUpdateQuoteNotesByAdminMutation,
   useUpdateQuoteStatusByAdminMutation,
   useRecheckQuoteAvailabilityByAdminMutation,
 } from "../../features/quotes/quotesApiSlice";
 import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
 import { useGetAdminUsersQuery } from "../../features/auth/usersApiSlice";
+import { useLazyGetUserPricesQuery } from "../../features/userPrices/userPricesApiSlice";
+import { useLazyGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
 
 import OwnerStep from "./request-details/OwnerStep";
 import QuantitiesStep from "./request-details/QuantitiesStep";
@@ -74,9 +75,13 @@ export default function AdminRequestDetailsPage() {
     { isLoading: isUpdatingPricing, error: updatePricingError },
   ] = useUpdateQuotePricingByAdminMutation();
   const [
-    assignUserPricesByAdmin,
-    { isLoading: isAssigningUserPrices },
-  ] = useAssignUserPricesByAdminMutation();
+    loadUserPrices,
+    { isLoading: isLoadingUserPrices },
+  ] = useLazyGetUserPricesQuery();
+  const [
+    loadPriceRules,
+    { isLoading: isLoadingPriceRules },
+  ] = useLazyGetPriceRulesQuery();
   const [
     updateQuoteNotesByAdmin,
     { isLoading: isUpdatingNotes, error: updateNotesError },
@@ -124,6 +129,7 @@ export default function AdminRequestDetailsPage() {
           productId: getId(it.product),
           sku: product?.sku || "",
           name: product?.name || "",
+          priceRule: it?.priceRule || "",
           requestedQty: Math.max(0, Number(it.qty) || 0),
           qtyStr: toInputValue(it.qty),
           unitPriceStr: toInputValue(it.unitPrice),
@@ -365,7 +371,8 @@ export default function AdminRequestDetailsPage() {
     isUpdatingOwner ||
     isUpdatingQuantities ||
     isUpdatingPricing ||
-    isAssigningUserPrices ||
+    isLoadingUserPrices ||
+    isLoadingPriceRules ||
     isUpdatingNotes ||
     isUpdatingStatus ||
     isRecheckingAvailability ||
@@ -687,14 +694,56 @@ export default function AdminRequestDetailsPage() {
   };
 
   const onAssignUserPrices = async () => {
-    if (!quoteId || quoteLocked) return;
+    if (quoteLocked) return;
+    if (!userId) {
+      toast.error("Select a user before loading prices.");
+      return;
+    }
+
+    const missingRules = (items || []).filter((it) => !it.priceRule);
+    if (missingRules.length) {
+      toast.error(
+        "Some items are missing price rules. Refresh or recreate the quote."
+      );
+      return;
+    }
 
     try {
-      await assignUserPricesByAdmin(quoteId).unwrap();
-      await refetchQuote();
-      toast.success("User prices assigned.");
+      const [userPricesRes, priceRulesRes] = await Promise.all([
+        loadUserPrices(userId).unwrap(),
+        loadPriceRules().unwrap(),
+      ]);
+
+      const userPrices = Array.isArray(userPricesRes?.data)
+        ? userPricesRes.data
+        : [];
+      const priceRules = Array.isArray(priceRulesRes?.data)
+        ? priceRulesRes.data
+        : [];
+
+      const priceByRule = new Map(
+        userPrices.map((p) => [String(p.priceRule), p.unitPrice])
+      );
+      const defaultByRule = new Map(
+        priceRules.map((rule) => [String(rule.code), rule.defaultPrice])
+      );
+
+      setItems((prev) =>
+        prev.map((it) => {
+          const rule = String(it.priceRule || "");
+          if (!rule) return it;
+          const resolved = priceByRule.get(rule);
+          const fallback = defaultByRule.get(rule);
+          const nextPrice =
+            resolved == null ? (fallback == null ? null : fallback) : resolved;
+          if (nextPrice == null) return it;
+          return { ...it, unitPriceStr: toInputValue(nextPrice) };
+        })
+      );
+
+      toast.success("User prices loaded into inputs.");
     } catch (err) {
-      toast.error(resolveToastError(err, "Failed to assign user prices."));
+      toast.error(resolveToastError(err, "Failed to load user prices."));
     }
   };
 

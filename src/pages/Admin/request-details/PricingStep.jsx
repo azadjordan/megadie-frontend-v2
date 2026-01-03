@@ -47,6 +47,9 @@ export default function PricingStep({
           Assign User Prices
         </button>
       </div>
+      <div className="mb-3 text-[11px] text-slate-500">
+        Loads prices into the inputs only. Click Update Pricing to save.
+      </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-full table-fixed text-left text-sm">

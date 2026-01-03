@@ -53,6 +53,7 @@ export const priceRulesApiSlice = apiSlice.injectEndpoints({
 
 export const {
   useGetPriceRulesQuery,
+  useLazyGetPriceRulesQuery,
   useCreatePriceRuleMutation,
   useUpdatePriceRuleMutation,
   useDeletePriceRuleMutation,

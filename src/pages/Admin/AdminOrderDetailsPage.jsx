@@ -4,6 +4,7 @@ import { FiChevronLeft } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
+import AdminOrderAllocation from "../../components/admin/AdminOrderAllocation";
 
 import {
   useGetOrderByIdQuery,
@@ -38,6 +39,19 @@ function money(amount, currency = "AED") {
     }).format(n);
   } catch {
     return `${n.toFixed(2)} ${currency}`;
+  }
+}
+
+function moneyPlain(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return n.toFixed(2);
   }
 }
 
@@ -116,6 +130,7 @@ export default function AdminOrderDetailsPage() {
   const [adminToClientNote, setAdminToClientNote] = useState("");
   const [localError, setLocalError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState("allocation");
 
   const [updateOrderByAdmin, { isLoading: isUpdatingOrder, error: saveError }] =
     useUpdateOrderByAdminMutation();
@@ -137,6 +152,10 @@ export default function AdminOrderDetailsPage() {
     setLocalError("");
     setSaved(false);
   }, [order?._id, order?.id, order?.updatedAt]);
+
+  useEffect(() => {
+    if (id) setActiveTab("allocation");
+  }, [id]);
 
   const onSave = async () => {
     if (!order) return;
@@ -254,8 +273,36 @@ export default function AdminOrderDetailsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-4">
+      <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: "general", label: "General Details" },
+            { id: "allocation", label: "Allocation" },
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                aria-pressed={isActive}
+                className={[
+                  "inline-flex items-center rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                  isActive
+                    ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab === "general" ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-4">
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
             <div className="text-sm font-semibold text-slate-900">
               Order settings
@@ -411,65 +458,13 @@ export default function AdminOrderDetailsPage() {
             ) : null}
           </div>
 
-          <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-semibold text-slate-900">Items</div>
-                <div className="text-xs text-slate-500">
-                  {items.length} item{items.length !== 1 ? "s" : ""}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-12 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
-              <div className="col-span-6">Product</div>
-              <div className="col-span-2 text-right">Qty</div>
-              <div className="col-span-2 text-right">Unit</div>
-              <div className="col-span-2 text-right">Total</div>
-            </div>
-
-            {items.length === 0 ? (
-              <div className="px-4 py-4 text-sm text-slate-600">
-                No items in this order.
-              </div>
-            ) : (
-              items.map((it, idx) => {
-                const name =
-                  it?.product?.name ||
-                  (typeof it?.product === "string" ? it.product : "") ||
-                  "Untitled product";
-                const sku = it?.sku || it?.product?.sku || "";
-                const qty = Number(it?.qty) || 0;
-                const unit = Number(it?.unitPrice) || 0;
-                const totalLine = lineTotal(it);
-
-                return (
-                  <div
-                    key={`${order._id || "order"}-${idx}`}
-                    className="grid grid-cols-12 items-center border-t border-slate-200 px-4 py-3 text-sm text-slate-800"
-                  >
-                    <div className="col-span-6 min-w-0">
-                      <div className="truncate font-semibold text-slate-900">
-                        {name}
-                      </div>
-                      {sku ? (
-                        <div className="text-xs text-slate-500">SKU: {sku}</div>
-                      ) : null}
-                    </div>
-                    <div className="col-span-2 text-right tabular-nums">
-                      {qty}
-                    </div>
-                    <div className="col-span-2 text-right tabular-nums">
-                      {money(unit)}
-                    </div>
-                    <div className="col-span-2 text-right tabular-nums font-semibold text-slate-900">
-                      {money(totalLine)}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+          <AdminOrderAllocation
+            orderId={order?._id || order?.id}
+            items={items}
+            formatMoney={moneyPlain}
+            showSlots={false}
+            title="Order items"
+          />
         </div>
 
         <aside className="space-y-3">
@@ -543,7 +538,18 @@ export default function AdminOrderDetailsPage() {
             </div>
           </div>
         </aside>
-      </div>
+        </div>
+      ) : null}
+
+      {activeTab === "allocation" ? (
+        <AdminOrderAllocation
+          orderId={order?._id || order?.id}
+          items={items}
+          formatMoney={money}
+          showPricing={false}
+          title="Allocation"
+        />
+      ) : null}
     </div>
   );
 }
