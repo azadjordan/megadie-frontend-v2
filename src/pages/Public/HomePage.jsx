@@ -3,184 +3,266 @@ import { Link } from 'react-router-dom'
 const fallbackImg =
   'https://via.placeholder.com/300x200?text=Image+Unavailable'
 
-const productTypes = [
+const highlights = [
   {
-    key: 'Ribbon',
-    label: 'Ribbon',
-    image:
-      'https://megadie.s3.eu-central-1.amazonaws.com/Home+Page/RibbonProductType.jpg',
+    title: 'Factory-direct sourcing',
+    copy: 'Work with one team that handles sourcing, pricing, and delivery.',
   },
   {
-    key: 'Creasing Matrix',
-    label: 'Creasing Matrix',
-    image:
-      'https://megadie.s3.eu-central-1.amazonaws.com/Home+Page/CreasingMatrixProductType.jpg',
+    title: 'Specs stay consistent',
+    copy: 'Every quote includes the details needed to avoid surprises.',
   },
   {
-    key: 'Double Face Tape',
-    label: 'Double Face Tape',
-    image:
-      'https://megadie.s3.eu-central-1.amazonaws.com/Home+Page/DoubleFaceTapeProductType.jpg',
+    title: 'Flexible quantities',
+    copy: 'Top up inventory when you need it or place bulk requests.',
+  },
+]
+
+const steps = [
+  {
+    title: 'Browse and request',
+    copy: 'Pick materials, add quantities, and submit a quote request.',
+  },
+  {
+    title: 'Review pricing',
+    copy: 'We confirm specs and send back a clear, itemized quote.',
+  },
+  {
+    title: 'Receive delivery',
+    copy: 'Approve the quote and we handle the rest, end to end.',
+  },
+]
+
+const testimonials = [
+  {
+    location: 'Abu Dhabi',
+    feedback:
+      "Reliable quality and quick follow ups. It has simplified our sourcing a lot.",
+  },
+  {
+    location: 'Al Ain',
+    feedback: 'Straightforward process and easy communication every time.',
+  },
+  {
+    location: 'Dubai',
+    feedback: 'Good pricing, clear specs, and deliveries that show up on time.',
   },
 ]
 
 export default function HomePage() {
-  const shopLinkForType = (typeKey) =>
-    `/shop?productType=${encodeURIComponent(typeKey)}&fromHome=1`
-
   return (
-    <div className="w-full bg-white text-gray-800">
-      {/* ✅ Hero */}
-      <section className="relative flex h-[70vh] items-center justify-center">
-        <img
-          src="https://megadie.s3.eu-central-1.amazonaws.com/Home+Page/HeroPhoto.jpg"
-          alt="Hero"
-          className="absolute inset-0 h-full w-full object-cover brightness-95"
-          onError={(e) => {
-            e.currentTarget.onerror = null
-            e.currentTarget.src = fallbackImg
+    <div
+      className="w-full bg-[#f5f3ff] font-['Outfit'] text-slate-900"
+      style={{
+        '--accent': '#7c3aed',
+        '--accent-soft': '#ede9fe',
+      }}
+    >
+      <section className="relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute -top-32 right-[-10%] h-80 w-80 rounded-full opacity-70 blur-3xl"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at center, rgba(124,58,237,0.28), transparent 65%)',
           }}
         />
-        <div className="absolute inset-0 bg-white/70 backdrop-blur-sm" />
-        <div className="relative z-10 max-w-3xl px-6 text-center">
-          <h1 className="mb-6 text-4xl font-bold leading-tight text-gray-800 md:text-5xl">
-            Premium Industrial Supplies, Delivered
-          </h1>
-          <p className="mb-6 text-base text-gray-700 md:text-lg">
-            High-quality ribbons, tapes, rubbers, and creasing materials —
-            tailored for your business.
-          </p>
-          <Link
-            to="/shop"
-            className="cursor-pointer rounded-lg bg-purple-500 px-6 py-3 text-sm font-medium text-white transition hover:bg-purple-600"
-          >
-            Browse Products
-          </Link>
-        </div>
-      </section>
+        <div
+          className="pointer-events-none absolute -bottom-36 left-[-10%] h-96 w-96 rounded-full opacity-60 blur-3xl"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at center, rgba(139,92,246,0.22), transparent 65%)',
+          }}
+        />
 
-      {/* ✅ Our Promise */}
-      <section className="bg-gray-50 py-20 sm:py-28">
-        <div className="mx-auto max-w-5xl px-6 text-center">
-          <h2 className="mb-4 text-2xl font-bold md:text-3xl">
-            Why Choose Megadie?
-          </h2>
-          <p className="text-sm text-gray-600 md:text-lg">
-            We cut out middlemen and deliver industrial-grade materials directly
-            from factories to your store — saving you money, time, and hassle.
-          </p>
-        </div>
-      </section>
-
-      {/* ✅ Product Types */}
-      <section className="py-20 sm:py-28">
-        <div className="mx-auto max-w-6xl px-6">
-          <h2 className="mb-12 text-center text-2xl font-bold md:text-3xl">
-            Product Types
-          </h2>
-
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
-            {productTypes.map((pt) => (
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
+          <div className="space-y-6 motion-safe:animate-rise">
+            <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+              Industrial supply partner
+            </div>
+            <h1 className="text-4xl font-semibold leading-tight text-slate-900 md:text-5xl">
+              Precision materials and Industrial supplys.
+            </h1>
+            <p className="text-sm text-slate-600 md:text-base">
+              Megadie delivers with a
+              clear flow and reliable updates from request to delivery.
+            </p>
+            <div className="flex flex-wrap gap-3">
               <Link
-                key={pt.key}
-                to={shopLinkForType(pt.key)}
-                className="group flex flex-col overflow-hidden rounded-xl bg-white shadow transition hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
-                aria-label={`Shop ${pt.label}`}
+                to="/shop"
+                className="rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-95"
+                style={{ backgroundColor: 'var(--accent)' }}
               >
-                <img
-                  src={pt.image}
-                  alt={pt.label}
-                  className="h-60 w-full object-cover transition group-hover:scale-[1.01]"
-                  loading="lazy"
-                  decoding="async"
-                  onError={(e) => {
-                    e.currentTarget.onerror = null
-                    e.currentTarget.src = fallbackImg
-                  }}
-                />
-                <div className="p-4 text-center">
-                  <p className="text-lg font-semibold text-gray-700">
-                    {pt.label}
-                  </p>
-                </div>
+                Browse products
               </Link>
+              <Link
+                to="/contact"
+                className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+              >
+                Talk to us
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+              <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                Factory-direct
+              </span>
+              <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                Clear specs
+              </span>
+              <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">
+                Fast responses
+              </span>
+            </div>
+          </div>
+
+          <div className="relative motion-safe:animate-rise motion-safe:animate-delay-1">
+            <div className="rounded-3xl border border-white/80 bg-white/80 p-3 shadow-lg shadow-violet-200/40">
+              <img
+                src="https://megadie.s3.eu-central-1.amazonaws.com/Home+Page/HeroPhoto.jpg"
+                alt="Warehouse inventory"
+                className="h-64 w-full rounded-2xl object-cover"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => {
+                  e.currentTarget.onerror = null
+                  e.currentTarget.src = fallbackImg
+                }}
+              />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Response
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-slate-900">
+                    Fast quote turnaround
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Keep projects moving with quick updates.
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                    Coverage
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-slate-900">
+                    Stock for daily production
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Reorder what you need, when you need it.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white/80 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mb-10 flex items-center gap-3">
+            <span
+              className="h-10 w-1 rounded-full"
+              style={{ backgroundColor: 'var(--accent)' }}
+            />
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">
+                Built for busy production teams
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                A simple workflow so your team can focus on the job.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            {highlights.map((item, index) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm motion-safe:animate-rise"
+                style={{ animationDelay: `${0.1 + index * 0.1}s` }}
+              >
+                <div
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold"
+                  style={{
+                    backgroundColor: 'var(--accent-soft)',
+                    color: 'var(--accent)',
+                  }}
+                >
+                  {String(index + 1).padStart(2, '0')}
+                </div>
+                <div className="mt-4 text-lg font-semibold text-slate-900">
+                  {item.title}
+                </div>
+                <div className="mt-2 text-sm text-slate-600">{item.copy}</div>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ✅ How It Works */}
-      <section className="bg-gray-50 py-20 sm:py-28">
-        <div className="mx-auto max-w-6xl px-6 text-center">
-          <h2 className="mb-14 text-2xl font-bold md:text-3xl">
-            How It Works
-          </h2>
-          <div className="grid gap-10 md:grid-cols-3">
-            {['Browse Products', 'Request a Quote', 'Fast Delivery'].map(
-              (step, i) => (
+      <section className="py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                How it works
+              </div>
+              <h2 className="mt-4 text-2xl font-semibold text-slate-900">
+                A faster quote cycle, end to end.
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Submit a request, confirm details, and receive delivery without
+                friction.
+              </p>
+            </div>
+            <div className="space-y-4">
+              {steps.map((step, index) => (
                 <div
-                  key={step}
-                  className="flex min-h-[140px] flex-col rounded-xl border bg-white p-6 shadow-sm transition hover:shadow-md"
+                  key={step.title}
+                  className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm motion-safe:animate-rise"
+                  style={{ animationDelay: `${0.15 + index * 0.1}s` }}
                 >
-                  <div className="mb-3 text-4xl font-bold text-purple-600">
-                    {i + 1}
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold"
+                    style={{
+                      backgroundColor: 'var(--accent-soft)',
+                      color: 'var(--accent)',
+                    }}
+                  >
+                    {index + 1}
                   </div>
-                  <h3 className="mb-2 text-lg font-semibold">{step}</h3>
-                  <p className="text-sm text-gray-600">
-                    {i === 0 &&
-                      'Explore a range of high-quality materials curated for industrial use.'}
-                    {i === 1 &&
-                      'Tell us what you need and we’ll provide a competitive offer tailored to you.'}
-                    {i === 2 &&
-                      'We ship directly to your store or factory, quickly and reliably.'}
-                  </p>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {step.title}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">{step.copy}</div>
+                  </div>
                 </div>
-              ),
-            )}
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ✅ Testimonials */}
-      <section className="py-20 sm:py-28">
+      <section className="bg-white/80 py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-6">
-          <h2 className="mb-14 text-center text-2xl font-bold md:text-3xl">
-            What Our Clients Say
-          </h2>
+          <div className="mb-10 text-center">
+            <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+              Client voice
+            </div>
+            <h2 className="mt-4 text-2xl font-semibold text-slate-900">
+              Trusted by production teams across the UAE
+            </h2>
+          </div>
           <div className="grid gap-6 md:grid-cols-3">
-            {[
-              {
-                location: 'Abu Dhabi',
-                feedback:
-                  "Great quality and always on time. I'm glad I was one of the early clients of Megadie!",
-              },
-              {
-                location: 'Al Ain',
-                feedback: 'Very helpful team. Easier work for us.',
-              },
-              {
-                location: 'Dubai',
-                feedback:
-                  'Prices are fair and the materials are strong. Definitely recommend them.',
-              },
-            ].map((client) => (
+            {testimonials.map((client, index) => (
               <div
                 key={client.location}
-                className="flex min-h-[140px] flex-col rounded-xl border bg-white p-6 shadow-sm transition hover:shadow-md"
+                className="flex min-h-[180px] flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm motion-safe:animate-rise"
+                style={{ animationDelay: `${0.2 + index * 0.1}s` }}
               >
-                <p className="mb-6 italic text-gray-700">
-                  “{client.feedback}”
-                </p>
-                <div className="mt-auto flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gray-300" />
-                  <div>
-                    <p className="select-none font-semibold blur-sm">
-                      Client Name
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {client.location}
-                    </p>
-                  </div>
+                <p className="text-sm text-slate-700">"{client.feedback}"</p>
+                <div className="mt-auto pt-6 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  {client.location}
                 </div>
               </div>
             ))}
@@ -188,31 +270,31 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ✅ CTA */}
-      <section className="bg-gray-50 px-10 py-20 text-center sm:py-28">
-        <h2 className="mb-4 text-2xl font-bold md:text-3xl">
-          Let’s Work Together
-        </h2>
-        <p className="mb-8 text-base text-gray-600 md:text-lg">
-          Whether you&apos;re looking to buy or supply — we&apos;re ready to
-          partner with you.
-        </p>
-
-        <div className="flex flex-col items-center justify-center gap-4 md:flex-row">
-          <Link
-            to="/shop"
-            className="cursor-pointer rounded-lg bg-purple-500 px-6 py-3 text-sm font-medium text-white transition hover:bg-purple-600"
-          >
-            Browse Products
-          </Link>
-          <a
-            href="https://wa.me/971545050244"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="cursor-pointer rounded-lg border border-purple-500 px-6 py-3 text-sm font-medium text-purple-500 transition hover:bg-purple-600 hover:text-white"
-          >
-            Become Our Supplier
-          </a>
+      <section className="px-6 py-16 sm:py-20">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="text-2xl font-semibold text-slate-900">
+            Ready to source with confidence?
+          </h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Submit a quote request or message us directly to get started.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to="/shop"
+              className="rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-95"
+              style={{ backgroundColor: 'var(--accent)' }}
+            >
+              Request a quote
+            </Link>
+            <a
+              href="https://wa.me/971545050244"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-violet-200/70 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-violet-300 hover:text-slate-900"
+            >
+              WhatsApp us
+            </a>
+          </div>
         </div>
       </section>
     </div>

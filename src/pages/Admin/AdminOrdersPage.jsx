@@ -1,22 +1,12 @@
 ﻿// src/pages/Admin/AdminOrdersPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "react-toastify";
-import { FiSettings, FiTrash2, FiRefreshCw } from "react-icons/fi";
+import { FiRefreshCw, FiSettings } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
-import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
-import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
-
-import {
-  useDeleteOrderByAdminMutation,
-  useGetOrdersAdminQuery,
-  useMarkOrderDeliveredMutation,
-  useUpdateOrderByAdminMutation,
-} from "../../features/orders/ordersApiSlice";
-import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
+import { useGetOrdersAdminQuery } from "../../features/orders/ordersApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 function formatDateTime(iso) {
@@ -81,92 +71,22 @@ function StatusBadge({ status, size = "default" }) {
   );
 }
 
-function InvoiceCell({ order, onCreateInvoice }) {
-  const hasInvoice = Boolean(order?.invoice);
-  const canCreate =
-    !hasInvoice &&
-    ["Shipping", "Delivered"].includes(order?.status || "");
-
-  const invoiceNo =
-    order?.invoice?.invoiceNumber || order?.invoice?.number || order?.invoice?._id;
-
-  if (hasInvoice) {
-    return (
-      <div className="text-[10px] font-semibold text-slate-500">
-        {invoiceNo ? String(invoiceNo) : "Invoice"}
-      </div>
-    );
+function StockBadge({ finalized, size = "default" }) {
+  if (!finalized) {
+    return <span className="text-[11px] text-slate-400">-</span>;
   }
-
+  const base =
+    "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
   return (
-    <button
-      type="button"
-      disabled={!canCreate}
-      className={[
-        "inline-flex h-6 w-20 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition",
-        canCreate
-          ? "bg-violet-600 text-white ring-violet-600 hover:bg-violet-700"
-          : "bg-violet-600 text-white opacity-50 ring-violet-600 cursor-not-allowed",
-      ].join(" ")}
-      onClick={() => {
-        if (!canCreate || !onCreateInvoice) return;
-        onCreateInvoice(order);
-      }}
-      title={
-        canCreate
-          ? "Create invoice"
-          : hasInvoice && invoiceNo
-          ? `Invoice ${invoiceNo}`
-          : "Invoice can be created only for Shipping or Delivered orders."
-      }
+    <span
+      className={`${base} ${sizes[size] || sizes.default} bg-emerald-50 text-emerald-700 ring-emerald-200`}
     >
-      Invoice
-    </button>
-  );
-}
-
-function ActionsCell({ order, className, onDelete, isDeleting }) {
-  const canDelete = order.status === "Cancelled" && !order.invoice;
-  const classes = className || "flex items-center justify-center gap-2";
-
-  return (
-    <div className={classes}>
-      {/* Edit */}
-      <Link
-        to={`/admin/orders/${order._id}`}
-        className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white ring-1 ring-slate-900 hover:bg-slate-800"
-        title="Open order"
-        aria-label="Open order"
-      >
-        <FiSettings className="h-4 w-4" />
-      </Link>
-
-      {/* Delete */}
-      <button
-        type="button"
-        disabled={!canDelete || isDeleting}
-        className={[
-          "inline-flex items-center justify-center rounded-xl p-2 ring-1 transition",
-          canDelete && !isDeleting
-            ? "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50"
-            : "bg-white text-slate-300 ring-slate-200 cursor-not-allowed",
-        ].join(" ")}
-        title={
-          isDeleting
-            ? "Deleting..."
-            : canDelete
-            ? "Delete order"
-            : "Only cancelled orders without invoices can be deleted"
-        }
-        aria-label="Delete order"
-        onClick={() => {
-          if (!canDelete || !onDelete || isDeleting) return;
-          onDelete();
-        }}
-      >
-        <FiTrash2 className="h-4 w-4" />
-      </button>
-    </div>
+      Finalized
+    </span>
   );
 }
 
@@ -174,7 +94,6 @@ export default function AdminOrdersPage() {
   // Note: Server-side filters (must match backend query params)
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-
   // Note: Pagination (server-side)
   const [page, setPage] = useState(1);
 
@@ -194,174 +113,10 @@ export default function AdminOrdersPage() {
     status,
     search: searchParam,
   });
-
   const rows = useMemo(() => ordersRes?.data || [], [ordersRes]);
   const pagination = ordersRes?.pagination;
   const totalItems =
     typeof pagination?.total === "number" ? pagination.total : rows.length;
-
-  const [deletingId, setDeletingId] = useState(null);
-  const [deliveringId, setDeliveringId] = useState(null);
-  const [shippingId, setShippingId] = useState(null);
-  const [deliverTarget, setDeliverTarget] = useState(null);
-  const [deliveredBy, setDeliveredBy] = useState("");
-  const [deliverFormError, setDeliverFormError] = useState("");
-  const [createTarget, setCreateTarget] = useState(null);
-  const [createForm, setCreateForm] = useState({
-    dueDate: "",
-    adminNote: "",
-    currency: "AED",
-    minorUnitFactor: "100",
-  });
-  const [createFormError, setCreateFormError] = useState("");
-  const [deleteOrderByAdmin, { isLoading: isDeleting }] =
-    useDeleteOrderByAdminMutation();
-  const [markOrderDelivered, { isLoading: isDelivering }] =
-    useMarkOrderDeliveredMutation();
-  const [updateOrderByAdmin, { isLoading: isShipping }] =
-    useUpdateOrderByAdminMutation();
-  const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
-    useCreateInvoiceFromOrderMutation();
-
-  const handleDelete = async (order) => {
-    if (!order) return;
-    if (order.status !== "Cancelled" || order.invoice) return;
-
-    const ok = window.confirm(
-      "Delete this cancelled order? This will also remove its invoice and payments."
-    );
-    if (!ok) return;
-
-    try {
-      setDeletingId(order._id);
-      const res = await deleteOrderByAdmin(order._id).unwrap();
-      toast.success(res?.message || "Order deleted.");
-    } catch (err) {
-      toast.error(err?.data?.message || err?.error || "Delete failed.");
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const handleMarkDelivered = async (order) => {
-    if (
-      !order ||
-      order.status !== "Shipping"
-    ) {
-      return;
-    }
-
-    setDeliverTarget(order);
-    setDeliveredBy(order.deliveredBy || "");
-    setDeliverFormError("");
-  };
-
-  const handleMarkShipping = async (order) => {
-    if (!order || order.status !== "Processing") return;
-
-    try {
-      setShippingId(order._id);
-      await updateOrderByAdmin({
-        id: order._id,
-        status: "Shipping",
-      }).unwrap();
-    } catch (err) {
-      toast.error(err?.data?.message || err?.error || "Failed to mark shipping.");
-    } finally {
-      setShippingId(null);
-    }
-  };
-  const closeDeliverModal = () => {
-    if (isDelivering) return;
-    setDeliverTarget(null);
-    setDeliveredBy("");
-    setDeliverFormError("");
-  };
-
-  const confirmDeliver = async () => {
-    if (!deliverTarget) return;
-    const name = deliveredBy.trim();
-    if (!name) {
-      setDeliverFormError("Delivered by is required.");
-      return;
-    }
-
-    try {
-      setDeliveringId(deliverTarget._id);
-      await markOrderDelivered({
-        id: deliverTarget._id,
-        deliveredBy: name,
-      }).unwrap();
-      closeDeliverModal();
-    } catch (err) {
-      setDeliverFormError(
-        err?.data?.message || err?.error || "Failed to mark delivered."
-      );
-    } finally {
-      setDeliveringId(null);
-    }
-  };
-
-  const openCreateModal = (order) => {
-    if (!order) return;
-    setCreateTarget(order);
-    setCreateForm({
-      dueDate: "",
-      adminNote: "",
-      currency: "AED",
-      minorUnitFactor: "100",
-    });
-    setCreateFormError("");
-  };
-
-  const closeCreateModal = () => {
-    if (isCreating) return;
-    setCreateTarget(null);
-    setCreateFormError("");
-  };
-
-  const handleCreateField = (key, value) => {
-    setCreateForm((prev) => ({ ...prev, [key]: value }));
-    if (createFormError) setCreateFormError("");
-  };
-
-  const submitCreateInvoice = async () => {
-    if (!createTarget || isCreating) return;
-
-    const dueDate = String(createForm.dueDate || "").trim();
-    if (!dueDate) {
-      setCreateFormError("Due date is required.");
-      return;
-    }
-
-    const minorRaw = String(createForm.minorUnitFactor || "").trim();
-    if (minorRaw) {
-      const minorValue = Number(minorRaw);
-      if (!Number.isInteger(minorValue) || minorValue <= 0) {
-        setCreateFormError("Minor unit factor must be a positive integer.");
-        return;
-      }
-    }
-
-    const payload = { orderId: createTarget._id };
-    payload.dueDate = dueDate;
-
-    const adminNote = String(createForm.adminNote || "").trim();
-    if (adminNote) payload.adminNote = adminNote;
-
-    const currency = String(createForm.currency || "").trim();
-    if (currency) payload.currency = currency;
-
-    if (minorRaw) payload.minorUnitFactor = Number(minorRaw);
-
-    try {
-      await createInvoiceFromOrder(payload).unwrap();
-      closeCreateModal();
-    } catch {
-      // ErrorMessage will show it
-    }
-  };
-
 
   return (
     <div className="space-y-5">
@@ -474,22 +229,21 @@ export default function AdminOrdersPage() {
                   <th className="px-4 py-3">Order</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3 text-center">Status</th>
-                  <th className="px-4 py-3 text-center">Workflow</th>
+                  <th className="px-4 py-3 text-center">Stock</th>
                   <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3 text-center">Actions</th>
+                  <th className="px-4 py-3 text-center">Open</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-200">
-                {rows.map((o) => (
+                {rows.map((o) => {
+                  const isFinalized = Boolean(o.stockFinalizedAt) || o.status === "Delivered";
+                  return (
                   <tr key={o._id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <Link
-                        to={`/admin/orders/${o._id}`}
-                        className="font-semibold text-slate-900 hover:underline"
-                      >
+                      <div className="font-semibold text-slate-900">
                         {o.orderNumber || o._id}
-                      </Link>
+                      </div>
                       <div className="mt-0.5 text-xs text-slate-500">
                         Created: {formatDateTime(o.createdAt)}
                       </div>
@@ -509,42 +263,8 @@ export default function AdminOrdersPage() {
                     </td>
 
                     <td className="px-4 py-3">
-                      <div className="flex flex-col items-center gap-2">
-                        {o.status === "Processing" ? (
-                          <button
-                            type="button"
-                            className={[
-                              "inline-flex h-6 w-20 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition",
-                              isShipping && shippingId === o._id
-                                ? "cursor-not-allowed bg-blue-600 text-white opacity-50 ring-blue-600"
-                                : "bg-blue-600 text-white ring-blue-600 hover:bg-blue-700",
-                            ].join(" ")}
-                            disabled={isShipping && shippingId === o._id}
-                            onClick={() => handleMarkShipping(o)}
-                            title="Mark Shipping"
-                          >
-                            {isShipping && shippingId === o._id ? "Shipping..." : "Ship"}
-                          </button>
-                        ) : null}
-                        {o.status === "Shipping" ? (
-                          <button
-                            type="button"
-                            className={[
-                              "inline-flex h-6 w-20 items-center justify-center rounded-md text-[10px] font-semibold ring-1 transition",
-                              isDelivering && deliveringId === o._id
-                                ? "cursor-not-allowed bg-emerald-600 text-white opacity-50 ring-emerald-600"
-                                : "bg-emerald-600 text-white ring-emerald-600 hover:bg-emerald-700",
-                            ].join(" ")}
-                            disabled={isDelivering && deliveringId === o._id}
-                            onClick={() => handleMarkDelivered(o)}
-                            title="Mark Delivered"
-                          >
-                            {isDelivering && deliveringId === o._id
-                              ? "Delivering..."
-                              : "Deliver"}
-                          </button>
-                        ) : null}
-                        <InvoiceCell order={o} onCreateInvoice={openCreateModal} />
+                      <div className="flex justify-center">
+                        <StockBadge finalized={isFinalized} size="compact" />
                       </div>
                     </td>
 
@@ -555,46 +275,26 @@ export default function AdminOrdersPage() {
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <ActionsCell
-                          order={o}
-                          onDelete={() => handleDelete(o)}
-                          isDeleting={isDeleting && deletingId === o._id}
-                        />
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <Link
+                          to={`/admin/orders/${o._id}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          aria-label="Open order"
+                          title="Open order"
+                        >
+                          <FiSettings className="h-4 w-4" />
+                        </Link>
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
-
-      <MarkDeliveredModal
-        open={Boolean(deliverTarget)}
-        order={deliverTarget}
-        deliveredBy={deliveredBy}
-        onDeliveredByChange={setDeliveredBy}
-        onClose={closeDeliverModal}
-        onSubmit={confirmDeliver}
-        isSaving={isDelivering}
-        error={null}
-        formError={deliverFormError}
-      />
-
-      <CreateInvoiceModal
-        open={Boolean(createTarget)}
-        order={createTarget}
-        form={createForm}
-        onFieldChange={handleCreateField}
-        onClose={closeCreateModal}
-        onSubmit={submitCreateInvoice}
-        isSaving={isCreating}
-        error={createError}
-        formError={createFormError}
-      />
     </div>
   );
 }

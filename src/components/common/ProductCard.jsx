@@ -6,9 +6,17 @@ import { FaShoppingCart, FaCheck, FaPlus } from 'react-icons/fa'
 import { addToCart } from '../../features/cart/cartSlice'
 import QuantityControl from './QuantityControl'
 
+const FALLBACK_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20" font-weight="600" text-anchor="middle" dominant-baseline="middle">No image</text></svg>',
+)}`
+
 export default function ProductCard({ product }) {
   const dispatch = useDispatch()
-  const image = product.images?.[0] || '/placeholder.jpg'
+  const image =
+    product?.images?.find((src) => typeof src === 'string' && src.trim()) ||
+    (typeof product?.imageUrl === 'string' && product.imageUrl.trim()
+      ? product.imageUrl
+      : FALLBACK_IMAGE)
   const name = product?.name || 'Untitled product'
   const productId = product?._id || product?.id || product?.sku
   const detailsPath = productId
@@ -41,7 +49,7 @@ export default function ProductCard({ product }) {
   }
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="flex h-full flex-col overflow-hidden rounded-2xl bg-white/90 shadow-sm ring-1 ring-slate-200/80 transition hover:-translate-y-0.5 hover:shadow-md">
       {/* Image */}
       {detailsPath ? (
         <Link
@@ -50,7 +58,7 @@ export default function ProductCard({ product }) {
           className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2"
           aria-label={`View details for ${name}`}
         >
-          <div className="h-40 w-full overflow-hidden bg-slate-100">
+          <div className="h-40 w-full overflow-hidden bg-slate-50">
             <img
               src={image}
               alt={name}
@@ -59,7 +67,7 @@ export default function ProductCard({ product }) {
               decoding="async"
               onError={(e) => {
                 e.currentTarget.onerror = null
-                e.currentTarget.src = '/placeholder.jpg'
+                e.currentTarget.src = FALLBACK_IMAGE
               }}
             />
           </div>
@@ -74,7 +82,7 @@ export default function ProductCard({ product }) {
             decoding="async"
             onError={(e) => {
               e.currentTarget.onerror = null
-              e.currentTarget.src = '/placeholder.jpg'
+              e.currentTarget.src = FALLBACK_IMAGE
             }}
           />
         </div>
@@ -82,7 +90,7 @@ export default function ProductCard({ product }) {
 
       {/* Content */}
       <div className="flex flex-1 flex-col gap-2 px-3 pb-3 pt-3">
-        <h2 className="line-clamp-2 text-sm font-semibold text-slate-900">
+        <h2 className="line-clamp-3 text-sm font-semibold text-slate-900">
           {detailsPath ? (
             <Link
               to={detailsPath}
@@ -98,15 +106,15 @@ export default function ProductCard({ product }) {
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
-                title={tag}
-              >
-                {tag}
-              </span>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200/70"
+              title={tag}
+            >
+              {tag}
+            </span>
             ))}
           </div>
         )}

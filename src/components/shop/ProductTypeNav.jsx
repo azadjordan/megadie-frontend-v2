@@ -8,7 +8,7 @@ export default function ProductTypeNav({
   if (!productTypes || productTypes.length <= 1) return null
 
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
       <div className="text-sm font-semibold text-slate-900">Choose product</div>
 
       {/* Mobile: horizontal scroll | Desktop: vertical */}
@@ -23,12 +23,12 @@ export default function ProductTypeNav({
               disabled={disabled}
               onClick={() => onChange(pt)}
               className={[
-                'inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm text-left transition',
+                'inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm text-left transition',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
                 disabled ? 'cursor-not-allowed opacity-60' : '',
                 isActive
-                  ? 'bg-violet-600 text-white ring-1 ring-violet-600 hover:bg-violet-700'
-                  : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-violet-50 hover:ring-violet-200',
+                  ? 'bg-violet-50 text-violet-700 font-semibold ring-1 ring-violet-300 hover:bg-violet-100'
+                  : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50',
               ].join(' ')}
             >
               {pt}

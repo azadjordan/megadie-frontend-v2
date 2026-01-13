@@ -7,7 +7,7 @@ export default function PublicLayout() {
   const isHome = pathname === '/'
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-[#f5f3ff]">
       <Header />
 
       <main className="flex-1">
@@ -20,7 +20,7 @@ export default function PublicLayout() {
         )}
       </main>
 
-      <Footer />
+      <Footer className="mt-auto" />
     </div>
   )
 }

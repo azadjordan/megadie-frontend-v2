@@ -3,10 +3,10 @@ import { useSelector } from "react-redux";
 
 const navItem = ({ isActive }) =>
   [
-    "flex items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-semibold transition",
+    "flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-semibold transition",
     isActive
-      ? "bg-violet-600 text-white shadow-sm shadow-violet-200/60"
-      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
+      ? "bg-violet-50 text-violet-700 ring-1 ring-violet-200"
+      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
   ].join(" ");
 
 function initialsFrom(userInfo) {
@@ -28,9 +28,9 @@ export default function AccountSidebar() {
 
   return (
     <aside className="flex h-full flex-col">
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-600 text-sm font-semibold text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-sm font-semibold text-white">
             {initials}
           </div>
           <div className="min-w-0">
@@ -47,52 +47,25 @@ export default function AccountSidebar() {
           </div>
         </div>
 
-        <div className="mt-4 text-xs text-slate-500">
-          Your account shortcuts.
+        <div className="mt-4 space-y-1">
+          <NavLink to="/account/overview" className={navItem} end>
+            Overview
+          </NavLink>
+          <NavLink to="/account/requests" className={navItem}>
+            Requests
+          </NavLink>
+          <NavLink to="/account/orders" className={navItem}>
+            Orders
+          </NavLink>
+          <NavLink to="/account/invoices" className={navItem}>
+            Invoices
+          </NavLink>
+          <NavLink to="/account/profile" className={navItem}>
+            Profile
+          </NavLink>
         </div>
 
-        <div className="mt-6 space-y-5">
-          <div>
-            <div className="text-xs font-semibold text-slate-500">
-              Overview
-            </div>
-            <div className="mt-2 space-y-1">
-              <NavLink to="/account/overview" className={navItem} end>
-                Overview
-              </NavLink>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold text-slate-500">
-              Activity
-            </div>
-            <div className="mt-2 space-y-1">
-              <NavLink to="/account/requests" className={navItem}>
-                Requests
-              </NavLink>
-              <NavLink to="/account/orders" className={navItem}>
-                Orders
-              </NavLink>
-              <NavLink to="/account/invoices" className={navItem}>
-                Invoices
-              </NavLink>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold text-slate-500">
-              Account
-            </div>
-            <div className="mt-2 space-y-1">
-              <NavLink to="/account/profile" className={navItem}>
-                Profile
-              </NavLink>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-violet-100 bg-violet-50/70 p-4 text-xs text-slate-600">
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
           Need help?{" "}
           <a
             href="/contact"

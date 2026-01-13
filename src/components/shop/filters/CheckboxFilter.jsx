@@ -22,8 +22,11 @@ export default function CheckboxFilter({
             <label
               key={v}
               className={[
-                'flex items-center gap-2 text-sm',
-                disabled ? 'opacity-60' : 'cursor-pointer',
+                'flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-sm ring-1 ring-transparent transition',
+                checked
+                  ? 'bg-violet-50 text-violet-700 ring-violet-200'
+                  : 'bg-white/70 text-slate-700 hover:bg-white',
+                disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
               ].join(' ')}
             >
               <input
@@ -36,7 +39,9 @@ export default function CheckboxFilter({
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
                 ].join(' ')}
               />
-              <span className="text-slate-700">{v}</span>
+              <span className={checked ? 'text-violet-700' : 'text-slate-700'}>
+                {v}
+              </span>
             </label>
           )
         })}

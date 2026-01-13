@@ -3,8 +3,6 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FiAlertTriangle,
-  FiCheck,
-  FiClock,
   FiCopy,
   FiEdit2,
   FiRefreshCw,
@@ -22,8 +20,6 @@ import {
   useLazyGetQuoteShareQuery,
   useLazyGetQuotePdfQuery,
 } from "../../features/quotes/quotesApiSlice";
-
-import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
 
 function formatDateTime(iso) {
   try {
@@ -64,7 +60,6 @@ function StatusBadge({ status }) {
 
   return (
     <span className={`${base} ${map[status] || map.Processing}`}>
-      {status === "Processing" ? <FiClock className="h-3 w-3" /> : null}
       {status}
     </span>
   );
@@ -82,7 +77,7 @@ function AvailabilityBadge({ status }) {
   const labelMap = {
     AVAILABLE: "Available",
     SHORTAGE: "Shortage",
-    NOT_AVAILABLE: "Not available",
+    NOT_AVAILABLE: "Not Available",
     NOT_CHECKED: "Not checked",
   };
   return (
@@ -225,11 +220,7 @@ export default function AdminRequestsPage() {
   const [getQuoteShare] = useLazyGetQuoteShareQuery();
   const [getQuotePdf, { isFetching: isPdfLoading }] = useLazyGetQuotePdfQuery();
 
-  const [createOrderFromQuote, { isLoading: isCreatingOrder }] =
-    useCreateOrderFromQuoteMutation();
-
   const [deletingId, setDeletingId] = useState(null);
-  const [creatingId, setCreatingId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [copyId, setCopyId] = useState(null);
 
@@ -264,22 +255,6 @@ export default function AdminRequestsPage() {
       toast.error(friendlyApiError(e));
     } finally {
       setDeletingId(null);
-    }
-  }
-
-  async function onCreateOrder(quoteId) {
-    const ok = window.confirm(
-      "Create an order from this confirmed quote?"
-    );
-    if (!ok) return;
-
-    try {
-      setCreatingId(quoteId);
-      await createOrderFromQuote(quoteId).unwrap();
-    } catch (e) {
-      alert(friendlyApiError(e));
-    } finally {
-      setCreatingId(null);
     }
   }
 
@@ -388,7 +363,7 @@ export default function AdminRequestsPage() {
                   <th className="px-4 py-3">Quote</th>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Availability</th>
+                  <th className="px-4 py-3 w-36">Availability</th>
                   <th className="px-4 py-3">Order</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -398,7 +373,6 @@ export default function AdminRequestsPage() {
               <tbody className="divide-y divide-slate-200">
                 {rows.map((q) => {
                   const hasOrder = Boolean(q.order);
-                  const canCreateOrder = q.status === "Confirmed" && !hasOrder;
                   const canPdf = q.status === "Quoted";
                   const canCopy = q.status === "Quoted";
                   const isCancelled = q.status === "Cancelled";
@@ -436,7 +410,6 @@ export default function AdminRequestsPage() {
                     ? "AVAILABLE"
                     : "SHORTAGE";
 
-                  const rowCreating = creatingId === q._id;
                   const rowDeleting = deletingId === q._id;
                   const rowPdf = pdfId === q._id;
                   const rowCopy = copyId === q._id;
@@ -480,36 +453,11 @@ export default function AdminRequestsPage() {
                       {/* Order */}
                       <td className="px-4 py-3">
                         {hasOrder ? (
-                          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                            <span className="text-slate-700">
-                              {q.order?.orderNumber}
-                            </span>
-                            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 ring-1 ring-inset ring-emerald-200">
-                              <FiCheck className="h-3 w-3" />
-                            </span>
+                          <div className="text-xs font-semibold text-slate-700">
+                            {q.order?.orderNumber}
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            className={[
-                              "rounded-md px-2.5 py-1 text-[10px] font-semibold",
-                              q.status === "Confirmed"
-                                ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                : "bg-slate-200 text-slate-400 cursor-not-allowed",
-                            ].join(" ")}
-                            onClick={
-                              q.status === "Confirmed"
-                                ? () => onCreateOrder(q._id)
-                                : undefined
-                            }
-                            disabled={
-                              q.status !== "Confirmed" ||
-                              rowCreating ||
-                              isCreatingOrder
-                            }
-                          >
-                            {rowCreating ? "Creating..." : "Create"}
-                          </button>
+                          <span className="text-xs text-slate-400">-</span>
                         )}
                       </td>
 
@@ -527,7 +475,7 @@ export default function AdminRequestsPage() {
                                 {money(displayTotal)}
                               </div>
                               <div className="mt-0.5 text-[10px] text-slate-500">
-                                {itemsCount} items / {unitsCount} units
+                                {itemsCount} items {unitsCount} units
                               </div>
                             </>
                           );
@@ -536,7 +484,7 @@ export default function AdminRequestsPage() {
 
                       {/* Actions */}
                       <td className="px-4 py-3 text-right">
-                        <div className="inline-flex items-center gap-2">
+                        <div className="grid grid-cols-2 gap-2 justify-end">
                           <button
                             type="button"
                             className={[

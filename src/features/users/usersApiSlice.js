@@ -3,9 +3,16 @@ import { apiSlice } from "../../app/apiSlice";
 export const usersApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getUsersAdmin: builder.query({
-      query: ({ page = 1, search = "", role = "all", sort = "name" } = {}) => {
+      query: ({
+        page = 1,
+        limit,
+        search = "",
+        role = "all",
+        sort = "name",
+      } = {}) => {
         const params = new URLSearchParams();
         params.set("page", String(page));
+        if (Number.isFinite(limit)) params.set("limit", String(limit));
         if (search) params.set("search", search);
         if (role && role !== "all") params.set("role", role);
         if (sort && sort !== "newest") params.set("sort", sort);

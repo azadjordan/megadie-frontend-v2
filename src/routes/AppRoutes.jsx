@@ -28,6 +28,11 @@ import AdminOrdersPage from "../pages/Admin/AdminOrdersPage";
 import AdminInvoicesPage from "../pages/Admin/AdminInvoicesPage";
 import AdminInvoiceEditPage from "../pages/Admin/AdminInvoiceEditPage";
 import AdminInventoryPage from "../pages/Admin/AdminInventoryPage";
+import AdminInventorySlotsPage from "../pages/Admin/AdminInventorySlotsPage";
+import AdminInventoryAllocationsPage from "../pages/Admin/AdminInventoryAllocationsPage";
+import AdminProductCreatePage from "../pages/Admin/AdminProductCreatePage";
+import AdminProductEditPage from "../pages/Admin/AdminProductEditPage";
+import AdminSlotDetailsPage from "../pages/Admin/AdminSlotDetailsPage";
 import AdminUsersPage from "../pages/Admin/AdminUsersPage";
 import AdminUserDetailsPage from "../pages/Admin/AdminUserDetailsPage";
 import AdminRequestDetailsPage from "../pages/Admin/AdminRequestDetailsPage";
@@ -141,7 +146,22 @@ export default function AppRoutes() {
     <Route path="payments" element={<AdminPaymentsPage />} />
     <Route path="users" element={<AdminUsersPage />} />
     <Route path="users/:id/edit" element={<AdminUserDetailsPage />} />
-    <Route path="inventory" element={<AdminInventoryPage />} />
+    <Route
+      path="inventory"
+      element={<Navigate to="/admin/inventory/slots" replace />}
+    />
+    <Route path="inventory/products" element={<AdminInventoryPage />} />
+    <Route path="inventory/slots" element={<AdminInventorySlotsPage />} />
+    <Route
+      path="inventory/allocations"
+      element={<AdminInventoryAllocationsPage />}
+    />
+    <Route path="inventory/slots/:id" element={<AdminSlotDetailsPage />} />
+    <Route path="inventory/products/new" element={<AdminProductCreatePage />} />
+    <Route
+      path="inventory/products/:id/edit"
+      element={<AdminProductEditPage />}
+    />
     <Route path="price-rules" element={<AdminPriceRulesPage />} />
   </Route>
 </Route>

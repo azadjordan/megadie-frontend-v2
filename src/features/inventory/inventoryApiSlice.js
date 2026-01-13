@@ -24,7 +24,30 @@ export const inventoryApiSlice = apiSlice.injectEndpoints({
             ]
           : [{ type: "InventoryProduct", id: "LIST" }],
     }),
+    getInventoryAllocations: builder.query({
+      query: (params) => ({
+        url: "/inventory/allocations",
+        params,
+      }),
+      transformResponse: (response) => ({
+        rows: response?.data ?? [],
+        pagination: response?.pagination ?? null,
+      }),
+      providesTags: (result) =>
+        result?.rows
+          ? [
+              ...result.rows.map((row) => ({
+                type: "OrderAllocation",
+                id: row.id,
+              })),
+              { type: "OrderAllocation", id: "LIST" },
+            ]
+          : [{ type: "OrderAllocation", id: "LIST" }],
+    }),
   }),
 });
 
-export const { useGetInventoryProductsQuery } = inventoryApiSlice;
+export const {
+  useGetInventoryProductsQuery,
+  useGetInventoryAllocationsQuery,
+} = inventoryApiSlice;

@@ -34,6 +34,7 @@ export const apiSlice = createApi({
     'UserPrice',
     'PriceRule',
     'SlotItem',
+    'Slot',
     'OrderAllocation',
     'InventoryProduct',
   ],

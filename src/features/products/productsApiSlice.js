@@ -34,7 +34,46 @@ export const productsApiSlice = apiSlice.injectEndpoints({
       transformResponse: (response) => response?.data, // product object
       providesTags: (result, error, id) => [{ type: 'Product', id }],
     }),
+
+    // Admin product meta (enums for create/edit UI)
+    getProductMeta: builder.query({
+      query: () => '/products/meta',
+      transformResponse: (response) => response?.data ?? {},
+    }),
+
+    // Admin create product
+    createProduct: builder.mutation({
+      query: (body) => ({
+        url: '/products',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [
+        { type: 'Product', id: 'LIST' },
+        { type: 'InventoryProduct', id: 'LIST' },
+      ],
+    }),
+
+    // Admin update product
+    updateProduct: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/products/${id}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: (result, error, arg) => [
+        { type: 'Product', id: arg.id },
+        { type: 'Product', id: 'LIST' },
+        { type: 'InventoryProduct', id: 'LIST' },
+      ],
+    }),
   }),
 })
 
-export const { useGetProductsQuery, useGetProductByIdQuery } = productsApiSlice
+export const {
+  useGetProductsQuery,
+  useGetProductByIdQuery,
+  useGetProductMetaQuery,
+  useCreateProductMutation,
+  useUpdateProductMutation,
+} = productsApiSlice

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 
 import {
+  useDeleteInvoiceByAdminMutation,
   useGetInvoiceByIdQuery,
   useUpdateInvoiceByAdminMutation,
 } from "../../features/invoices/invoicesApiSlice";
@@ -150,6 +152,12 @@ function OverdueBadge() {
   );
 }
 
+function friendlyApiError(err) {
+  const msg =
+    err?.data?.message || err?.error || err?.message || "Something went wrong.";
+  return String(msg);
+}
+
 export default function AdminInvoiceEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -166,6 +174,8 @@ export default function AdminInvoiceEditPage() {
 
   const [updateInvoiceByAdmin, { isLoading: isSaving, error: saveError }] =
     useUpdateInvoiceByAdminMutation();
+  const [deleteInvoiceByAdmin, { isLoading: isDeleting }] =
+    useDeleteInvoiceByAdminMutation();
   const [
     addPaymentToInvoice,
     { isLoading: isAddingPayment, error: addPaymentError },
@@ -218,6 +228,8 @@ export default function AdminInvoiceEditPage() {
   const overdue = isOverdue(invoice);
   const canAddPayment =
     invoice?.status !== "Cancelled" && invoice?.paymentStatus !== "Paid";
+  const isCancelled = invoice?.status === "Cancelled";
+  const canDelete = isCancelled && !isDeleting;
   const user = invoice?.user && typeof invoice.user === "object" ? invoice.user : null;
   const userId =
     typeof invoice?.user === "string"
@@ -243,6 +255,24 @@ export default function AdminInvoiceEditPage() {
   const closeAddPayment = () => {
     setShowAddPayment(false);
     setPaymentFieldErrors({});
+  };
+
+  const onDeleteInvoice = async () => {
+    if (!invoice?._id && !invoice?.id) return;
+    if (invoice?.status !== "Cancelled") return;
+    const detail = invoice.order
+      ? "Invoice and linked payments deleted AND Order unlinked."
+      : "Invoice and linked payments deleted.";
+    const ok = window.confirm(`Delete this cancelled invoice? ${detail}`);
+    if (!ok) return;
+
+    try {
+      const res = await deleteInvoiceByAdmin(invoice._id || invoice.id).unwrap();
+      toast.success(res?.message || detail);
+      navigate("/admin/invoices");
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
   };
 
   const onSave = async () => {
@@ -363,33 +393,58 @@ export default function AdminInvoiceEditPage() {
       />
 
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-        <button
-          type="button"
-          onClick={() => navigate("/admin/invoices")}
-          className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
-        >
-          <FiChevronLeft className="h-4 w-4" />
-          Back to invoices
-        </button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate("/admin/invoices")}
+              className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
+            >
+              <FiChevronLeft className="h-4 w-4" />
+              Back to invoices
+            </button>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold text-slate-900">Edit Invoice</div>
-          <span className="text-xs text-slate-400">/</span>
-          <div className="text-sm font-semibold text-slate-700">
-            {invoice.invoiceNumber || invoice._id}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-lg font-semibold text-slate-900">
+                Edit Invoice
+              </div>
+              <span className="text-xs text-slate-400">/</span>
+              <div className="text-sm font-semibold text-slate-700">
+                {invoice.invoiceNumber || invoice._id}
+              </div>
+              <PaymentStatusBadge status={invoice.paymentStatus} />
+              {overdue ? <OverdueBadge /> : null}
+              {isFetching ? (
+                <span className="text-xs text-slate-400">Refreshing...</span>
+              ) : null}
+            </div>
+
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+              <SmallStatusPill status={invoice.status} />
+              {invoice.status === "Cancelled" ? null : (
+                <span>{formatDateTime(invoice.createdAt)}</span>
+              )}
+            </div>
           </div>
-          <PaymentStatusBadge status={invoice.paymentStatus} />
-          {overdue ? <OverdueBadge /> : null}
-          {isFetching ? (
-            <span className="text-xs text-slate-400">Refreshing...</span>
-          ) : null}
-        </div>
 
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-          <SmallStatusPill status={invoice.status} />
-          {invoice.status === "Cancelled" ? null : (
-            <span>{formatDateTime(invoice.createdAt)}</span>
-          )}
+          <button
+            type="button"
+            disabled={!canDelete}
+            onClick={onDeleteInvoice}
+            title={
+              isCancelled
+                ? "Delete invoice"
+                : "Only cancelled invoices can be deleted"
+            }
+            className={[
+              "rounded-xl px-4 py-2 text-xs font-semibold ring-1 transition",
+              canDelete
+                ? "bg-rose-50 text-rose-700 ring-rose-200 hover:bg-rose-100"
+                : "cursor-not-allowed bg-slate-100 text-slate-400 ring-slate-200",
+            ].join(" ")}
+          >
+            {isDeleting ? "Deleting..." : "Delete Invoice"}
+          </button>
         </div>
       </div>
 

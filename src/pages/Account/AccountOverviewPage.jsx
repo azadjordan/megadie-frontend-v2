@@ -6,7 +6,10 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 
 import { useGetMyQuotesQuery } from "../../features/quotes/quotesApiSlice";
 import { useGetMyOrdersQuery } from "../../features/orders/ordersApiSlice";
-import { useGetMyInvoicesQuery } from "../../features/invoices/invoicesApiSlice";
+import {
+  useGetMyInvoicesQuery,
+  useGetMyInvoiceSummaryQuery,
+} from "../../features/invoices/invoicesApiSlice";
 
 function formatDate(iso) {
   if (!iso) return "-";
@@ -24,6 +27,19 @@ function formatDate(iso) {
 function statusLabel(status) {
   if (status === "PartiallyPaid") return "Partially paid";
   return status || "-";
+}
+
+function formatMoney(amountMinor, currency = "AED", minorUnitFactor = 100) {
+  const factor = Number(minorUnitFactor) > 0 ? Number(minorUnitFactor) : 100;
+  const amount = (Number(amountMinor) || 0) / factor;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
 }
 
 function StatusPill({ status, label, showIcon = false }) {
@@ -55,10 +71,10 @@ function StatusPill({ status, label, showIcon = false }) {
   );
 }
 
-function StatCard({ label, value, hint, to, actionLabel = "Review now", valueIcon }) {
+function StatCard({ label, value, hint, to, actionLabel, valueIcon }) {
   return (
-    <div className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-sm shadow-slate-200/40">
-      <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
+    <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
         {label}
       </div>
       <div className="mt-3 text-2xl font-semibold text-slate-900">
@@ -69,7 +85,7 @@ function StatCard({ label, value, hint, to, actionLabel = "Review now", valueIco
       </div>
       <div className="mt-1 text-sm text-slate-500">{hint}</div>
       {actionLabel && to ? (
-        <div className="mt-4">
+        <div className="mt-3">
           <Link
             to={to}
             className="text-xs font-semibold text-violet-600 hover:text-violet-700 hover:underline hover:underline-offset-4"
@@ -82,23 +98,99 @@ function StatCard({ label, value, hint, to, actionLabel = "Review now", valueIco
   );
 }
 
-function MiniList({ title, items, empty, renderItem, actionLabel, to }) {
+function BalanceSummaryCard({ summary }) {
+  const unpaidTotalMinor = summary?.unpaidTotalMinor ?? 0;
+  const overdueTotalMinor = summary?.overdueTotalMinor ?? 0;
+  const unpaidCount = summary?.unpaidCount ?? 0;
+  const overdueCount = summary?.overdueCount ?? 0;
+  const currency = summary?.currency || "AED";
+  const minorUnitFactor = summary?.minorUnitFactor || 100;
+
+  const unpaidCountLabel =
+    unpaidCount === 1 ? "1 invoice" : `${unpaidCount} invoices`;
+  const overdueCountLabel =
+    overdueCount === 0
+      ? "No overdue invoices"
+      : overdueCount === 1
+      ? "1 overdue invoice"
+      : `${overdueCount} overdue invoices`;
+
+  const overdueTone =
+    overdueTotalMinor > 0 ? "text-rose-600" : "text-slate-900";
+
   return (
-    <div className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-sm shadow-slate-200/40">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-slate-900">{title}</div>
+    <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        Invoice balance
+      </div>
+      <div className="mt-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">
+              Unpaid balance
+            </div>
+            <div className="text-xs text-slate-500">{unpaidCountLabel}</div>
+          </div>
+          <div className="text-sm font-semibold text-slate-900 tabular-nums">
+            {formatMoney(unpaidTotalMinor, currency, minorUnitFactor)}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">
+              Overdue balance
+            </div>
+            <div className="text-xs text-slate-500">{overdueCountLabel}</div>
+          </div>
+          <div className={`text-sm font-semibold tabular-nums ${overdueTone}`}>
+            {formatMoney(overdueTotalMinor, currency, minorUnitFactor)}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3">
         <Link
-          to={to}
+          to="/account/invoices"
           className="text-xs font-semibold text-violet-600 hover:text-violet-700 hover:underline hover:underline-offset-4"
         >
-          {actionLabel}
+          View invoices
         </Link>
+      </div>
+    </div>
+  );
+}
+
+function ActivityList({ items }) {
+  return (
+    <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+      <div className="text-sm font-semibold text-slate-900">
+        Recent activity
       </div>
       <div className="mt-4 space-y-3">
         {items.length === 0 ? (
-          <div className="text-sm text-slate-500">{empty}</div>
+          <div className="text-sm text-slate-500">No activity yet.</div>
         ) : (
-          items.map(renderItem)
+          items.map((item) => (
+            <Link
+              key={item.id}
+              to={item.to}
+              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:bg-slate-50"
+            >
+              <div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {item.label}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {formatDate(item.date)}
+                </div>
+              </div>
+              <StatusPill
+                status={item.status}
+                label={item.statusLabel}
+                showIcon={item.status === "Processing"}
+              />
+            </Link>
+          ))
         )}
       </div>
     </div>
@@ -109,29 +201,55 @@ export default function AccountOverviewPage() {
   const quotesQuery = useGetMyQuotesQuery({ page: 1, limit: 5 });
   const ordersQuery = useGetMyOrdersQuery({ page: 1, limit: 5 });
   const invoicesQuery = useGetMyInvoicesQuery({ page: 1, unpaid: false });
-  const unpaidQuery = useGetMyInvoicesQuery({ page: 1, unpaid: true });
+  const invoiceSummaryQuery = useGetMyInvoiceSummaryQuery();
 
   const isLoading =
     quotesQuery.isLoading ||
     ordersQuery.isLoading ||
     invoicesQuery.isLoading ||
-    unpaidQuery.isLoading;
+    invoiceSummaryQuery.isLoading;
 
   const error =
     quotesQuery.error ||
     ordersQuery.error ||
     invoicesQuery.error ||
-    unpaidQuery.error;
+    invoiceSummaryQuery.error;
 
   const quotes = quotesQuery.data?.data || [];
   const orders = ordersQuery.data?.data || [];
   const invoices = invoicesQuery.data?.items || [];
-  const unpaidInvoices = unpaidQuery.data?.items || [];
+  const invoiceSummary = invoiceSummaryQuery.data || {};
 
   const processingQuotes = quotes.filter((q) => q.status === "Processing");
   const quotedQuotes = quotes.filter((q) => q.status === "Quoted");
-  const unpaidTotal = unpaidQuery.data?.total ?? unpaidInvoices.length;
   const showReadyQuotes = quotedQuotes.length > 0;
+  const activityItems = [
+    ...quotes.map((q) => ({
+      id: `quote-${q._id}`,
+      label: `Quote ${q.quoteNumber || String(q._id).slice(-6).toUpperCase()}`,
+      date: q.createdAt,
+      status: q.status,
+      to: "/account/requests",
+      statusLabel: q.status === "Processing" ? "Preparing" : null,
+    })),
+    ...orders.map((o) => ({
+      id: `order-${o._id}`,
+      label: `Order ${o.orderNumber || String(o._id).slice(-6)}`,
+      date: o.createdAt,
+      status: o.status,
+      to: "/account/orders",
+    })),
+    ...invoices.map((inv) => ({
+      id: `invoice-${inv._id}`,
+      label: `Invoice ${inv.invoiceNumber || String(inv._id).slice(-6)}`,
+      date: inv.createdAt,
+      status: inv.status === "Cancelled" ? "Cancelled" : inv.paymentStatus,
+      to: "/account/invoices",
+    })),
+  ]
+    .filter((item) => item.date)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 6);
 
   if (isLoading) {
     return (
@@ -151,7 +269,7 @@ export default function AccountOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex items-center gap-3">
           <span className="h-8 w-1 rounded-full bg-violet-500" aria-hidden="true" />
           <div>
@@ -163,7 +281,7 @@ export default function AccountOverviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {showReadyQuotes ? (
           <StatCard
             label="Ready quotes"
@@ -174,8 +292,6 @@ export default function AccountOverviewPage() {
               ) : null
             }
             hint="Awaiting your confirmation."
-            to="/account/requests"
-            actionLabel="Check Quotes"
           />
         ) : (
           <StatCard
@@ -186,104 +302,13 @@ export default function AccountOverviewPage() {
                 <FiClock className="text-lg text-slate-500" aria-hidden="true" />
               ) : null
             }
-            hint="We are preparing a quote."
-            to="/account/requests"
-            actionLabel={null}
+            hint="Quotes are in progress."
           />
         )}
-        <StatCard
-          label="Unpaid invoices"
-          value={unpaidTotal}
-          hint="Invoices waiting to be paid."
-          to="/account/invoices"
-          actionLabel="Review Invoices"
-        />
+        <BalanceSummaryCard summary={invoiceSummary} />
       </div>
 
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-          Recent activity
-        </div>
-        <div className="mt-3 grid gap-4 lg:grid-cols-3">
-          <MiniList
-            title="Recent requests"
-            items={quotes.slice(0, 2)}
-            empty="No requests yet."
-            actionLabel="View all"
-            to="/account/requests"
-            renderItem={(q) => (
-              <div
-                key={q._id}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">
-                    Request{" "}
-                    {q.quoteNumber || String(q._id).slice(-6).toUpperCase()}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {formatDate(q.createdAt)}
-                  </div>
-                </div>
-                <StatusPill
-                  status={q.status}
-                  label={q.status === "Processing" ? "Preparing" : null}
-                  showIcon
-                />
-              </div>
-            )}
-          />
-
-          <MiniList
-            title="Recent orders"
-            items={orders.slice(0, 2)}
-            empty="No orders yet."
-            actionLabel="View all"
-            to="/account/orders"
-            renderItem={(o) => (
-              <div
-                key={o._id}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">
-                    {o.orderNumber || `Order ${String(o._id).slice(-6)}`}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {formatDate(o.createdAt)}
-                  </div>
-                </div>
-                <StatusPill status={o.status} />
-              </div>
-            )}
-          />
-
-          <MiniList
-            title="Recent invoices"
-            items={invoices.slice(0, 2)}
-            empty="No invoices yet."
-            actionLabel="View all"
-            to="/account/invoices"
-            renderItem={(inv) => (
-              <div
-                key={inv._id}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">
-                    {inv.invoiceNumber ||
-                      `Invoice ${String(inv._id).slice(-6)}`}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {formatDate(inv.createdAt)}
-                  </div>
-                </div>
-                <StatusPill status={inv.paymentStatus} />
-              </div>
-            )}
-          />
-        </div>
-      </div>
+      <ActivityList items={activityItems} />
     </div>
   );
 }

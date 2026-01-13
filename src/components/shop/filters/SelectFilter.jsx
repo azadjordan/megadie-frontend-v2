@@ -10,6 +10,7 @@ export default function SelectFilter({
   if (!values.length) return null
 
   const current = multi ? selected : selected?.[0] || ''
+  const isActive = multi ? selected.length > 0 : Boolean(current)
 
   const handleChange = (e) => {
     const val = e.target.value
@@ -41,7 +42,10 @@ export default function SelectFilter({
         multiple={multi}
         onChange={handleChange}
         className={[
-          'w-full rounded-md bg-white px-3 py-2 text-sm ring-1 ring-slate-200 transition',
+          'w-full rounded-xl px-3 py-2 text-sm ring-1 transition',
+          isActive
+            ? 'bg-violet-50 text-violet-700 ring-violet-200'
+            : 'bg-white/90 text-slate-700 ring-slate-200/80',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
           disabled ? 'cursor-not-allowed opacity-60' : 'hover:ring-violet-200',
         ].join(' ')}

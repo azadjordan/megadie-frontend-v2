@@ -129,7 +129,7 @@ export default function AdminRequestDetailsPage() {
           productId: getId(it.product),
           sku: product?.sku || "",
           name: product?.name || "",
-          priceRule: it?.priceRule || "",
+          priceRule: product?.priceRule || it?.priceRule || "",
           requestedQty: Math.max(0, Number(it.qty) || 0),
           qtyStr: toInputValue(it.qty),
           unitPriceStr: toInputValue(it.unitPrice),
@@ -703,7 +703,7 @@ export default function AdminRequestDetailsPage() {
     const missingRules = (items || []).filter((it) => !it.priceRule);
     if (missingRules.length) {
       toast.error(
-        "Some items are missing price rules. Refresh or recreate the quote."
+        "Some products are missing price rules. Update the product and try again."
       );
       return;
     }

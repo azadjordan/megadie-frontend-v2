@@ -37,6 +37,8 @@ export default function AccountRequestsPage() {
   const [editDraft, setEditDraft] = useState({});
   const [editLocalError, setEditLocalError] = useState("");
   const [editMaxHit, setEditMaxHit] = useState({});
+  const [cancelPrompt, setCancelPrompt] = useState(null);
+  const [cancelPromptError, setCancelPromptError] = useState("");
   const maxHitTimers = useRef({});
 
   const quotes = useMemo(() => data?.data || [], [data]);
@@ -47,6 +49,8 @@ export default function AccountRequestsPage() {
     setEditDraft({});
     setEditLocalError("");
     setEditMaxHit({});
+    setCancelPrompt(null);
+    setCancelPromptError("");
   }, [page, filterStatus]);
 
   const toggle = (id) =>
@@ -207,14 +211,43 @@ export default function AccountRequestsPage() {
     });
   };
 
-  const onCancel = async (id) => {
-    // eslint-disable-next-line no-restricted-globals
-    const ok = confirm("Cancel this quote?");
-    if (!ok) return;
+  const onCancel = (id) => {
+    if (!id) return;
+    const target = quotes.find((quote) => quote?._id === id);
+    const requestedItems = Array.isArray(target?.requestedItems)
+      ? target.requestedItems
+      : [];
+    const hasShortage = requestedItems.some((item) => Number(item?.shortage) > 0);
+    const actionLabel =
+      target?.status === "Quoted" && !hasShortage
+        ? "Reject quote"
+        : "Cancel quote";
+    const quoteNumber =
+      target?.quoteNumber ||
+      (target?._id ? target._id.slice(-6).toUpperCase() : "");
+    setCancelPrompt({
+      quoteId: id,
+      quoteNumber,
+      actionLabel,
+    });
+    setCancelPromptError("");
+  };
+
+  const closeCancelPrompt = () => {
+    setCancelPrompt(null);
+    setCancelPromptError("");
+  };
+
+  const confirmCancelPrompt = async () => {
+    if (!cancelPrompt?.quoteId) return;
     try {
-      await cancelQuote(id).unwrap();
+      await cancelQuote(cancelPrompt.quoteId).unwrap();
+      closeCancelPrompt();
       refetch();
     } catch (e) {
+      setCancelPromptError(
+        e?.data?.message || e?.error || "Unable to cancel quote."
+      );
       console.error(e);
     }
   };
@@ -368,6 +401,69 @@ export default function AccountRequestsPage() {
         </>
       )}
 
+      {cancelPrompt ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={closeCancelPrompt}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-quote-title"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <div
+                  id="cancel-quote-title"
+                  className="text-sm font-semibold text-slate-900"
+                >
+                  {cancelPrompt.actionLabel || "Cancel quote"}?
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeCancelPrompt}
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:text-slate-900"
+              >
+                Close
+              </button>
+            </div>
+            <div className="px-4 py-4">
+              {cancelPromptError ? (
+                <div className="mt-1 text-xs font-semibold text-rose-600">
+                  {cancelPromptError}
+                </div>
+              ) : null}
+              <div
+                className={`${
+                  cancelPromptError ? "mt-4" : "mt-2"
+                } flex flex-wrap justify-end gap-2`}
+              >
+                <button
+                  type="button"
+                  onClick={closeCancelPrompt}
+                  disabled={isCancelling}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Keep quote
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmCancelPrompt}
+                  disabled={isCancelling}
+                  className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                >
+                  {isCancelling
+                    ? "Cancelling..."
+                    : cancelPrompt.actionLabel || "Cancel quote"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

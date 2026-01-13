@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiSettings, FiTrash2, FiRefreshCw } from "react-icons/fi";
+import { FiSettings, FiRefreshCw } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
@@ -9,10 +9,11 @@ import Pagination from "../../components/common/Pagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 import {
-  useDeleteInvoiceByAdminMutation,
   useGetInvoicesAdminQuery,
+  useGetInvoicesAdminSummaryQuery,
   useLazyGetInvoicePdfQuery,
 } from "../../features/invoices/invoicesApiSlice";
+import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 
 function formatDateTime(iso) {
   if (!iso) return "";
@@ -77,6 +78,18 @@ function numberMinorRounded(amountMinor, factor = 100) {
   }
 }
 
+function formatCount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0";
+  return new Intl.NumberFormat().format(n);
+}
+
+function renderSummaryValue(isLoading, isError, value) {
+  if (isLoading) return "...";
+  if (isError) return "--";
+  return value;
+}
+
 function balanceDueMinor(inv) {
   if (!inv) return 0;
   if (typeof inv.balanceDueMinor === "number") return inv.balanceDueMinor;
@@ -132,6 +145,7 @@ export default function AdminInvoicesPage() {
   const [search, setSearch] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [sort, setSort] = useState("newest");
+  const [selectedUser, setSelectedUser] = useState(null);
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -139,6 +153,9 @@ export default function AdminInvoicesPage() {
   const overdueOnly = paymentStatusFilter === "overdue";
   const statusFilter = overdueOnly ? "Issued" : "all";
   const effectivePaymentStatus = overdueOnly ? "all" : paymentStatusFilter;
+
+  const selectedUserId = selectedUser?._id || selectedUser?.id;
+  const summaryEnabled = Boolean(selectedUserId);
 
   const {
     data,
@@ -153,18 +170,71 @@ export default function AdminInvoicesPage() {
     overdue: overdueOnly,
     sort,
     search: debouncedSearch,
+    user: selectedUserId || undefined,
   });
 
-  const [deleteInvoiceByAdmin, { isLoading: isDeleting }] =
-    useDeleteInvoiceByAdminMutation();
+  const {
+    data: usersData,
+    isLoading: usersLoading,
+    isError: usersError,
+    error: usersErrorMessage,
+  } = useGetUsersAdminQuery({
+    page: 1,
+    limit: 100,
+    role: "all",
+    sort: "name",
+  });
+
+  const {
+    data: summaryData,
+    isLoading: summaryLoading,
+    isError: summaryError,
+  } = useGetInvoicesAdminSummaryQuery(
+    summaryEnabled ? { user: selectedUserId } : undefined,
+    { skip: !summaryEnabled }
+  );
+
   const [getInvoicePdf, { isFetching: isPdfLoading }] =
     useLazyGetInvoicePdfQuery();
 
-  const [deletingId, setDeletingId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
+  const summaryCurrency = summaryData?.currency || "AED";
+  const summaryFactor = summaryData?.minorUnitFactor || 100;
+  const unpaidSummary = summaryData?.unpaidTotalMinor ?? 0;
+  const overdueSummary = summaryData?.overdueTotalMinor ?? 0;
+  const unpaidCount = summaryData?.unpaidCount ?? 0;
+  const overdueCount = summaryData?.overdueCount ?? 0;
+  const unpaidHint = !summaryEnabled
+    ? "Select a user to load summary"
+    : summaryLoading
+    ? "Loading..."
+    : summaryError
+    ? "Unavailable"
+    : `${formatCount(unpaidCount)} invoice${unpaidCount === 1 ? "" : "s"}`;
+  const overdueHint = !summaryEnabled
+    ? "Select a user to load summary"
+    : summaryLoading
+    ? "Loading..."
+    : summaryError
+    ? "Unavailable"
+    : `${formatCount(overdueCount)} overdue`;
+
+  const users = useMemo(
+    () => usersData?.data || usersData?.items || [],
+    [usersData]
+  );
+
+  const userOptions = useMemo(() => {
+    if (!selectedUserId) return users;
+    const exists = users.some(
+      (user) => String(user?._id || user?.id) === String(selectedUserId)
+    );
+    if (exists) return users;
+    return selectedUser ? [selectedUser, ...users] : users;
+  }, [users, selectedUser, selectedUserId]);
 
   const pagination = useMemo(() => {
     if (!data) return null;
@@ -179,25 +249,6 @@ export default function AdminInvoicesPage() {
       hasNext: cur < totalPages,
     };
   }, [data]);
-
-  async function onDelete(inv) {
-    if (inv.status !== "Cancelled") return;
-    const detail = inv.order
-      ? "Invoice and linked payments deleted AND Order unlinked."
-      : "Invoice and linked payments deleted.";
-    const ok = window.confirm(`Delete this cancelled invoice? ${detail}`);
-    if (!ok) return;
-
-    try {
-      setDeletingId(inv._id);
-      const res = await deleteInvoiceByAdmin(inv._id).unwrap();
-      toast.success(res?.message || detail);
-    } catch (e) {
-      toast.error(friendlyApiError(e));
-    } finally {
-      setDeletingId(null);
-    }
-  }
 
   async function onPdf(inv) {
     try {
@@ -228,7 +279,7 @@ export default function AdminInvoicesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Invoices</div>
           <div className="text-sm text-slate-500">
@@ -236,10 +287,51 @@ export default function AdminInvoicesPage() {
           </div>
         </div>
 
+        <div className="grid w-full gap-3 sm:grid-cols-2 lg:w-auto lg:min-w-[320px] xl:min-w-[360px]">
+          <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Unpaid balance
+            </div>
+            <div className="mt-2 text-lg font-semibold text-slate-900 tabular-nums">
+              {summaryEnabled
+                ? renderSummaryValue(
+                    summaryLoading,
+                    summaryError,
+                    moneyMinorRounded(
+                      unpaidSummary,
+                      summaryCurrency,
+                      summaryFactor
+                    )
+                  )
+                : "--"}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">{unpaidHint}</div>
+          </div>
+
+          <div className="rounded-xl bg-rose-50/70 p-3 ring-1 ring-rose-100">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">
+              Overdue balance
+            </div>
+            <div className="mt-2 text-lg font-semibold text-rose-800 tabular-nums">
+              {summaryEnabled
+                ? renderSummaryValue(
+                    summaryLoading,
+                    summaryError,
+                    moneyMinorRounded(
+                      overdueSummary,
+                      summaryCurrency,
+                      summaryFactor
+                    )
+                  )
+                : "--"}
+            </div>
+            <div className="mt-1 text-xs text-rose-700">{overdueHint}</div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_200px_200px_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_220px_200px_200px_auto] md:items-end">
           <div>
             <label
               htmlFor="invoices-search"
@@ -254,9 +346,53 @@ export default function AdminInvoicesPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search by invoice #, order #, or user"
+              placeholder="Search by invoice # or order #"
               className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor="invoices-user"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              User
+            </label>
+            <select
+              id="invoices-user"
+              value={selectedUserId ? String(selectedUserId) : ""}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setPage(1);
+                if (!nextId) {
+                  setSelectedUser(null);
+                  return;
+                }
+                const nextUser = userOptions.find(
+                  (user) => String(user?._id || user?.id) === nextId
+                );
+                setSelectedUser(nextUser || { _id: nextId });
+              }}
+              disabled={usersLoading && userOptions.length === 0}
+              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            >
+              <option value="">
+                {usersLoading && userOptions.length === 0
+                  ? "Loading users..."
+                  : "All users"}
+              </option>
+              {userOptions.map((user) => {
+                const userId = user._id || user.id;
+                const label = user.name
+                  ? `${user.name}${user.email ? ` - ${user.email}` : ""}`
+                  : user.email || userId;
+                return (
+                  <option key={userId} value={userId}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
           <div>
@@ -312,6 +448,7 @@ export default function AdminInvoicesPage() {
               className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
               onClick={() => {
                 setSearch("");
+                setSelectedUser(null);
                 setPaymentStatusFilter("all");
                 setSort("newest");
                 setPage(1);
@@ -330,6 +467,11 @@ export default function AdminInvoicesPage() {
             <span className="font-semibold text-slate-900">{total}</span> items
             {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
             {isFetching ? <span className="ml-2">(Updating)</span> : null}
+            {usersError ? (
+              <span className="ml-2 text-rose-600">
+                {friendlyApiError(usersErrorMessage)}
+              </span>
+            ) : null}
           </div>
 
           {pagination ? (
@@ -379,9 +521,7 @@ export default function AdminInvoicesPage() {
                   const factor = inv.minorUnitFactor || 100;
                   const overdue = isOverdue(inv);
                   const balance = balanceDueMinor(inv);
-                  const rowDeleting = deletingId === inv._id;
                   const rowPdf = pdfId === inv._id;
-                  const canDelete = inv.status === "Cancelled";
 
                   return (
                     <tr key={inv._id} className="hover:bg-slate-50">
@@ -472,25 +612,6 @@ export default function AdminInvoicesPage() {
                             <FiSettings className="h-4 w-4" />
                           </Link>
 
-                          <button
-                            type="button"
-                            disabled={!canDelete || rowDeleting || isDeleting}
-                            className={[
-                              "inline-flex items-center justify-center rounded-xl p-2 ring-1 transition",
-                              canDelete && !rowDeleting && !isDeleting
-                                ? "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50"
-                                : "bg-white text-slate-300 ring-slate-200 cursor-not-allowed",
-                            ].join(" ")}
-                            title={
-                              canDelete
-                                ? "Delete invoice"
-                                : "Only cancelled invoices can be deleted"
-                            }
-                            aria-label="Delete invoice"
-                            onClick={() => onDelete(inv)}
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </button>
                         </div>
                       </td>
                     </tr>

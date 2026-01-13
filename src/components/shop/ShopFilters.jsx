@@ -21,14 +21,14 @@ export default function ShopFilters({
 
   if (fields.length === 0) {
     return (
-      <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
         <p className="text-sm text-slate-500">No filters available.</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-5 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <div className="space-y-5 rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-slate-900">Filters</h2>

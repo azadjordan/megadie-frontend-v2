@@ -9,7 +9,9 @@ import QuantityControl from "../../components/common/QuantityControl";
 import { addToCart } from "../../features/cart/cartSlice";
 import { useGetProductByIdQuery } from "../../features/products/productsApiSlice";
 
-const placeholder = "/placeholder.jpg";
+const placeholder = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20" font-weight="600" text-anchor="middle" dominant-baseline="middle">No image</text></svg>'
+)}`;
 
 export default function ProductDetailsPage() {
   const { id } = useParams();
@@ -114,7 +116,7 @@ export default function ProductDetailsPage() {
         <button
           type="button"
           onClick={handleBack}
-          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200/80 hover:bg-white"
         >
           <FaArrowLeft size={12} />
           Back to shop
@@ -124,7 +126,7 @@ export default function ProductDetailsPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-3">
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-sm">
+          <div className="overflow-hidden rounded-3xl bg-white/90 shadow-sm ring-1 ring-slate-200/80">
             <div className="grid min-h-[320px] place-items-center p-4 sm:min-h-[360px]">
               <img
                 src={activeImage}
@@ -189,7 +191,7 @@ export default function ProductDetailsPage() {
           </div>
 
           {specs.length > 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="rounded-2xl bg-white/90 p-4 ring-1 ring-slate-200/80">
               <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Specs
               </div>
@@ -206,7 +208,7 @@ export default function ProductDetailsPage() {
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-2xl bg-white/80 p-4 ring-1 ring-slate-200/80">
             <div className="text-xs text-slate-500">
               MOQ: {moq || minQty}
               {product?.packingUnit ? ` ${product.packingUnit}` : ""}
@@ -259,7 +261,7 @@ export default function ProductDetailsPage() {
       </div>
 
       {description ? (
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-3xl bg-white/90 p-6 shadow-sm ring-1 ring-slate-200/80">
           <div className="text-sm font-semibold text-slate-900">
             Description
           </div>

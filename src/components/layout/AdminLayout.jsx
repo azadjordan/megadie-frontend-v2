@@ -63,7 +63,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-[calc(100vh-var(--app-header-h,64px))] bg-slate-50">
-      <div className="mx-auto max-w-7xl px-4 py-4">
+      <div className="mx-auto w-[90%] max-w-screen-2xl px-4 py-4">
         {/* Top bar */}
         <div className="mb-4 flex items-center gap-3">
           {/* Back to site button */}
@@ -72,10 +72,10 @@ export default function AdminLayout() {
             onClick={() => navigate("/")}
             className={[
               "inline-flex items-center gap-2 rounded-xl px-3 py-2",
-              "bg-violet-500 text-white",
+              "bg-violet-600 text-white",
               "text-sm font-semibold",
               "hover:bg-violet-700 transition",
-              "shadow-sm",
+              "shadow-sm shadow-violet-200/40",
             ].join(" ")}
           >
             <FiArrowLeft className="h-4 w-4" />

@@ -1,16 +1,25 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import AdminOrderAllocation from "../../components/admin/AdminOrderAllocation";
+import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
+import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
+import StepCard from "./request-details/StepCard";
+import OrderSummaryPanel from "./order-details/SummaryPanel";
+import { StatusBadge, StockBadge } from "./order-details/Badges";
 
 import {
   useGetOrderByIdQuery,
+  useDeleteOrderByAdminMutation,
   useUpdateOrderByAdminMutation,
   useMarkOrderDeliveredMutation,
 } from "../../features/orders/ordersApiSlice";
+import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
+import { useGetOrderAllocationsQuery } from "../../features/orderAllocations/orderAllocationsApiSlice";
 
 function formatDateTime(iso) {
   if (!iso) return "";
@@ -55,24 +64,6 @@ function moneyPlain(amount) {
   }
 }
 
-function StatusBadge({ status }) {
-  const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset";
-
-  const map = {
-    Processing: "bg-slate-50 text-slate-700 ring-slate-200",
-    Shipping: "bg-blue-50 text-blue-700 ring-blue-200",
-    Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
-  };
-
-  return (
-    <span className={`${base} ${map[status] || map.Processing}`}>
-      {status || "Unknown"}
-    </span>
-  );
-}
-
 function lineTotal(item) {
   if (!item) return 0;
   if (typeof item.lineTotal === "number") return item.lineTotal;
@@ -88,9 +79,30 @@ function parseNumberInput(value) {
   return n;
 }
 
+function resolveEntityId(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    if (value._id) return String(value._id);
+    if (value.id) return String(value.id);
+    if (typeof value.toString === "function") return String(value);
+  }
+  return "";
+}
+
+function getDefaultDueDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 35);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function AdminOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const {
     data: orderResult,
@@ -109,82 +121,427 @@ export default function AdminOrderDetailsPage() {
       : order?.invoice?._id || "";
   const invoiceNumber = order?.invoice?.invoiceNumber || invoiceId;
 
+  const quoteData = order?.quote;
   const quoteId =
-    typeof order?.quote === "string" ? order.quote : order?.quote?._id || "";
+    typeof quoteData === "string" ? quoteData : quoteData?._id || "";
+  const quoteNumber =
+    quoteData && typeof quoteData === "object" ? quoteData.quoteNumber || "" : "";
 
   const user =
     order?.user && typeof order.user === "object" ? order.user : null;
 
   const itemsTotal = items.reduce((sum, it) => sum + lineTotal(it), 0);
+  const itemsCount = items.length;
+  const totalQty = items.reduce((sum, it) => sum + (Number(it?.qty) || 0), 0);
   const delivery = Number(order?.deliveryCharge) || 0;
   const extra = Number(order?.extraFee) || 0;
   const total = Number(order?.totalPrice) || itemsTotal + delivery + extra;
 
+  const orderId = order?._id || order?.id || "";
+  const orderStatus = order?.status || "Processing";
+  const isCancelled = orderStatus === "Cancelled";
   const hasInvoice = Boolean(invoiceId);
+  const isProcessing = orderStatus === "Processing";
+  const canEditNotes = isProcessing;
+  const canEditFees = isProcessing && !hasInvoice;
+  const editNotice = !isProcessing
+    ? "Notes and fees are editable only while the order is Processing."
+    : hasInvoice
+    ? "Fees are locked once an invoice exists."
+    : "";
+  const canCreateInvoice = orderStatus === "Processing" && !hasInvoice;
+  const createInvoiceReason = hasInvoice
+    ? "Invoice attached."
+    : orderStatus !== "Processing"
+    ? "Only Processing orders can create invoices."
+    : "";
+  const shouldLoadAllocations =
+    Boolean(orderId) && (orderStatus === "Shipping" || orderStatus === "Cancelled");
+  const {
+    data: allocationsResult,
+    isLoading: isAllocationsLoading,
+    isError: isAllocationsError,
+  } = useGetOrderAllocationsQuery(orderId, { skip: !shouldLoadAllocations });
 
-  const [status, setStatus] = useState("Processing");
+  const allocations = Array.isArray(allocationsResult?.data)
+    ? allocationsResult.data
+    : Array.isArray(allocationsResult)
+      ? allocationsResult
+      : [];
+  const hasBlockingAllocations = allocations.some(
+    (row) =>
+      !row?.status || row.status === "Reserved" || row.status === "Deducted"
+  );
+
+  const allocationMetrics = useMemo(() => {
+    const deductedTotals = new Map();
+    let hasReservedAllocations = false;
+
+    for (const row of allocations) {
+      const productId = resolveEntityId(row?.product);
+      if (!productId) continue;
+      const qty = Number(row?.qty) || 0;
+      if (row?.status === "Deducted") {
+        deductedTotals.set(
+          productId,
+          (deductedTotals.get(productId) || 0) + qty
+        );
+      } else if (row?.status !== "Cancelled") {
+        hasReservedAllocations = true;
+      }
+    }
+
+    const hasAllocations = allocations.length > 0;
+    let isFullyDeducted = false;
+
+    if (hasAllocations && items.length > 0) {
+      isFullyDeducted = items.every((it) => {
+        const productId = resolveEntityId(it?.product);
+        const orderedQty = Number(it?.qty) || 0;
+        const deductedQty = productId ? deductedTotals.get(productId) || 0 : 0;
+        return deductedQty === orderedQty;
+      });
+    }
+
+    return { hasAllocations, hasReservedAllocations, isFullyDeducted };
+  }, [allocations, items]);
+
+  const isStockFinalized =
+    Boolean(order?.stockFinalizedAt) ||
+    orderStatus === "Delivered" ||
+    allocationMetrics.isFullyDeducted;
+  const canAllocate =
+    orderStatus === "Shipping" && hasInvoice && !isStockFinalized;
+  const allocationLockReason = !hasInvoice
+    ? "Invoice required before managing allocations."
+    : isStockFinalized
+    ? "Stock finalized."
+    : orderStatus === "Cancelled"
+    ? "Order is cancelled."
+    : orderStatus !== "Shipping"
+    ? "Order must be Shipping before managing allocations."
+    : "";
+
+  const isShipping = orderStatus === "Shipping";
+  const canShip = orderStatus === "Processing" && hasInvoice;
+  const shippingLockReason = !hasInvoice
+    ? "Invoice required before Shipping."
+    : orderStatus === "Processing" || isShipping
+    ? ""
+    : "Only Processing orders can mark Shipping.";
+
+  let deliverLockReason = "";
+  if (!hasInvoice) {
+    deliverLockReason = "Invoice required before delivery.";
+  } else if (orderStatus !== "Shipping") {
+    deliverLockReason = "Order must be Shipping before delivery.";
+  } else if (!isStockFinalized) {
+    if (isAllocationsLoading) {
+      deliverLockReason = "Checking allocations...";
+    } else if (isAllocationsError) {
+      deliverLockReason = "Unable to load allocation status.";
+    } else if (!allocationMetrics.hasAllocations) {
+      deliverLockReason = "Reserve and finalize stock before delivery.";
+    } else if (allocationMetrics.hasReservedAllocations) {
+      deliverLockReason = "Finalize allocations before delivery.";
+    } else if (!allocationMetrics.isFullyDeducted) {
+      deliverLockReason = "Finalize allocations before delivery.";
+    }
+  }
+  const canDeliver = deliverLockReason === "";
+  const needsAllocationCheck = orderStatus === "Shipping" || isCancelled;
+  const allocationCheckLoading = needsAllocationCheck && isAllocationsLoading;
+  const allocationCheckError = needsAllocationCheck && isAllocationsError;
+  const canCancelOrder =
+    !isCancelled &&
+    !isStockFinalized &&
+    !allocationCheckLoading &&
+    !allocationCheckError &&
+    !hasBlockingAllocations;
+  const canReopenOrder =
+    isCancelled &&
+    !isStockFinalized &&
+    !allocationCheckLoading &&
+    !allocationCheckError &&
+    !hasBlockingAllocations;
+  const cancelReason = isStockFinalized
+    ? "Stock finalized orders cannot be cancelled."
+    : allocationCheckLoading
+    ? "Checking allocations..."
+    : allocationCheckError
+    ? "Unable to load allocations."
+    : hasBlockingAllocations
+    ? "Remove allocations before cancelling."
+    : "";
+  const reopenReason = isStockFinalized
+    ? "Stock finalized orders cannot be reopened."
+    : allocationCheckLoading
+    ? "Checking allocations..."
+    : allocationCheckError
+    ? "Unable to load allocations."
+    : hasBlockingAllocations
+    ? "Remove allocations before re-opening."
+    : "";
+  const canDeleteOrder =
+    isCancelled &&
+    !isStockFinalized &&
+    !allocationCheckLoading &&
+    !allocationCheckError &&
+    !hasBlockingAllocations;
+  const deleteReason = !isCancelled
+    ? "Cancel order before deleting."
+    : isStockFinalized
+    ? "Stock finalized orders cannot be deleted."
+    : allocationCheckLoading
+    ? "Checking allocations..."
+    : allocationCheckError
+    ? "Unable to load allocations."
+    : hasBlockingAllocations
+    ? "Remove allocations before deleting."
+    : "";
+  const canToggleCancel = isCancelled ? canReopenOrder : canCancelOrder;
   const [deliveryCharge, setDeliveryCharge] = useState("0");
   const [extraFee, setExtraFee] = useState("0");
   const [deliveredBy, setDeliveredBy] = useState("");
   const [adminToAdminNote, setAdminToAdminNote] = useState("");
   const [adminToClientNote, setAdminToClientNote] = useState("");
-  const [localError, setLocalError] = useState("");
+  const [overviewError, setOverviewError] = useState("");
+  const [shippingError, setShippingError] = useState("");
+  const [deliverFormError, setDeliverFormError] = useState("");
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState("allocation");
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("tab") === "stock" ? "stock" : "general";
+  });
+  const [createTarget, setCreateTarget] = useState(null);
+  const [isDeliverModalOpen, setIsDeliverModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    dueDate: getDefaultDueDate(),
+    adminNote: "",
+    currency: "AED",
+    minorUnitFactor: "100",
+  });
+  const [createFormError, setCreateFormError] = useState("");
 
-  const [updateOrderByAdmin, { isLoading: isUpdatingOrder, error: saveError }] =
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const nextTab = params.get("tab") === "stock" ? "stock" : "general";
+    setActiveTab(nextTab);
+  }, [id, location.search]);
+
+  const [updateOrderByAdmin, { isLoading: isSaving, error: saveError }] =
     useUpdateOrderByAdminMutation();
+  const [updateOrderStatus, { isLoading: isUpdatingStatus }] =
+    useUpdateOrderByAdminMutation();
+  const [deleteOrderByAdmin, { isLoading: isDeleting }] =
+    useDeleteOrderByAdminMutation();
   const [
     markOrderDelivered,
     { isLoading: isDelivering, error: deliverError },
   ] = useMarkOrderDeliveredMutation();
-  const isSaving = isUpdatingOrder || isDelivering;
-  const combinedError = deliverError || saveError;
+  const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
+    useCreateInvoiceFromOrderMutation();
 
   useEffect(() => {
     if (!order) return;
-    setStatus(order.status || "Processing");
     setDeliveryCharge(String(Number(order.deliveryCharge ?? 0)));
     setExtraFee(String(Number(order.extraFee ?? 0)));
     setDeliveredBy(order.deliveredBy || "");
     setAdminToAdminNote(order.adminToAdminNote || "");
     setAdminToClientNote(order.adminToClientNote || "");
-    setLocalError("");
+    setOverviewError("");
+    setShippingError("");
+    setDeliverFormError("");
     setSaved(false);
   }, [order?._id, order?.id, order?.updatedAt]);
 
-  useEffect(() => {
-    if (id) setActiveTab("allocation");
-  }, [id]);
-
-  const onSave = async () => {
+  const openCreateModal = () => {
     if (!order) return;
-    setLocalError("");
-    setSaved(false);
+    setCreateTarget(order);
+    setCreateForm({
+      dueDate: getDefaultDueDate(),
+      adminNote: "",
+      currency: "AED",
+      minorUnitFactor: "100",
+    });
+    setCreateFormError("");
+  };
 
-    if (status === "Delivered" && !deliveredBy.trim()) {
-      setLocalError("Delivered by is required when marking an order as Delivered.");
+  const closeCreateModal = () => {
+    if (isCreating) return;
+    setCreateTarget(null);
+    setCreateFormError("");
+  };
+
+  const handleCreateField = (key, value) => {
+    setCreateForm((prev) => ({ ...prev, [key]: value }));
+    if (createFormError) setCreateFormError("");
+  };
+
+  const submitCreateInvoice = async () => {
+    if (!createTarget || isCreating) return;
+
+    const dueDate = String(createForm.dueDate || "").trim();
+    if (!dueDate) {
+      setCreateFormError("Due date is required.");
       return;
     }
 
+    const minorRaw = String(createForm.minorUnitFactor || "").trim();
+    if (minorRaw) {
+      const minorValue = Number(minorRaw);
+      if (!Number.isInteger(minorValue) || minorValue <= 0) {
+        setCreateFormError("Minor unit factor must be a positive integer.");
+        return;
+      }
+    }
+
+    const payload = { orderId: createTarget._id };
+    payload.dueDate = dueDate;
+
+    const adminNote = String(createForm.adminNote || "").trim();
+    if (adminNote) payload.adminNote = adminNote;
+
+    const currency = String(createForm.currency || "").trim();
+    if (currency) payload.currency = currency;
+
+    if (minorRaw) payload.minorUnitFactor = Number(minorRaw);
+
+    try {
+      await createInvoiceFromOrder(payload).unwrap();
+      closeCreateModal();
+    } catch {
+      // ErrorMessage handles it
+    }
+  };
+
+  const handleShip = async () => {
+    if (!order || !canShip || isUpdatingStatus) return;
+    setShippingError("");
+    try {
+      await updateOrderStatus({
+        id: orderId,
+        status: "Shipping",
+      }).unwrap();
+      toast.success("Order moved to Shipping.");
+    } catch (err) {
+      setShippingError(
+        err?.data?.message || err?.error || "Failed to update shipping status."
+      );
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!order || isUpdatingStatus) return;
+    const confirmed = window.confirm(
+      "Cancel this order? You can still delete it after cancelling."
+    );
+    if (!confirmed) return;
+    setOverviewError("");
+    try {
+      await updateOrderStatus({
+        id: orderId,
+        status: "Cancelled",
+      }).unwrap();
+      toast.success("Order cancelled.");
+    } catch (err) {
+      setOverviewError(
+        err?.data?.message || err?.error || "Failed to cancel order."
+      );
+    }
+  };
+
+  const handleMakeProcessing = async () => {
+    if (!order || isUpdatingStatus) return;
+    const confirmed = window.confirm(
+      "Move this order back to Processing?"
+    );
+    if (!confirmed) return;
+    setOverviewError("");
+    try {
+      await updateOrderStatus({
+        id: orderId,
+        status: "Processing",
+      }).unwrap();
+      toast.success("Order moved back to Processing.");
+    } catch (err) {
+      setOverviewError(
+        err?.data?.message || err?.error || "Failed to update order status."
+      );
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!order || !canDeleteOrder || isDeleting) return;
+    const confirmed = window.confirm(
+      "Delete this cancelled order? This will delete its quote, invoice, payments, and allocations."
+    );
+    if (!confirmed) return;
+    try {
+      await deleteOrderByAdmin(orderId).unwrap();
+      toast.success("Order deleted.");
+      navigate("/admin/orders");
+    } catch (err) {
+      toast.error(err?.data?.message || err?.error || "Delete failed.");
+    }
+  };
+  const openDeliverModal = () => {
+    if (!order || !canDeliver || isDelivering) return;
+    setDeliverFormError("");
+    setIsDeliverModalOpen(true);
+  };
+
+  const closeDeliverModal = () => {
+    if (isDelivering) return;
+    setIsDeliverModalOpen(false);
+    setDeliverFormError("");
+  };
+
+  const handleDeliver = async () => {
+    if (!order || !canDeliver || isDelivering) return;
+    setDeliverFormError("");
+    const name = deliveredBy.trim();
+    if (!name) {
+      setDeliverFormError("Delivered by is required.");
+      return;
+    }
+
+    try {
+      await markOrderDelivered({
+        id: orderId,
+        deliveredBy: name,
+      }).unwrap();
+      setIsDeliverModalOpen(false);
+    } catch {
+      // ErrorMessage handles it
+    }
+  };
+
+  const onSave = async () => {
+    if (!order || isSaving) return;
+    if (!canEditNotes && !canEditFees) return;
+    setOverviewError("");
+    setSaved(false);
+
     const payload = {
-      id: order._id || order.id,
-      status,
-      deliveredBy: deliveredBy.trim(),
-      adminToAdminNote,
-      adminToClientNote,
+      id: orderId,
     };
 
-    if (!hasInvoice) {
+    if (canEditNotes) {
+      payload.adminToAdminNote = adminToAdminNote;
+      payload.adminToClientNote = adminToClientNote;
+    }
+
+    if (canEditFees) {
       const deliveryNum = parseNumberInput(deliveryCharge);
       if (deliveryNum == null) {
-        setLocalError("Delivery charge must be a non-negative number.");
+        setOverviewError("Delivery charge must be a non-negative number.");
         return;
       }
 
       const extraNum = parseNumberInput(extraFee);
       if (extraNum == null) {
-        setLocalError("Extra fee must be a non-negative number.");
+        setOverviewError("Extra fee must be a non-negative number.");
         return;
       }
 
@@ -193,16 +550,213 @@ export default function AdminOrderDetailsPage() {
     }
 
     try {
-      if (status === "Delivered") {
-        const deliverPayload = { ...payload };
-        delete deliverPayload.status;
-        await markOrderDelivered(deliverPayload).unwrap();
-      } else {
-        await updateOrderByAdmin(payload).unwrap();
-      }
+      await updateOrderByAdmin(payload).unwrap();
       setSaved(true);
     } catch {
       // ErrorMessage handles it
+    }
+  };
+
+  const tabs = [
+    { id: "general", label: "General", number: 1 },
+    {
+      id: "stock",
+      label: "Allocate Stock",
+      number: 2,
+      locked: !canAllocate,
+      lockReason: allocationLockReason,
+    },
+  ];
+
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case "general":
+        return (
+          <div className="space-y-4">
+            <StepCard
+              n={1}
+              title="General"
+              subtitle="Edit notes and charges. Workflow actions are in the summary panel."
+            >
+              {editNotice ? (
+                <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
+                  {editNotice}
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <div className="mb-1 text-xs font-semibold text-slate-600">
+                    Status
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
+                    {orderStatus}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-1 text-xs font-semibold text-slate-600">
+                    Delivered by
+                  </div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
+                    {order?.deliveredBy || "-"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Delivery charge
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={deliveryCharge}
+                    onChange={(e) => setDeliveryCharge(e.target.value)}
+                    disabled={!canEditFees}
+                    className={[
+                      "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                      !canEditFees
+                        ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                        : "",
+                    ].join(" ")}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Extra fee
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={extraFee}
+                    onChange={(e) => setExtraFee(e.target.value)}
+                    disabled={!canEditFees}
+                    className={[
+                      "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                      !canEditFees
+                        ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                        : "",
+                    ].join(" ")}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3">
+                <div>
+                  <div className="mb-1 text-xs font-semibold text-slate-600">
+                    Client to Admin
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
+                    {order.clientToAdminNote || "No client note."}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Admin to Admin
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={adminToAdminNote}
+                    onChange={(e) => setAdminToAdminNote(e.target.value)}
+                    placeholder="Internal notes"
+                    disabled={!canEditNotes}
+                    className={[
+                      "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                      !canEditNotes
+                        ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                        : "",
+                    ].join(" ")}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Admin to Client
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={adminToClientNote}
+                    onChange={(e) => setAdminToClientNote(e.target.value)}
+                    placeholder="Optional message to the client"
+                    disabled={!canEditNotes}
+                    className={[
+                      "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                      !canEditNotes
+                        ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                        : "",
+                    ].join(" ")}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={isSaving || (!canEditNotes && !canEditFees)}
+                  className={[
+                    "rounded-xl px-4 py-2 text-sm font-semibold text-white",
+                    isSaving || (!canEditNotes && !canEditFees)
+                      ? "cursor-not-allowed bg-slate-300"
+                      : "bg-slate-900 hover:bg-slate-800",
+                  ].join(" ")}
+                >
+                  {isSaving ? "Saving..." : "Save changes"}
+                </button>
+
+                {saved ? (
+                  <span className="text-xs font-semibold text-emerald-700">
+                    Saved.
+                  </span>
+                ) : null}
+              </div>
+
+              {overviewError ? (
+                <div className="mt-3 rounded-xl bg-rose-50 p-3 text-xs text-rose-800 ring-1 ring-rose-200">
+                  {overviewError}
+                </div>
+              ) : null}
+
+              {saveError ? (
+                <div className="mt-3">
+                  <ErrorMessage error={saveError} />
+                </div>
+              ) : null}
+            </StepCard>
+
+            <AdminOrderAllocation
+              orderId={orderId}
+              orderStatus={orderStatus}
+              items={items}
+              formatMoney={moneyPlain}
+              showSlots={false}
+              title="Order items"
+            />
+
+          </div>
+        );
+      case "stock":
+        return (
+          <AdminOrderAllocation
+            orderId={orderId}
+            orderStatus={orderStatus}
+            items={items}
+            formatMoney={money}
+            showPricing={false}
+            title="Allocate Stock"
+            allocationEnabled={canAllocate}
+            allocationLockReason={allocationLockReason}
+            mode="stock"
+          />
+        );
+      default:
+        return null;
     }
   };
 
@@ -257,12 +811,40 @@ export default function AdminOrderDetailsPage() {
               {order.orderNumber || order._id}
             </div>
             <StatusBadge status={order.status} />
+            <StockBadge isFinalized={isStockFinalized} />
             {isFetching ? (
               <span className="text-xs text-slate-400">Refreshing...</span>
             ) : null}
           </div>
 
-          <span />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={isCancelled ? handleMakeProcessing : handleCancel}
+              disabled={isUpdatingStatus || !canToggleCancel}
+              title={
+                !isUpdatingStatus && !canToggleCancel
+                  ? isCancelled
+                    ? reopenReason
+                    : cancelReason
+                  : undefined
+              }
+              className={[
+                "rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                isUpdatingStatus || !canToggleCancel
+                  ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                  : isCancelled
+                  ? "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                  : "border-rose-500 bg-white text-rose-600 hover:bg-rose-50",
+              ].join(" ")}
+            >
+              {isUpdatingStatus
+                ? "Updating..."
+                : isCancelled
+                ? "Make Processing"
+                : "Cancel order"}
+            </button>
+          </div>
         </div>
 
         <div className="mt-1 text-sm text-slate-500">
@@ -273,283 +855,117 @@ export default function AdminOrderDetailsPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: "general", label: "General Details" },
-            { id: "allocation", label: "Allocation" },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                aria-pressed={isActive}
-                className={[
-                  "inline-flex items-center rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                  isActive
-                    ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-                ].join(" ")}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+            <div className="flex flex-wrap gap-2">
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                const isLocked = Boolean(tab.locked);
+                const numberClass = isActive
+                  ? isLocked
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-white/20 text-white"
+                  : isLocked
+                  ? "bg-slate-100 text-slate-400"
+                  : "bg-slate-100 text-slate-700";
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-pressed={isActive}
+                    title={isLocked ? tab.lockReason : undefined}
+                    className={[
+                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                      isActive
+                        ? isLocked
+                          ? "border-amber-300 bg-amber-50 text-amber-800"
+                          : "border-slate-900 bg-slate-900 text-white shadow-sm"
+                        : isLocked
+                        ? "border-slate-200 bg-slate-50 text-slate-400"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "grid h-5 w-5 place-items-center rounded-md text-[11px] font-semibold",
+                        numberClass,
+                      ].join(" ")}
+                    >
+                      {tab.number}
+                    </span>
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {renderActiveTab()}
         </div>
+
+        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <OrderSummaryPanel
+            orderNumber={order.orderNumber || orderId}
+            invoiceId={invoiceId}
+            invoiceNumber={invoiceNumber}
+            quoteId={quoteId}
+            quoteNumber={quoteNumber}
+            customerName={user?.name || ""}
+            itemsCount={itemsCount}
+            totalQty={totalQty}
+            itemsTotal={itemsTotal}
+            deliveryCharge={delivery}
+            extraFee={extra}
+            total={total}
+            status={orderStatus}
+            formatMoney={money}
+            canCreateInvoice={canCreateInvoice}
+            canShip={canShip}
+            canDeliver={canDeliver}
+            canDelete={canDeleteOrder}
+            createInvoiceReason={createInvoiceReason}
+            shippingReason={shippingLockReason}
+            deliverReason={deliverLockReason}
+            deleteReason={deleteReason}
+            isStockFinalized={isStockFinalized}
+            onCreateInvoice={openCreateModal}
+            onShip={handleShip}
+            onDeliver={openDeliverModal}
+            onDelete={handleDeleteOrder}
+            isCreatingInvoice={isCreating}
+            isUpdatingStatus={isUpdatingStatus}
+            isDelivering={isDelivering}
+            isDeleting={isDeleting}
+            shippingError={shippingError}
+          />
+        </aside>
       </div>
 
-      {activeTab === "general" ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-4">
-          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-            <div className="text-sm font-semibold text-slate-900">
-              Order settings
-            </div>
-            <div className="mt-1 text-sm text-slate-500">
-              Update status, delivery charges, and notes.
-            </div>
+      <CreateInvoiceModal
+        open={Boolean(createTarget)}
+        order={createTarget}
+        form={createForm}
+        onFieldChange={handleCreateField}
+        onClose={closeCreateModal}
+        onSubmit={submitCreateInvoice}
+        isSaving={isCreating}
+        error={createError}
+        formError={createFormError}
+      />
 
-            {hasInvoice ? (
-              <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
-                This order has an invoice. Delivery and extra fees are locked.
-              </div>
-            ) : null}
-
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Status
-                </label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                >
-                  <option value="Processing">Processing</option>
-                  <option value="Shipping">Shipping</option>
-                  <option value="Delivered">Delivered</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Delivered by
-                </label>
-                <input
-                  type="text"
-                  value={deliveredBy}
-                  onChange={(e) => setDeliveredBy(e.target.value)}
-                  placeholder="Required for Delivered"
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Delivery charge
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={deliveryCharge}
-                  onChange={(e) => setDeliveryCharge(e.target.value)}
-                  disabled={hasInvoice}
-                  className={[
-                    "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
-                    hasInvoice ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
-                  ].join(" ")}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Extra fee
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={extraFee}
-                  onChange={(e) => setExtraFee(e.target.value)}
-                  disabled={hasInvoice}
-                  className={[
-                    "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
-                    hasInvoice ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
-                  ].join(" ")}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-3">
-              <div>
-                <div className="mb-1 text-xs font-semibold text-slate-600">
-                  Client to Admin
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
-                  {order.clientToAdminNote || "No client note."}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Admin to Admin
-                </label>
-                <textarea
-                  rows={3}
-                  value={adminToAdminNote}
-                  onChange={(e) => setAdminToAdminNote(e.target.value)}
-                  placeholder="Internal notes"
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Admin to Client
-                </label>
-                <textarea
-                  rows={3}
-                  value={adminToClientNote}
-                  onChange={(e) => setAdminToClientNote(e.target.value)}
-                  placeholder="Optional message to the client"
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={isSaving}
-                className={[
-                  "rounded-xl px-4 py-2 text-sm font-semibold text-white",
-                  isSaving
-                    ? "cursor-not-allowed bg-slate-300"
-                    : "bg-slate-900 hover:bg-slate-800",
-                ].join(" ")}
-              >
-                {isSaving ? "Saving..." : "Save changes"}
-              </button>
-
-              {saved ? (
-                <span className="text-xs font-semibold text-emerald-700">
-                  Saved.
-                </span>
-              ) : null}
-            </div>
-
-            {localError ? (
-              <div className="mt-3 rounded-xl bg-rose-50 p-3 text-xs text-rose-800 ring-1 ring-rose-200">
-                {localError}
-              </div>
-            ) : null}
-
-            {combinedError ? (
-              <div className="mt-3">
-                <ErrorMessage error={combinedError} />
-              </div>
-            ) : null}
-          </div>
-
-          <AdminOrderAllocation
-            orderId={order?._id || order?.id}
-            items={items}
-            formatMoney={moneyPlain}
-            showSlots={false}
-            title="Order items"
-          />
-        </div>
-
-        <aside className="space-y-3">
-          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-            <div className="text-xs font-semibold text-slate-600">Customer</div>
-            <div className="mt-1 text-sm font-semibold text-slate-900">
-              {user?.name || "Customer"}
-            </div>
-            <div className="text-xs text-slate-500">{user?.email || ""}</div>
-            {user?.phoneNumber ? (
-              <div className="text-xs text-slate-500">{user.phoneNumber}</div>
-            ) : null}
-          </div>
-
-          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-            <div className="text-xs font-semibold text-slate-600">Invoice</div>
-            {invoiceId ? (
-              <Link
-                to={`/admin/invoices/${invoiceId}/edit`}
-                className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-slate-900 hover:underline"
-              >
-                {invoiceNumber}
-              </Link>
-            ) : (
-              <div className="mt-1 text-sm text-slate-500">No invoice yet.</div>
-            )}
-          </div>
-
-          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-            <div className="text-xs font-semibold text-slate-600">Quote</div>
-            {quoteId ? (
-              <Link
-                to={`/admin/requests/${quoteId}`}
-                className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-slate-900 hover:underline"
-              >
-                View quote
-              </Link>
-            ) : (
-              <div className="mt-1 text-sm text-slate-500">No quote link.</div>
-            )}
-          </div>
-
-          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-            <div className="text-xs font-semibold text-slate-600">Totals</div>
-            <div className="mt-2 space-y-1 text-sm text-slate-700">
-              <div className="flex items-center justify-between">
-                <span>Items</span>
-                <span className="font-semibold text-slate-900">
-                  {money(itemsTotal)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Delivery</span>
-                <span className="font-semibold text-slate-900">
-                  {money(delivery)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Extra</span>
-                <span className="font-semibold text-slate-900">
-                  {money(extra)}
-                </span>
-              </div>
-              <div className="h-px bg-slate-200" />
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-700">Total</span>
-                <span className="font-semibold text-slate-900">
-                  {money(total)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </aside>
-        </div>
-      ) : null}
-
-      {activeTab === "allocation" ? (
-        <AdminOrderAllocation
-          orderId={order?._id || order?.id}
-          items={items}
-          formatMoney={money}
-          showPricing={false}
-          title="Allocation"
-        />
-      ) : null}
+      <MarkDeliveredModal
+        open={isDeliverModalOpen}
+        order={order}
+        deliveredBy={deliveredBy}
+        onDeliveredByChange={setDeliveredBy}
+        onClose={closeDeliverModal}
+        onSubmit={handleDeliver}
+        isSaving={isDelivering}
+        error={deliverError}
+        formError={deliverFormError}
+      />
     </div>
   );
 }

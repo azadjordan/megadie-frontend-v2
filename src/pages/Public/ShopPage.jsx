@@ -104,7 +104,7 @@ export default function ShopPage() {
     if (!pagination) {
       const n = products.length;
       if (n === 0) return "Showing 0 items";
-      return `Showing 1 – ${n} of ${n} item${n !== 1 ? "s" : ""}`;
+      return `Showing 1 to ${n} of ${n} item${n !== 1 ? "s" : ""}`;
     }
 
     const page = pagination.page ?? 1;
@@ -115,7 +115,9 @@ export default function ShopPage() {
 
     const start = (page - 1) * limit + 1;
     const end = Math.min(start + products.length - 1, total);
-    return `Showing ${start} – ${end} of ${total} item${total !== 1 ? "s" : ""}`;
+    return `Showing ${start} to ${end} of ${total} item${
+      total !== 1 ? "s" : ""
+    }`;
   }, [pagination, products.length, productsQueryParams?.limit]);
 
   useEffect(() => {
@@ -207,7 +209,7 @@ export default function ShopPage() {
               />
             </div>
           ) : (
-            <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+            <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
               <p className="text-sm text-slate-500">No filters available.</p>
             </div>
           )}
@@ -232,9 +234,9 @@ export default function ShopPage() {
           </div>
 
           {products.length === 0 ? (
-            <p className="text-sm text-slate-500">
+            <div className="rounded-2xl bg-white/90 p-4 text-sm text-slate-500 ring-1 ring-slate-200/80">
               No products available for this selection.
-            </p>
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {products.map((p) => (
@@ -254,7 +256,7 @@ export default function ShopPage() {
 
           {productsQ.isFetching && !productsQ.isLoading ? (
             <p className="text-[11px] text-right text-slate-400">
-              Updating products…
+              Updating products...
             </p>
           ) : null}
         </section>

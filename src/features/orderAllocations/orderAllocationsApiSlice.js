@@ -24,6 +24,7 @@ export const orderAllocationsApiSlice = apiSlice.injectEndpoints({
         body: { productId, slotId, qty, note },
       }),
       invalidatesTags: (_result, _error, arg) => [
+        { type: "OrderAllocation", id: "LIST" },
         { type: "OrderAllocation", id: `ORDER-${arg?.orderId}` },
         { type: "Order", id: arg?.orderId },
       ],
@@ -35,8 +36,22 @@ export const orderAllocationsApiSlice = apiSlice.injectEndpoints({
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, arg) => [
+        { type: "OrderAllocation", id: "LIST" },
         { type: "OrderAllocation", id: `ORDER-${arg?.orderId}` },
         { type: "Order", id: arg?.orderId },
+      ],
+    }),
+
+    finalizeOrderAllocations: builder.mutation({
+      query: (orderId) => ({
+        url: `/orders/${orderId}/allocations/finalize`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, orderId) => [
+        { type: "OrderAllocation", id: "LIST" },
+        { type: "OrderAllocation", id: `ORDER-${orderId}` },
+        { type: "Order", id: orderId },
+        { type: "SlotItem", id: "LIST" },
       ],
     }),
   }),
@@ -46,4 +61,5 @@ export const {
   useGetOrderAllocationsQuery,
   useUpsertOrderAllocationMutation,
   useDeleteOrderAllocationMutation,
+  useFinalizeOrderAllocationsMutation,
 } = orderAllocationsApiSlice;

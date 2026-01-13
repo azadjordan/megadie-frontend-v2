@@ -128,7 +128,7 @@ export default function CartPage() {
           <div className="space-y-6">
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="text-sm font-semibold text-slate-900">Items</div>
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-2">
                 {items.map(({ productId, product, quantity }) => {
                   const image =
                     product?.images?.[0] || product?.imageUrl || placeholder;

@@ -16,14 +16,16 @@ import { logout as logoutAction } from '../../features/auth/authSlice'
 import { useLogoutMutation } from '../../features/auth/usersApiSlice'
 
 const desktopLink = ({ isActive }) =>
-  `inline-flex items-center gap-2 text-base font-medium transition ${
-    isActive ? 'text-violet-700' : 'text-slate-700 hover:text-violet-700'
+  `inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+    isActive
+      ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-200'
+      : 'text-slate-600 hover:bg-violet-50/70 hover:text-violet-700'
   }`
 
 const drawerLink = ({ isActive }) =>
-  `flex items-center justify-between rounded-lg px-3 py-2 text-base font-medium transition ${
+  `flex items-center justify-between rounded-xl px-3 py-2 text-base font-medium transition ${
     isActive
-      ? 'bg-violet-50 text-violet-700'
+      ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-200'
       : 'text-slate-700 hover:bg-violet-50 hover:text-violet-700'
   }`
 
@@ -35,7 +37,7 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const drawerRef = useRef(null)
 
-  // ✅ measure header height -> CSS var for layouts below
+  // Measure header height -> CSS var for layouts below
   const headerRef = useRef(null)
   useLayoutEffect(() => {
     const el = headerRef.current
@@ -129,23 +131,31 @@ export default function Header() {
   }
 
   return (
-    <header ref={headerRef} className="sticky top-0 z-50 bg-white shadow-sm">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur"
+    >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         {/* Logo */}
-        <Link to="/" className="text-2xl font-bold tracking-tight text-violet-700">
-          Megadie
+        <Link to="/" className="flex items-center gap-2">
+          <span className="text-2xl font-bold tracking-tight text-violet-700">
+            Megadie
+          </span>
+          <span className="hidden rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600 sm:inline-flex">
+            Supply
+          </span>
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden items-center gap-8 md:flex">
+        <div className="hidden items-center gap-4 md:flex">
           <NavLink to="/shop" className={desktopLink}>
-            <FaStore size={20} />
+            <FaStore size={18} />
             Shop
           </NavLink>
 
           <NavLink to="/cart" className={desktopLink}>
             <span className="relative flex items-center">
-              <FaShoppingCart size={20} />
+              <FaShoppingCart size={18} />
               {count > 0 && (
                 <span
                   className={[
@@ -164,33 +174,33 @@ export default function Header() {
           {!isInitialized ? null : isAuthed ? (
             <>
               <NavLink to="/account" className={desktopLink}>
-                <FaUser size={20} />
+                <FaUser size={18} />
                 {firstName}
               </NavLink>
 
               <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60"
                 type="button"
               >
-                <FaSignOutAlt size={20} />
-                {isLoggingOut ? 'Logging out…' : 'Logout'}
+                <FaSignOutAlt size={18} />
+                {isLoggingOut ? 'Logging out...' : 'Logout'}
               </button>
             </>
           ) : (
             <NavLink to="/login" className={desktopLink}>
-              <FaUser size={20} />
+              <FaUser size={18} />
               Sign in
             </NavLink>
           )}
 
-          {/* Admin entry point (desktop) — LAST */}
+          {/* Admin entry point (desktop) */}
           {!isInitialized ? null : isAdmin ? (
             <NavLink to="/admin" className={desktopLink}>
-                <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-semibold text-white">
-                  Admin
-                </span>
+              <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                Admin
+              </span>
             </NavLink>
           ) : null}
         </div>
@@ -200,10 +210,10 @@ export default function Header() {
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Toggle menu"
-            className="text-slate-700 hover:text-slate-900 transition"
+            className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700"
             type="button"
           >
-            {menuOpen ? <FaTimes size={28} /> : <FaBars size={28} />}
+            {menuOpen ? <FaTimes size={22} /> : <FaBars size={22} />}
           </button>
 
           {count > 0 && (
@@ -222,14 +232,16 @@ export default function Header() {
       {/* Mobile drawer */}
       {menuOpen && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/25" />
+          <div className="fixed inset-0 z-40 bg-slate-900/30" />
 
           <aside
             ref={drawerRef}
             className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <span className="text-base font-semibold text-slate-900">Menu</span>
+              <span className="text-base font-semibold text-slate-900">
+                Navigation
+              </span>
               <button
                 onClick={() => setMenuOpen(false)}
                 className="text-slate-700 hover:text-slate-900"
@@ -240,7 +252,7 @@ export default function Header() {
               </button>
             </div>
 
-            <div className="p-4 space-y-2">
+            <div className="space-y-2 p-4">
               <NavLink to="/shop" className={drawerLink}>
                 <span className="flex items-center gap-3">
                   <FaStore size={20} />
@@ -263,7 +275,7 @@ export default function Header() {
               </NavLink>
 
               {/* Auth (mobile) */}
-              <div className="pt-2 border-t border-slate-200">
+              <div className="border-t border-slate-200 pt-2">
                 {!isInitialized ? null : isAuthed ? (
                   <>
                     <NavLink to="/account" className={drawerLink}>
@@ -276,11 +288,11 @@ export default function Header() {
                     <button
                       onClick={handleLogout}
                       disabled={isLoggingOut}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60"
                       type="button"
                     >
-                      <FaSignOutAlt size={20} />
-                      {isLoggingOut ? 'Logging out…' : 'Logout'}
+                      <FaSignOutAlt size={18} />
+                      {isLoggingOut ? 'Logging out...' : 'Logout'}
                     </button>
                   </>
                 ) : (
@@ -293,7 +305,7 @@ export default function Header() {
                 )}
               </div>
 
-              {/* Admin entry point (mobile) — LAST */}
+              {/* Admin entry point (mobile) */}
               {!isInitialized ? null : isAdmin ? (
                 <NavLink to="/admin" className={drawerLink}>
                   <span className="flex items-center gap-3">

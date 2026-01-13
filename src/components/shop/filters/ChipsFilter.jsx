@@ -31,8 +31,8 @@ export default function ChipsFilter({
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
                 disabled ? 'cursor-not-allowed opacity-60' : '',
                 isActive
-                  ? 'bg-violet-600 text-white ring-violet-600 hover:bg-violet-700'
-                  : 'bg-white text-slate-700 ring-slate-200 hover:bg-violet-50 hover:ring-violet-200',
+                  ? 'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100'
+                  : 'bg-white/90 text-slate-600 ring-slate-200/80 hover:bg-white',
               ].join(' ')}
               title={v}
             >

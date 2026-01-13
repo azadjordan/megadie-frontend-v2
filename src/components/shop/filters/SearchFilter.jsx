@@ -13,6 +13,7 @@ export default function SearchFilter({
 
   const values = field?.allowedValues ?? []
   const multi = field?.multi !== false
+  const hasSelection = selected.length > 0
 
   const filteredValues = useMemo(() => {
     let list = values
@@ -61,9 +62,12 @@ export default function SearchFilter({
         onChange={(e) => setQuery(e.target.value)}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        placeholder={`Search ${field.label.toLowerCase()}…`}
+        placeholder={`Search ${field.label.toLowerCase()}`}
         className={[
-          'w-full rounded-md bg-white px-3 py-2 text-sm ring-1 ring-slate-200 transition',
+          'w-full rounded-xl px-3 py-2 text-sm ring-1 transition',
+          hasSelection
+            ? 'bg-violet-50 text-slate-900 ring-violet-200'
+            : 'bg-white/90 text-slate-700 ring-slate-200/80',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
           disabled ? 'cursor-not-allowed opacity-60' : 'hover:ring-violet-200',
         ].join(' ')}
@@ -80,13 +84,13 @@ export default function SearchFilter({
               onClick={() => onToggle(field.key, v, multi)}
               className={[
                 'rounded-full px-3 py-1 text-xs ring-1 transition',
-                'bg-violet-600 text-white ring-violet-600 hover:bg-violet-700',
+                'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
                 disabled ? 'cursor-not-allowed opacity-60' : '',
               ].join(' ')}
               title="Remove"
             >
-              {v} ×
+              {v}
             </button>
           ))}
         </div>
@@ -94,7 +98,7 @@ export default function SearchFilter({
 
       {/* Results dropdown */}
       {openResults && (
-        <div className="max-h-40 overflow-auto rounded-md bg-white shadow-sm ring-1 ring-slate-200">
+        <div className="max-h-40 overflow-auto rounded-xl bg-white/95 shadow-sm ring-1 ring-slate-200/80">
           {filteredValues.length === 0 ? (
             <div className="px-3 py-2 text-xs text-slate-500">
               No matching results

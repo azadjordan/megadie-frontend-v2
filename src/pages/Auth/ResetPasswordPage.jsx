@@ -1,81 +1,78 @@
-// src/pages/Auth/ResetPasswordPage.jsx
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { toast } from "react-toastify";
-import { useDispatch } from "react-redux";
+import { useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import { useDispatch } from 'react-redux'
 
-import Loader from "../../components/common/Loader";
-import ErrorMessage from "../../components/common/ErrorMessage";
-
+import AuthShell from '../../components/auth/AuthShell'
+import Loader from '../../components/common/Loader'
+import ErrorMessage from '../../components/common/ErrorMessage'
 import {
   useResetPasswordMutation,
   useLazyGetMyProfileQuery,
-} from "../../features/auth/usersApiSlice";
-
-import { setCredentials } from "../../features/auth/authSlice";
+} from '../../features/auth/usersApiSlice'
+import { setCredentials } from '../../features/auth/authSlice'
 
 export default function ResetPasswordPage() {
-  const { token } = useParams();
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const { token } = useParams()
+  const navigate = useNavigate()
+  const dispatch = useDispatch()
 
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
 
   const [resetPassword, { isLoading: isResetting, error: resetError }] =
-    useResetPasswordMutation();
-
+    useResetPasswordMutation()
   const [fetchProfile, { isLoading: isFetchingProfile, error: profileError }] =
-    useLazyGetMyProfileQuery();
+    useLazyGetMyProfileQuery()
 
-  const isLoading = isResetting || isFetchingProfile;
+  const isLoading = isResetting || isFetchingProfile
 
   const tokenLooksValid = useMemo(() => {
-    // crypto.randomBytes(32).toString("hex") => 64 hex chars
-    return typeof token === "string" && token.length >= 32;
-  }, [token]);
+    // crypto.randomBytes(32).toString('hex') => 64 hex chars
+    return typeof token === 'string' && token.length >= 32
+  }, [token])
 
   const submitHandler = async (e) => {
-    e.preventDefault();
+    e.preventDefault()
 
-    if (!tokenLooksValid) return toast.error("Invalid reset link.");
+    if (!tokenLooksValid) return toast.error('Invalid reset link.')
     if (!password || password.length < 6) {
-      return toast.error("Password must be at least 6 characters.");
+      return toast.error('Password must be at least 6 characters.')
     }
-    if (password !== confirm) return toast.error("Passwords do not match.");
+    if (password !== confirm) return toast.error('Passwords do not match.')
 
     try {
-      // 1) Reset password (backend sets auth cookie)
-      const res = await resetPassword({ token, password }).unwrap();
-      toast.success(res?.message || "Password reset successful.");
+      const res = await resetPassword({ token, password }).unwrap()
+      toast.success(res?.message || 'Password reset successful.')
 
-      // 2) Fetch profile (cookie now valid)
-      const profileRes = await fetchProfile().unwrap();
+      const profileRes = await fetchProfile().unwrap()
+      dispatch(setCredentials(profileRes.data))
 
-      // 3) Store userInfo in Redux
-      dispatch(setCredentials(profileRes.data));
-
-      // 4) Redirect (user is logged in)
-      navigate("/account", { replace: true });
+      navigate('/account', { replace: true })
     } catch (err) {
-      toast.error(err?.data?.message || err?.error || "Reset failed");
+      toast.error(err?.data?.message || err?.error || 'Reset failed')
     }
-  };
+  }
 
   return (
-    <div className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold text-slate-900">Reset password</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        Choose a new password for your account.
-      </p>
-
+    <AuthShell
+      title="Reset password"
+      subtitle="Choose a new password for your account."
+      footer={
+        <div className="text-sm text-slate-600">
+          <Link to="/login" className="font-semibold text-slate-900 hover:underline">
+            Back to sign in
+          </Link>
+        </div>
+      }
+    >
       {!tokenLooksValid ? (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <div className="text-sm font-semibold text-red-900">
+        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
+          <div className="text-sm font-semibold text-rose-900">
             Invalid reset link
           </div>
-          <div className="mt-1 text-sm text-red-700">
-            Please request a new password reset link.
+          <div className="mt-1 text-sm text-rose-700">
+            Request a new password reset link to continue.
           </div>
           <div className="mt-3">
             <Link
@@ -88,18 +85,16 @@ export default function ResetPasswordPage() {
         </div>
       ) : null}
 
-      {resetError ? <ErrorMessage error={resetError} className="mt-4" /> : null}
-      {profileError ? (
-        <ErrorMessage error={profileError} className="mt-4" />
-      ) : null}
+      {resetError ? <ErrorMessage error={resetError} className="mb-4" /> : null}
+      {profileError ? <ErrorMessage error={profileError} className="mb-4" /> : null}
 
-      <form onSubmit={submitHandler} className="mt-6 space-y-4">
+      <form onSubmit={submitHandler} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700">
+          <label className="text-sm font-semibold text-slate-700">
             New password
           </label>
           <input
-            className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-900"
+            className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="password"
             autoComplete="new-password"
             value={password}
@@ -107,17 +102,15 @@ export default function ResetPasswordPage() {
             required
             disabled={!tokenLooksValid || isLoading}
           />
-          <div className="mt-1 text-xs text-slate-500">
-            At least 6 characters.
-          </div>
+          <div className="mt-2 text-xs text-slate-500">At least 6 characters.</div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700">
+          <label className="text-sm font-semibold text-slate-700">
             Confirm password
           </label>
           <input
-            className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-slate-900"
+            className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="password"
             autoComplete="new-password"
             value={confirm}
@@ -130,9 +123,10 @@ export default function ResetPasswordPage() {
         <button
           type="submit"
           disabled={isLoading || !tokenLooksValid}
-          className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+          className="w-full rounded-2xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
+          style={{ backgroundColor: 'var(--accent)' }}
         >
-          {isLoading ? "Working…" : "Reset password"}
+          {isLoading ? 'Resetting...' : 'Reset password'}
         </button>
 
         {isLoading ? (
@@ -140,16 +134,7 @@ export default function ResetPasswordPage() {
             <Loader />
           </div>
         ) : null}
-
-        <div className="text-sm text-slate-600">
-          <Link
-            to="/login"
-            className="font-semibold text-slate-900 hover:underline"
-          >
-            Back to sign in
-          </Link>
-        </div>
       </form>
-    </div>
-  );
+    </AuthShell>
+  )
 }

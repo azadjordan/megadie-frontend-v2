@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
+import { toast } from "react-toastify";
+import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import ErrorMessage from "../common/ErrorMessage";
 import { useGetSlotItemsByProductQuery } from "../../features/slotItems/slotItemsApiSlice";
 import {
   useGetOrderAllocationsQuery,
   useUpsertOrderAllocationMutation,
   useDeleteOrderAllocationMutation,
+  useFinalizeOrderAllocationsMutation,
 } from "../../features/orderAllocations/orderAllocationsApiSlice";
 
 function resolveProductId(product) {
@@ -37,6 +40,15 @@ function lineTotal(item) {
   return qty * unit;
 }
 
+const ALLOCATION_STATUS_STYLES = {
+  Reserved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  Deducted: "bg-slate-100 text-slate-600 ring-slate-200",
+  Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
+};
+
+const normalizeAllocationStatus = (status) =>
+  status === "Deducted" || status === "Cancelled" ? status : "Reserved";
+
 function SlotItemsPanel({
   orderId,
   productId,
@@ -44,21 +56,28 @@ function SlotItemsPanel({
   allocatedTotal,
   allocationsBySlot,
   allocationsList,
+  allocationSummaryList,
+  isLocked = false,
+  lockMessage = "",
+  onAvailabilityChange,
+  buttonPlacement = "inline",
+  buttonWrapperClassName = "",
 }) {
   const [open, setOpen] = useState(false);
   const isDisabled = !productId || !orderId;
-  const shouldSkip = !open || isDisabled;
+  const shouldSkip = isDisabled || !open;
+  const showLockedMessage = isLocked && Boolean(lockMessage);
   const [drafts, setDrafts] = useState({});
   const [localError, setLocalError] = useState("");
   const [actionError, setActionError] = useState("");
   const [isBulkPicking, setIsBulkPicking] = useState(false);
   const [isBulkUnpicking, setIsBulkUnpicking] = useState(false);
   const ordered = Number(orderedQty || 0);
-  const allocated = Number(allocatedTotal || 0);
-  const remainingQty = Math.max(0, ordered - allocated);
+  const reservedTotal = Number(allocatedTotal || 0);
+  const remainingQty = Math.max(0, ordered - reservedTotal);
 
   const { data, isFetching, isError, error } = useGetSlotItemsByProductQuery(
-    productId,
+    { productId, orderId },
     { skip: shouldSkip }
   );
 
@@ -71,18 +90,54 @@ function SlotItemsPanel({
     { isLoading: isDeleting, error: deleteError },
   ] = useDeleteOrderAllocationMutation();
 
-  const rows = Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data)
-      ? data
-      : [];
+  const rows = useMemo(() => {
+    if (Array.isArray(data?.data)) return data.data;
+    if (Array.isArray(data)) return data;
+    return [];
+  }, [data]);
+  const isLoading = isFetching;
+  const showError = isError;
+  const displayError = error;
+
+  useEffect(() => {
+    if (!open || typeof onAvailabilityChange !== "function") return;
+    if (isLoading) {
+      onAvailabilityChange({ status: "loading" });
+      return;
+    }
+    if (showError) {
+      onAvailabilityChange({ status: "error" });
+      return;
+    }
+
+    const totals = rows.reduce(
+      (acc, row) => {
+        const onHandQty = Number(row?.qty) || 0;
+        const availableQty = Number(row?.availableQty ?? row?.qty) || 0;
+        const slotId = resolveEntityId(row?.slot);
+        const existingQty = slotId
+          ? Number(allocationsBySlot?.get(slotId)?.qty) || 0
+          : 0;
+        const availableForOrder = Math.max(0, availableQty - existingQty);
+        acc.onHandTotal += onHandQty;
+        acc.availableTotal += availableForOrder;
+        return acc;
+      },
+      { onHandTotal: 0, availableTotal: 0 }
+    );
+    onAvailabilityChange({ status: "ready", ...totals });
+  }, [open, isLoading, showError, rows, allocationsBySlot, onAvailabilityChange]);
 
   const combinedError = saveError || deleteError;
   const isBusy = isSaving || isDeleting || isBulkPicking || isBulkUnpicking;
-  const hasPicks = Array.isArray(allocationsList) && allocationsList.length > 0;
+  const hasReservations =
+    Array.isArray(allocationsList) && allocationsList.length > 0;
 
   const resolveLimits = (availableQty, existingQty) => {
-    const remainingAllowed = Math.max(0, ordered - (allocated - existingQty));
+    const remainingAllowed = Math.max(
+      0,
+      ordered - (reservedTotal - existingQty)
+    );
     const maxAllowed = Math.min(Number(availableQty || 0), remainingAllowed);
     return { maxAllowed, remainingAllowed };
   };
@@ -95,6 +150,12 @@ function SlotItemsPanel({
       const slotId = resolveEntityId(row.slot);
       if (!slotId) continue;
 
+      const onHandQty = Number(row.qty) || 0;
+      if (onHandQty <= 0) {
+        result[slotId] = "";
+        continue;
+      }
+
       const existingQty = Number(allocationsBySlot?.get(slotId)?.qty) || 0;
       if (existingQty > 0) continue;
 
@@ -103,7 +164,7 @@ function SlotItemsPanel({
         continue;
       }
 
-      const availableQty = Number(row.qty) || 0;
+      const availableQty = Number(row.availableQty ?? row.qty) || 0;
       const suggested = Math.min(availableQty, remainingToFill);
       if (suggested > 0) {
         result[slotId] = String(suggested);
@@ -130,46 +191,44 @@ function SlotItemsPanel({
   };
 
   const handlePick = async ({ slotId, availableQty, existing, draftValue }) => {
-    if (!orderId || !productId) return;
+    if (!orderId || !productId || isLocked) return;
     setLocalError("");
     setActionError("");
+
+    const available = Number(availableQty || 0);
+    const existingQty = Number(existing?.qty) || 0;
+    const availableForOrder = Math.max(0, available - existingQty);
+    if (availableForOrder <= 0 && existingQty === 0) {
+      setLocalError("No available stock in this slot.");
+      return;
+    }
 
     const raw = draftValue;
     const parsed =
       raw === undefined ? Number(existing?.qty || 0) : Number(raw);
     if (!Number.isFinite(parsed) || parsed < 0) {
-      setLocalError("Enter a valid pick quantity.");
+      setLocalError("Enter a valid reserve quantity.");
       return;
     }
 
-    const existingQty = Number(existing?.qty) || 0;
     const allocationId = resolveEntityId(existing);
+    if (availableForOrder <= 0 && parsed >= existingQty) {
+      setLocalError("No available stock in this slot.");
+      return;
+    }
     const { maxAllowed } = resolveLimits(availableQty, existingQty);
 
     if (parsed === 0) {
-      if (allocationId) {
-        try {
-          await removeAllocation({
-            orderId,
-            allocationId,
-          }).unwrap();
-        } catch (err) {
-          setActionError(err?.data?.message || "Failed to unpick slot.");
-          return;
-        }
-        setDrafts((prev) => {
-          const next = { ...prev };
-          delete next[slotId];
-          return next;
-        });
-      } else {
-        setLocalError("Pick qty must be at least 1.");
-      }
+      setLocalError(
+        allocationId
+          ? "Use Unreserve to remove this reservation."
+          : "Reserve qty must be at least 1."
+      );
       return;
     }
 
     if (parsed > maxAllowed) {
-      setLocalError(`Pick qty cannot exceed ${maxAllowed}.`);
+      setLocalError(`Reserve qty cannot exceed ${maxAllowed}.`);
       return;
     }
 
@@ -181,7 +240,7 @@ function SlotItemsPanel({
         qty: parsed,
       }).unwrap();
     } catch (err) {
-      setActionError(err?.data?.message || "Failed to save pick.");
+      setActionError(err?.data?.message || "Failed to save reservation.");
       return;
     }
 
@@ -193,19 +252,19 @@ function SlotItemsPanel({
   };
 
   const handlePickAll = async () => {
-    if (!orderId || !productId) return;
+    if (!orderId || !productId || isLocked) return;
     setLocalError("");
     setActionError("");
 
     if (remainingQty <= 0) {
-      setLocalError("Nothing left to pick for this item.");
+      setLocalError("Nothing left to reserve for this item.");
       return;
     }
 
     setIsBulkPicking(true);
     const touchedSlots = [];
     let remainingToFill = remainingQty;
-    let pickedCount = 0;
+    let reservedCount = 0;
 
     try {
       for (const row of rows) {
@@ -213,10 +272,14 @@ function SlotItemsPanel({
         const slotId = resolveEntityId(row.slot);
         if (!slotId) continue;
 
+        const onHandQty = Number(row.qty) || 0;
+        if (onHandQty <= 0) continue;
+
         const existingQty = Number(allocationsBySlot?.get(slotId)?.qty) || 0;
         if (existingQty > 0) continue;
 
-        const availableQty = Number(row.qty) || 0;
+        const availableQty = Number(row.availableQty ?? row.qty) || 0;
+        if (availableQty <= 0) continue;
         const pickQty = Math.min(availableQty, remainingToFill);
         if (pickQty <= 0) continue;
 
@@ -228,15 +291,15 @@ function SlotItemsPanel({
         }).unwrap();
 
         touchedSlots.push(slotId);
-        pickedCount += 1;
+        reservedCount += 1;
         remainingToFill -= pickQty;
       }
 
-      if (pickedCount === 0) {
-        setLocalError("No available slots to pick from.");
+      if (reservedCount === 0) {
+        setLocalError("No available slots to reserve from.");
       } else if (remainingToFill > 0) {
         setActionError(
-          `Not enough stock to cover the remaining qty. ${remainingToFill} still unpicked.`
+          `Not enough stock to cover the remaining qty. ${remainingToFill} still unreserved.`
         );
       } else if (touchedSlots.length) {
         setDrafts((prev) => {
@@ -248,14 +311,14 @@ function SlotItemsPanel({
         });
       }
     } catch (err) {
-      setActionError(err?.data?.message || "Failed to pick all slots.");
+      setActionError(err?.data?.message || "Failed to reserve all slots.");
     } finally {
       setIsBulkPicking(false);
     }
   };
 
   const handleUnpick = async ({ slotId, existing }) => {
-    if (!orderId) return;
+    if (!orderId || isLocked) return;
     const allocationId = resolveEntityId(existing);
     if (!allocationId) return;
     setLocalError("");
@@ -267,7 +330,7 @@ function SlotItemsPanel({
         allocationId,
       }).unwrap();
     } catch (err) {
-      setActionError(err?.data?.message || "Failed to unpick slot.");
+      setActionError(err?.data?.message || "Failed to unreserve slot.");
       return;
     }
 
@@ -279,8 +342,8 @@ function SlotItemsPanel({
   };
 
   const handleUnpickAll = async () => {
-    if (!orderId || !hasPicks) return;
-    const confirmed = window.confirm("Remove all picks for this item?");
+    if (!orderId || !hasReservations || isLocked) return;
+    const confirmed = window.confirm("Remove all reservations for this item?");
     if (!confirmed) return;
     setLocalError("");
     setActionError("");
@@ -297,27 +360,34 @@ function SlotItemsPanel({
       }
       setDrafts({});
     } catch (err) {
-      setActionError(err?.data?.message || "Failed to unpick all slots.");
+      setActionError(err?.data?.message || "Failed to unreserve all slots.");
     } finally {
       setIsBulkUnpicking(false);
     }
   };
 
-  const summaryRows = Array.isArray(allocationsList)
-    ? allocationsList.map((row, index) => ({
-        id:
-          resolveEntityId(row) ||
-          `${resolveEntityId(row.slot) || "slot"}-${index}`,
-        label: row.slot?.label || "Slot",
-        qty: Number(row.qty) || 0,
-      }))
-    : [];
+  const allocationStatusBySlot = useMemo(() => {
+    const map = new Map();
+    if (!Array.isArray(allocationSummaryList)) return map;
+    for (const row of allocationSummaryList) {
+      const slotId = resolveEntityId(row.slot);
+      if (!slotId) continue;
+      map.set(slotId, normalizeAllocationStatus(row.status));
+    }
+    return map;
+  }, [allocationSummaryList]);
   const pickAllDisabled =
-    isDisabled || isBusy || isFetching || rows.length === 0 || remainingQty <= 0;
-  const unpickAllDisabled = isDisabled || isBusy || !hasPicks;
+    isDisabled ||
+    isBusy ||
+    isFetching ||
+    isLocked ||
+    rows.length === 0 ||
+    remainingQty <= 0;
+  const unpickAllDisabled =
+    isDisabled || isBusy || isLocked || !hasReservations;
 
-  return (
-    <div>
+  const buttonNode = (
+    <>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -333,24 +403,40 @@ function SlotItemsPanel({
             : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400",
         ].join(" ")}
       >
-        <span>{open ? "Close" : "Allocate"}</span>
-        <span className="text-[10px] leading-none">{open ? "v" : ">"}</span>
+        <span>{open ? "Close" : "Reserve"}</span>
+        {open ? (
+          <FiChevronUp className="h-4 w-4" />
+        ) : (
+          <FiChevronDown className="h-4 w-4" />
+        )}
       </button>
       {isDisabled ? (
         <div className="mt-2 text-[11px] text-slate-500">
           Product reference missing for this item.
         </div>
+      ) : showLockedMessage ? (
+        <div className="mt-2 text-[11px] text-slate-500">{lockMessage}</div>
       ) : null}
+    </>
+  );
+
+  return (
+    <div>
+      {buttonPlacement === "corner" ? (
+        <div className={buttonWrapperClassName}>{buttonNode}</div>
+      ) : (
+        buttonNode
+      )}
 
       {open ? (
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
-          {isFetching ? (
+          {isLoading ? (
             <div className="px-4 py-3 text-xs text-slate-500">
               Loading slots...
             </div>
-          ) : isError ? (
+          ) : showError ? (
             <div className="p-3">
-              <ErrorMessage error={error} />
+              <ErrorMessage error={displayError} />
             </div>
           ) : rows.length === 0 ? (
             <div className="px-4 py-3 text-xs text-slate-500">
@@ -365,33 +451,37 @@ function SlotItemsPanel({
                   disabled={pickAllDisabled}
                   title={
                     remainingQty <= 0
-                      ? "Nothing left to pick."
-                      : "Pick remaining qty across available slots."
+                      ? "Nothing left to reserve."
+                      : "Reserve remaining qty across available slots."
                   }
                   className={[
                     "inline-flex items-center rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition",
                     pickAllDisabled
-                      ? "border-emerald-100 bg-emerald-50/40 text-emerald-300"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                      ? "border-emerald-200 bg-emerald-100 text-emerald-300"
+                      : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
                     "disabled:cursor-not-allowed",
                   ].join(" ")}
                 >
-                  Pick all
+                  Reserve all
                 </button>
                 <button
                   type="button"
                   onClick={handleUnpickAll}
                   disabled={unpickAllDisabled}
-                  title={hasPicks ? "Remove all picks for this item." : "No picks yet."}
+                  title={
+                    hasReservations
+                      ? "Remove all reservations for this item."
+                      : "No reservations yet."
+                  }
                   className={[
                     "inline-flex items-center rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition",
                     unpickAllDisabled
-                      ? "border-rose-100 bg-rose-50/40 text-rose-300"
-                      : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
+                      ? "border-rose-200 bg-white text-rose-300"
+                      : "border-rose-300 bg-white text-rose-700 hover:bg-rose-50",
                     "disabled:cursor-not-allowed",
                   ].join(" ")}
                 >
-                  Unpick all
+                  Unreserve all
                 </button>
               </div>
               {actionError ? (
@@ -399,41 +489,92 @@ function SlotItemsPanel({
                   {actionError}
                 </div>
               ) : null}
-              <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-[1fr_240px]">
+              <div className="p-3">
                 <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  <div className="grid grid-cols-12 gap-2 border-b border-slate-200 px-4 py-2 text-center text-[11px] font-semibold text-slate-600">
-                    <div className="col-span-4">Slot</div>
-                    <div className="col-span-2">Available</div>
-                    <div className="col-span-2">Picked</div>
-                    <div className="col-span-2">Pick qty</div>
-                    <div className="col-span-2">Actions</div>
+                  <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-4 py-2 text-center text-[11px] font-semibold text-slate-600">
+                    <div className="col-span-2">Slot</div>
+                    <div className="col-span-2 leading-tight">
+                      <div>On hand</div>
+                      <div className="text-[10px] text-slate-400">Available</div>
+                    </div>
+                    <div className="col-span-2">Reserved</div>
+                    <div className="col-span-2">Status</div>
+                    <div className="col-span-2">Reserve</div>
+                    <div className="col-span-2">Unreserve</div>
                   </div>
                   {rows.map((row) => {
                     const slotId = resolveEntityId(row.slot);
                     const existing = allocationsBySlot?.get(slotId);
                     const existingQty = Number(existing?.qty) || 0;
                     const allocationId = resolveEntityId(existing);
-                    const availableQty = Number(row.qty) || 0;
+                    const allocationStatus = allocationStatusBySlot.get(slotId) || "-";
+                    const onHandQty = Number(row.qty) || 0;
+                    const availableQty = Number(row.availableQty ?? row.qty) || 0;
+                    const availableForOrder = Math.max(0, availableQty - existingQty);
+                    const isOutOfStock = onHandQty <= 0;
                     const draftValue = resolveDraftValue({
                       slotId,
                       existingQty,
                     });
+                    const desiredQty =
+                      draftValue === "" ? NaN : Number(draftValue);
+                    const isFullyReserved = remainingQty === 0 && existingQty === 0;
+                    const isAlreadyReserved = existingQty > 0;
+                    const reserveDisabled =
+                      isDisabled ||
+                      isBusy ||
+                      isLocked ||
+                      isAlreadyReserved ||
+                      isFullyReserved ||
+                      isOutOfStock ||
+                      (availableForOrder <= 0 &&
+                        (existingQty === 0 ||
+                          (Number.isFinite(desiredQty) &&
+                            desiredQty >= existingQty)));
+                    const reserveTitle =
+                      isAlreadyReserved
+                        ? "Already reserved. Unreserve to change."
+                        : isFullyReserved
+                        ? "Order fully reserved. Reduce another slot first."
+                        : isOutOfStock
+                        ? "No stock in this slot."
+                        : availableForOrder <= 0
+                        ? "No available stock. Reduce qty to adjust."
+                        : "";
 
                     return (
                       <div
                         key={row._id}
-                        className="grid grid-cols-12 gap-2 border-b border-slate-100 px-4 py-2 text-center text-xs text-slate-700 last:border-b-0"
+                        className="grid grid-cols-12 gap-3 border-b border-slate-100 px-4 py-2 text-center text-xs text-slate-700 odd:bg-slate-100/60 last:border-b-0"
                       >
-                        <div className="col-span-4 font-semibold text-slate-900">
+                        <div className="col-span-2 font-semibold text-slate-900">
                           {row.slot?.label || "Unknown slot"}
                         </div>
-                        <div className="col-span-2 tabular-nums">
-                          {availableQty}
+                        <div className="col-span-2 space-y-0.5 text-center">
+                          <div className="tabular-nums">{onHandQty}</div>
+                          <div className="text-[10px] text-slate-500">
+                            Avail {availableForOrder}
+                          </div>
                         </div>
                         <div className="col-span-2 tabular-nums">
                           {existingQty}
                         </div>
-                        <div className="col-span-2 flex justify-center">
+                        <div className="col-span-2 flex items-center justify-center">
+                          {allocationStatus === "-" ? (
+                            <span className="text-xs text-slate-400">-</span>
+                          ) : (
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                                ALLOCATION_STATUS_STYLES[allocationStatus] ||
+                                  ALLOCATION_STATUS_STYLES.Reserved,
+                              ].join(" ")}
+                            >
+                              {allocationStatus}
+                            </span>
+                          )}
+                        </div>
+                        <div className="col-span-2 flex items-center justify-center gap-2">
                           <input
                             type="number"
                             min="0"
@@ -446,10 +587,14 @@ function SlotItemsPanel({
                               }))
                             }
                             placeholder="0"
-                            className="w-full max-w-[84px] rounded-md bg-white px-2 py-1 text-center text-xs text-slate-700 ring-1 ring-slate-200"
+                            disabled={isLocked}
+                            className={[
+                              "w-[52px] rounded-md px-1 py-1 text-center text-xs ring-1 ring-slate-200",
+                              isLocked
+                                ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                                : "bg-white text-slate-700",
+                            ].join(" ")}
                           />
-                        </div>
-                        <div className="col-span-2 flex items-center justify-center gap-2 text-center">
                           <button
                             type="button"
                             onClick={() =>
@@ -460,17 +605,20 @@ function SlotItemsPanel({
                                 draftValue,
                               })
                             }
-                            disabled={isDisabled || isBusy}
+                            disabled={reserveDisabled}
+                            title={reserveTitle}
                             className={[
-                              "inline-flex min-w-[52px] items-center justify-center rounded-md border px-2 py-1 text-[11px] font-semibold transition",
-                              isDisabled || isBusy
-                                ? "border-emerald-100 bg-emerald-50/40 text-emerald-300"
-                                : "border-emerald-200 bg-emerald-50/60 text-emerald-600 hover:bg-emerald-50",
+                              "inline-flex min-w-[56px] items-center justify-center rounded border px-2.5 py-1.5 text-[11px] font-semibold transition",
+                              reserveDisabled
+                                ? "border-emerald-200 bg-emerald-100 text-emerald-300"
+                                : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
                               "disabled:cursor-not-allowed",
                             ].join(" ")}
                           >
-                            Pick
+                            Reserve
                           </button>
+                        </div>
+                        <div className="col-span-2 flex items-center justify-center text-center">
                           <button
                             type="button"
                             onClick={() =>
@@ -479,21 +627,21 @@ function SlotItemsPanel({
                                 existing,
                               })
                             }
-                            disabled={isDisabled || isBusy || !allocationId}
+                            disabled={isDisabled || isBusy || isLocked || !allocationId}
                             title={
                               allocationId
-                                ? "Remove this pick."
-                                : "Nothing to unpick."
+                                ? "Remove this reservation (removes full reservation)."
+                                : "Nothing to unreserve."
                             }
                             className={[
-                              "inline-flex min-w-[52px] items-center justify-center rounded-md border px-2 py-1 text-[11px] font-semibold transition",
-                              allocationId
-                                ? "border-rose-200 bg-rose-50/60 text-rose-600 hover:bg-rose-50"
-                                : "border-rose-100 bg-rose-50/30 text-rose-300",
+                              "inline-flex min-w-[72px] items-center justify-center rounded border px-2.5 py-1.5 text-[11px] font-semibold transition",
+                              allocationId && !isLocked
+                                ? "border-rose-400 bg-white text-rose-700 hover:bg-rose-50"
+                                : "border-rose-200 bg-white text-rose-300",
                               "disabled:cursor-not-allowed",
                             ].join(" ")}
                           >
-                            Unpick
+                            Unreserve
                           </button>
                         </div>
                       </div>
@@ -505,33 +653,10 @@ function SlotItemsPanel({
                     </div>
                   ) : combinedError ? (
                     <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-rose-600">
-                      {combinedError?.data?.message || "Failed to save pick."}
+                      {combinedError?.data?.message ||
+                        "Failed to save reservation."}
                     </div>
                   ) : null}
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="text-center text-[11px] font-semibold text-slate-700">
-                    Picked summary
-                  </div>
-                  {summaryRows.length ? (
-                    <div className="mt-2 space-y-1 text-xs text-slate-700">
-                      {summaryRows.map((row) => (
-                        <div
-                          key={row.id}
-                          className="flex items-center justify-between gap-2"
-                        >
-                          <span className="truncate">{row.label}</span>
-                          <span className="tabular-nums font-semibold text-slate-900">
-                            {row.qty}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-center text-[11px] text-slate-500">
-                      No picks yet.
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -542,18 +667,126 @@ function SlotItemsPanel({
   );
 }
 
+function AllocationItemCard({
+  orderId,
+  item,
+  allocationInfo,
+  allocationSummary,
+  isAllocationLocked,
+  allocationLockMessage,
+  showAvailability = true,
+  showSlotActions = true,
+  showDeducted = false,
+  deductedQty = 0,
+}) {
+  const name =
+    item?.product?.name ||
+    (typeof item?.product === "string" ? item.product : "") ||
+    "Untitled product";
+  const sku = item?.sku || item?.product?.sku || "";
+  const productId = resolveProductId(item?.product);
+  const orderedQty = Number(item?.qty) || 0;
+  const reservedQty = Number(allocationInfo?.total) || 0;
+
+  const [availability, setAvailability] = useState({
+    status: "idle",
+    onHandTotal: 0,
+    availableTotal: 0,
+  });
+
+  const resolveAvailabilityValue = (key) => {
+    if (!showAvailability) return "-";
+    if (availability.status === "ready") return availability[key];
+    if (availability.status === "loading") return "...";
+    if (availability.status === "error") return "-";
+    return "-";
+  };
+
+  const onHandLabel = resolveAvailabilityValue("onHandTotal");
+  const availableLabel = resolveAvailabilityValue("availableTotal");
+
+  const stats = [
+    { label: "Ordered", value: orderedQty },
+    { label: "Reserved", value: reservedQty },
+  ];
+
+  if (showDeducted) {
+    stats.push({ label: "Deducted", value: deductedQty });
+  }
+
+  if (showAvailability) {
+    stats.push({ label: "On hand", value: onHandLabel });
+    stats.push({ label: "Available", value: availableLabel });
+  }
+
+  return (
+    <div className="relative rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-slate-900">
+          {name}
+        </div>
+        {sku ? <div className="text-xs text-slate-500">SKU: {sku}</div> : null}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+        {stats.map((stat) => (
+          <span key={stat.label} className="rounded-lg bg-slate-100 px-2 py-1">
+            {stat.label}{" "}
+            <span className="ml-1 font-semibold text-slate-900 tabular-nums">
+              {stat.value}
+            </span>
+          </span>
+        ))}
+      </div>
+
+      {showSlotActions ? (
+        <div className="mt-3">
+          <SlotItemsPanel
+            orderId={orderId}
+            productId={productId}
+            orderedQty={orderedQty}
+            allocatedTotal={reservedQty}
+            allocationsBySlot={allocationInfo?.bySlot}
+            allocationsList={allocationInfo?.list}
+            allocationSummaryList={allocationSummary}
+            isLocked={isAllocationLocked}
+            lockMessage={allocationLockMessage}
+            onAvailabilityChange={showAvailability ? setAvailability : undefined}
+            buttonPlacement="corner"
+            buttonWrapperClassName="absolute right-4 top-4"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminOrderAllocation({
   orderId,
+  orderStatus,
   items,
   formatMoney,
   showPricing = true,
   showSlots = true,
   title = "Items",
+  allocationEnabled = true,
+  allocationLockReason = "",
+  mode,
 }) {
   const rows = Array.isArray(items) ? items : [];
   const money =
     typeof formatMoney === "function" ? formatMoney : (value) => value;
-  const isAllocationView = showSlots && !showPricing;
+  const resolvedMode = mode || (showSlots && !showPricing ? "allocation" : "summary");
+  const isAllocationView = ["allocation", "finalize", "stock"].includes(resolvedMode);
+  const showSlotActions =
+    resolvedMode === "allocation" || resolvedMode === "stock";
+  const showFinalizeControls =
+    resolvedMode === "finalize" || resolvedMode === "stock";
+  const showAvailability =
+    resolvedMode === "allocation" || resolvedMode === "stock";
+  const isWorkflowLocked = isAllocationView && !allocationEnabled;
+  const isOrderLocked =
+    ["Delivered", "Cancelled"].includes(orderStatus) || isWorkflowLocked;
   const shouldLoadAllocations = Boolean(orderId) && isAllocationView;
 
   const {
@@ -563,15 +796,33 @@ export default function AdminOrderAllocation({
     error: allocationsError,
   } = useGetOrderAllocationsQuery(orderId, { skip: !shouldLoadAllocations });
 
+  const [
+    finalizeAllocations,
+    { isLoading: isFinalizing, error: finalizeError },
+  ] = useFinalizeOrderAllocationsMutation();
+
   const allocations = Array.isArray(allocationsResult?.data)
     ? allocationsResult.data
     : Array.isArray(allocationsResult)
       ? allocationsResult
       : [];
 
+  const reservedAllocations = useMemo(
+    () =>
+      allocations.filter(
+        (row) => !row.status || row.status === "Reserved"
+      ),
+    [allocations]
+  );
+  const deductedAllocations = useMemo(
+    () => allocations.filter((row) => row.status === "Deducted"),
+    [allocations]
+  );
+  const hasDeducted = deductedAllocations.length > 0;
+
   const allocationsByProduct = useMemo(() => {
     const map = new Map();
-    for (const row of allocations) {
+    for (const row of reservedAllocations) {
       const productId = resolveProductId(row.product);
       const slotId = resolveEntityId(row.slot);
       if (!productId || !slotId) continue;
@@ -584,26 +835,191 @@ export default function AdminOrderAllocation({
       map.set(productId, entry);
     }
     return map;
+  }, [reservedAllocations]);
+
+  const deductedByProduct = useMemo(() => {
+    const map = new Map();
+    for (const row of deductedAllocations) {
+      const productId = resolveProductId(row.product);
+      if (!productId) continue;
+      const entry = map.get(productId) || { total: 0 };
+      entry.total += Number(row.qty) || 0;
+      map.set(productId, entry);
+    }
+    return map;
+  }, [deductedAllocations]);
+
+  const allocationSummaryByProduct = useMemo(() => {
+    const map = new Map();
+    for (const row of allocations) {
+      const productId = resolveProductId(row.product);
+      if (!productId) continue;
+      const entry = map.get(productId) || { list: [] };
+      entry.list.push(row);
+      map.set(productId, entry);
+    }
+    return map;
   }, [allocations]);
 
   if (isAllocationView) {
+    const orderedTotal = rows.reduce(
+      (sum, it) => sum + (Number(it?.qty) || 0),
+      0
+    );
+    const reservedTotal = reservedAllocations.reduce(
+      (sum, row) => sum + (Number(row.qty) || 0),
+      0
+    );
+    const deductedTotal = deductedAllocations.reduce(
+      (sum, row) => sum + (Number(row.qty) || 0),
+      0
+    );
+
+    const isFullyReserved =
+      rows.length > 0 &&
+      rows.every((it) => {
+        const productId = resolveProductId(it?.product);
+        const orderedQty = Number(it?.qty) || 0;
+        const reservedQty = Number(
+          allocationsByProduct.get(productId)?.total || 0
+        );
+        return reservedQty === orderedQty;
+      });
+
+    const isFullyDeducted =
+      rows.length > 0 &&
+      rows.every((it) => {
+        const productId = resolveProductId(it?.product);
+        const orderedQty = Number(it?.qty) || 0;
+        const deductedQty = Number(
+          deductedByProduct.get(productId)?.total || 0
+        );
+        return deductedQty === orderedQty;
+      });
+
+    const hasPartialDeduction = hasDeducted && !isFullyDeducted;
+    const isFinalized = isFullyDeducted;
+    const hasAllocations = allocations.length > 0;
+    const isAllocationLocked = isOrderLocked || hasDeducted;
+
+    let finalizeHint = "";
+    if (!isAllocationLocked && !isAllocationsLoading) {
+      if (!hasAllocations) {
+        finalizeHint = "No reservations yet.";
+      } else if (!isFullyReserved) {
+        finalizeHint = "Reserve all items before finalizing stock.";
+      } else {
+        finalizeHint = "Finalizing deducts reserved qty from stock.";
+      }
+    }
+
+    const canFinalize =
+      !isOrderLocked &&
+      !isFinalized &&
+      !hasPartialDeduction &&
+      hasAllocations &&
+      isFullyReserved &&
+      !isAllocationsLoading;
+
+    const handleFinalize = async () => {
+      if (!orderId || !canFinalize) return;
+      const confirmed = window.confirm(
+        "Finalize stock for this order? This will deduct reserved qty and lock allocations."
+      );
+      if (!confirmed) return;
+      try {
+        const res = await finalizeAllocations(orderId).unwrap();
+        toast.success(res?.message || "Stock finalized.");
+      } catch {
+        // ErrorMessage handles failure state.
+      }
+    };
+
+    let allocationLockMessage = "";
+    if (hasDeducted) {
+      allocationLockMessage = "Stock finalized.";
+    } else if (isWorkflowLocked) {
+      allocationLockMessage =
+        allocationLockReason || "Invoice and Shipping required before reserving.";
+    } else if (["Delivered", "Cancelled"].includes(orderStatus)) {
+      allocationLockMessage =
+        "Reservations are locked for delivered or cancelled orders.";
+    }
+    const slotLockMessage = isAllocationLocked ? "" : allocationLockMessage;
+
     return (
       <div className="space-y-4">
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="text-sm font-semibold text-slate-900">{title}</div>
-            <div className="text-xs text-slate-500">
-              {rows.length} item{rows.length !== 1 ? "s" : ""}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-semibold text-slate-900">{title}</div>
+              <div className="text-xs text-slate-500">
+                {rows.length} item{rows.length !== 1 ? "s" : ""}
+              </div>
             </div>
+
+            {showFinalizeControls ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleFinalize}
+                  disabled={!canFinalize || isFinalizing}
+                  className={[
+                    "inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
+                    !canFinalize || isFinalizing
+                      ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                      : "border-slate-900 bg-slate-900 text-white hover:bg-slate-800",
+                  ].join(" ")}
+                >
+                  {isFinalizing ? "Finalizing..." : "Finalize stock"}
+                </button>
+              </div>
+            ) : null}
           </div>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
+              Ordered{" "}
+              <span className="ml-1 font-semibold text-amber-900 tabular-nums">
+                {orderedTotal}
+              </span>
+            </span>
+            <span className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
+              Reserved{" "}
+              <span className="ml-1 font-semibold text-amber-900 tabular-nums">
+                {reservedTotal}
+              </span>
+            </span>
+            <span className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
+              Deducted{" "}
+              <span className="ml-1 font-semibold text-amber-900 tabular-nums">
+                {deductedTotal}
+              </span>
+            </span>
+          </div>
+
+          {showFinalizeControls && finalizeHint ? (
+            <div className="mt-2 text-xs text-slate-500">{finalizeHint}</div>
+          ) : null}
+
           {isAllocationsLoading ? (
             <div className="mt-2 text-xs text-slate-500">
-              Loading picks...
+              Loading reservations...
             </div>
           ) : null}
           {isAllocationsError ? (
             <div className="mt-2">
               <ErrorMessage error={allocationsError} />
+            </div>
+          ) : null}
+          {showFinalizeControls && finalizeError ? (
+            <div className="mt-2">
+              <ErrorMessage error={finalizeError} />
+            </div>
+          ) : null}
+          {isAllocationLocked ? (
+            <div className="mt-2 text-xs text-amber-700">
+              {allocationLockMessage}
             </div>
           ) : null}
         </div>
@@ -614,71 +1030,33 @@ export default function AdminOrderAllocation({
           </div>
         ) : (
           rows.map((it, idx) => {
-            const name =
-              it?.product?.name ||
-              (typeof it?.product === "string" ? it.product : "") ||
-              "Untitled product";
-            const sku = it?.sku || it?.product?.sku || "";
             const productId = resolveProductId(it?.product);
-            const orderedQty = Number(it?.qty) || 0;
             const allocationInfo =
               allocationsByProduct.get(productId) || {
                 total: 0,
                 bySlot: new Map(),
                 list: [],
               };
-            const pickedQty = Number(allocationInfo.total) || 0;
-            const remainingQty = Math.max(0, orderedQty - pickedQty);
+            const allocationSummary =
+              allocationSummaryByProduct.get(productId)?.list || [];
+            const deductedQty = Number(
+              deductedByProduct.get(productId)?.total || 0
+            );
 
             return (
-              <div
+              <AllocationItemCard
                 key={`${orderId || "order"}-${idx}`}
-                className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-slate-900">
-                      {name}
-                    </div>
-                    {sku ? (
-                      <div className="text-xs text-slate-500">
-                        SKU: {sku}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                    <span className="rounded-lg bg-slate-100 px-2 py-1">
-                      Ordered{" "}
-                      <span className="ml-1 font-semibold text-slate-900 tabular-nums">
-                        {orderedQty}
-                      </span>
-                    </span>
-                    <span className="rounded-lg bg-slate-100 px-2 py-1">
-                      Picked{" "}
-                      <span className="ml-1 font-semibold text-slate-900 tabular-nums">
-                        {pickedQty}
-                      </span>
-                    </span>
-                    <span className="rounded-lg bg-slate-100 px-2 py-1">
-                      Remaining{" "}
-                      <span className="ml-1 font-semibold text-slate-900 tabular-nums">
-                        {remainingQty}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <SlotItemsPanel
-                    orderId={orderId}
-                    productId={productId}
-                    orderedQty={orderedQty}
-                    allocatedTotal={pickedQty}
-                    allocationsBySlot={allocationInfo.bySlot}
-                    allocationsList={allocationInfo.list}
-                  />
-                </div>
-              </div>
+                orderId={orderId}
+                item={it}
+                allocationInfo={allocationInfo}
+                allocationSummary={allocationSummary}
+                isAllocationLocked={isAllocationLocked}
+                allocationLockMessage={slotLockMessage}
+                showAvailability={showAvailability}
+                showSlotActions={showSlotActions}
+                showDeducted={showFinalizeControls}
+                deductedQty={deductedQty}
+              />
             );
           })
         )}
@@ -767,3 +1145,4 @@ export default function AdminOrderAllocation({
     </div>
   );
 }
+
