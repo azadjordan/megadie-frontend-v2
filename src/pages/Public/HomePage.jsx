@@ -80,7 +80,7 @@ export default function HomePage() {
               Industrial supply partner
             </div>
             <h1 className="text-4xl font-semibold leading-tight text-slate-900 md:text-5xl">
-              Precision materials and Industrial supplys.
+              Precision Materials and Industrial Supplies.
             </h1>
             <p className="text-sm text-slate-600 md:text-base">
               Megadie delivers with a

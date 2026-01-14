@@ -1,6 +1,7 @@
 // src/pages/Public/ShopPage.jsx
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
+import { FaFilter } from "react-icons/fa";
 
 import { useGetProductsQuery } from "../../features/products/productsApiSlice";
 import { useGetFilterConfigsQuery } from "../../features/filters/filterConfigsApiSlice";
@@ -21,6 +22,7 @@ const PAGE_LIMIT = 16;
 export default function ShopPage() {
   const location = useLocation();
   const navigationType = useNavigationType();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const {
     productType,
     setProductType,
@@ -99,6 +101,14 @@ export default function ShopPage() {
 
   const hasActiveFilters =
     Object.values(filters || {}).some((arr) => Array.isArray(arr) && arr.length);
+  const activeFilterCount = useMemo(
+    () =>
+      Object.values(filters || {}).reduce(
+        (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+        0
+      ),
+    [filters]
+  );
 
   const showingText = useMemo(() => {
     if (!pagination) {
@@ -125,6 +135,22 @@ export default function ShopPage() {
       sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
     };
   }, [scrollKey]);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+
+    const handleKey = (event) => {
+      if (event.key === "Escape") setFiltersOpen(false);
+    };
+
+    document.addEventListener("keydown", handleKey);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = "";
+    };
+  }, [filtersOpen]);
 
   useEffect(() => {
     if (hasRestoredScroll.current) return;
@@ -181,23 +207,92 @@ export default function ShopPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* Left rail: product type nav + filters */}
-        <aside className="space-y-4 lg:col-span-3">
-          <ProductTypeNav
-            productTypes={productTypes}
-            value={productType}
-            onChange={(v) => {
-              // keep page stable / avoid stale results
-              setPage(1);
-              setProductType(v);
-            }}
-            disabled={productsQ.isFetching}
-          />
+    <div className="space-y-5 pt-8 lg:pt-0">
+      <button
+        type="button"
+        onClick={() => setFiltersOpen(true)}
+        className="fixed left-4 z-[60] inline-flex items-center gap-2 rounded-lg bg-violet-50/80 px-3 py-1.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200/70 shadow-sm shadow-violet-200/30 backdrop-blur lg:hidden"
+        style={{ top: "calc(var(--app-header-h, 64px) + 0.75rem)" }}
+      >
+        <FaFilter className="h-4 w-4" />
+        Filters
+        {activeFilterCount > 0 ? (
+          <span className="rounded-full bg-violet-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800">
+            {activeFilterCount}
+          </span>
+        ) : null}
+      </button>
 
-          {activeFilterConfig ? (
-            <div className="lg:sticky lg:top-16">
+      {filtersOpen ? (
+        <div className="fixed inset-0 z-[70] lg:hidden">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setFiltersOpen(false)}
+          />
+          <div
+            className="absolute left-4 w-[85%] max-w-[360px] rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-200"
+            style={{ top: "calc(var(--app-header-h, 64px) + 0.75rem)" }}
+          >
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-4">
+              <ProductTypeNav
+                productTypes={productTypes}
+                value={productType}
+                onChange={(v) => {
+                  setPage(1);
+                  setProductType(v);
+                }}
+                disabled={productsQ.isFetching}
+                stacked
+              />
+
+              {activeFilterConfig ? (
+                <ShopFilters
+                  config={activeFilterConfig}
+                  selectedFilters={filters}
+                  onToggle={toggleFilterValue}
+                  disabled={productsQ.isFetching}
+                  valueLabelMaps={{ categoryKeys: categoryLabelByKey }}
+                  onClearAll={clearAllFilters}
+                  hasActiveFilters={hasActiveFilters}
+                />
+              ) : (
+                <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
+                  <p className="text-sm text-slate-500">
+                    No filters available.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        {/* Filters + product types (left rail) */}
+        <aside className="hidden space-y-4 lg:col-span-3 lg:block">
+          <div className="space-y-4 lg:sticky lg:top-16 lg:self-start">
+            <ProductTypeNav
+              productTypes={productTypes}
+              value={productType}
+              onChange={(v) => {
+                // keep page stable / avoid stale results
+                setPage(1);
+                setProductType(v);
+              }}
+              disabled={productsQ.isFetching}
+            />
+
+            {activeFilterConfig ? (
               <ShopFilters
                 config={activeFilterConfig}
                 selectedFilters={filters}
@@ -207,12 +302,12 @@ export default function ShopPage() {
                 onClearAll={clearAllFilters}
                 hasActiveFilters={hasActiveFilters}
               />
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
-              <p className="text-sm text-slate-500">No filters available.</p>
-            </div>
-          )}
+            ) : (
+              <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
+                <p className="text-sm text-slate-500">No filters available.</p>
+              </div>
+            )}
+          </div>
         </aside>
 
         {/* Results */}

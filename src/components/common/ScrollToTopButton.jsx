@@ -33,7 +33,7 @@ const ScrollToTopButton = () => {
     <div className="fixed right-6 z-50 bottom-[calc(5rem+env(safe-area-inset-bottom))] sm:bottom-6 lg:bottom-4">
       <button
         onClick={scrollToTop}
-        className="cursor-pointer relative flex items-center justify-center w-10 h-10 rounded-full bg-purple-200 shadow-lg transition-all hover:bg-purple-500"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-violet-200 shadow-lg transition-all hover:bg-violet-600"
         aria-label="Scroll to top"
       >
         {/* SVG Progress Circle */}
@@ -42,7 +42,7 @@ const ScrollToTopButton = () => {
           viewBox="0 0 36 36"
         >
           <circle
-            className="text-purple-500"
+            className="text-violet-600"
             strokeWidth="2"
             stroke="currentColor"
             fill="transparent"

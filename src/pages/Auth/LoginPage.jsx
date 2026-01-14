@@ -19,8 +19,12 @@ export default function LoginPage() {
 
   const [login, { isLoading }] = useLoginMutation()
 
-  const getLandingPath = (user) =>
-    user?.isAdmin ? '/admin' : '/account/overview'
+  const getLandingPath = (user) => {
+    if (user?.isAdmin) return '/admin'
+    const status = user?.approvalStatus
+    if (status && status !== 'Approved') return '/'
+    return '/account/overview'
+  }
 
   useEffect(() => {
     if (!isInitialized) return
@@ -77,15 +81,7 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-slate-700">Password</label>
-            <Link
-              to="/forgot-password"
-              className="text-xs font-semibold text-slate-500 hover:text-slate-900 hover:underline"
-            >
-              Forgot password?
-            </Link>
-          </div>
+          <label className="text-sm font-semibold text-slate-700">Password</label>
           <input
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="password"
@@ -94,6 +90,14 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+          <div className="mt-2 text-right">
+            <Link
+              to="/forgot-password"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-900 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </div>
 
         <button

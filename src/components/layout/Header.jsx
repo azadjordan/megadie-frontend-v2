@@ -69,6 +69,8 @@ export default function Header() {
   const { userInfo, isInitialized } = useSelector((state) => state.auth)
   const isAuthed = !!userInfo
   const isAdmin = !!userInfo?.isAdmin
+  const isPendingApproval =
+    !isAdmin && userInfo?.approvalStatus === 'Pending'
 
   const firstName = (() => {
     const label = userInfo?.name || userInfo?.email || 'Account'
@@ -131,112 +133,123 @@ export default function Header() {
   }
 
   return (
-    <header
-      ref={headerRef}
-      className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur"
-    >
+    <>
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur"
+      >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2">
-          <span className="text-2xl font-bold tracking-tight text-violet-700">
-            Megadie
-          </span>
-          <span className="hidden rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600 sm:inline-flex">
-            Supply
-          </span>
-        </Link>
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2">
+            <span className="text-2xl font-bold tracking-tight text-violet-700">
+              Megadie
+            </span>
+            <span className="hidden rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-600 sm:inline-flex">
+              Supply
+            </span>
+          </Link>
 
-        {/* Desktop nav */}
-        <div className="hidden items-center gap-4 md:flex">
-          <NavLink to="/shop" className={desktopLink}>
-            <FaStore size={18} />
-            Shop
-          </NavLink>
+          {/* Desktop nav */}
+          <div className="hidden items-center gap-4 md:flex">
+            <NavLink to="/shop" className={desktopLink}>
+              <FaStore size={18} />
+              Shop
+            </NavLink>
 
-          <NavLink to="/cart" className={desktopLink}>
-            <span className="relative flex items-center">
-              <FaShoppingCart size={18} />
+            <NavLink to="/cart" className={desktopLink}>
+              <span className="relative flex items-center">
+                <FaShoppingCart size={18} />
+                {count > 0 && (
+                  <span
+                    className={[
+                      'absolute -right-2 -top-2 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white',
+                      bounce ? 'animate-bounce' : '',
+                    ].join(' ')}
+                  >
+                    {count}
+                  </span>
+                )}
+              </span>
+              Cart
+            </NavLink>
+
+            {/* Auth (desktop) */}
+            {!isInitialized ? null : isAuthed ? (
+              <>
+                <NavLink to="/account" className={desktopLink}>
+                  <FaUser size={18} />
+                  {firstName}
+                </NavLink>
+
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60"
+                  type="button"
+                >
+                  <FaSignOutAlt size={18} />
+                  {isLoggingOut ? 'Logging out...' : 'Logout'}
+                </button>
+              </>
+            ) : (
+              <NavLink to="/login" className={desktopLink}>
+                <FaUser size={18} />
+                Sign in
+              </NavLink>
+            )}
+
+            {/* Admin entry point (desktop) */}
+            {!isInitialized ? null : isAdmin ? (
+              <NavLink to="/admin" className={desktopLink}>
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                  Admin
+                </span>
+              </NavLink>
+            ) : null}
+          </div>
+
+          {/* Mobile controls */}
+          <div className="flex items-center gap-2 md:hidden">
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Toggle menu"
+                className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700"
+                type="button"
+              >
+                {menuOpen ? <FaTimes size={22} /> : <FaBars size={22} />}
+              </button>
+
               {count > 0 && (
                 <span
                   className={[
-                    'absolute -right-2 -top-2 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white',
+                    'absolute -right-3 -top-3 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white',
                     bounce ? 'animate-bounce' : '',
                   ].join(' ')}
                 >
                   {count}
                 </span>
               )}
-            </span>
-            Cart
-          </NavLink>
-
-          {/* Auth (desktop) */}
-          {!isInitialized ? null : isAuthed ? (
-            <>
-              <NavLink to="/account" className={desktopLink}>
-                <FaUser size={18} />
-                {firstName}
-              </NavLink>
-
-              <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60"
-                type="button"
-              >
-                <FaSignOutAlt size={18} />
-                {isLoggingOut ? 'Logging out...' : 'Logout'}
-              </button>
-            </>
-          ) : (
-            <NavLink to="/login" className={desktopLink}>
-              <FaUser size={18} />
-              Sign in
-            </NavLink>
-          )}
-
-          {/* Admin entry point (desktop) */}
-          {!isInitialized ? null : isAdmin ? (
-            <NavLink to="/admin" className={desktopLink}>
-              <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-                Admin
-              </span>
-            </NavLink>
-          ) : null}
-        </div>
-
-        {/* Mobile hamburger */}
-        <div className="relative md:hidden">
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Toggle menu"
-            className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700"
-            type="button"
-          >
-            {menuOpen ? <FaTimes size={22} /> : <FaBars size={22} />}
-          </button>
-
-          {count > 0 && (
-            <span
-              className={[
-                'absolute -right-3 -top-3 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white',
-                bounce ? 'animate-bounce' : '',
-              ].join(' ')}
-            >
-              {count}
-            </span>
-          )}
-        </div>
-      </nav>
+            </div>
+          </div>
+        </nav>
+        {isPendingApproval ? (
+          <div className="border-t border-amber-200 bg-amber-50/80">
+            <div className="mx-auto max-w-6xl px-4 py-2 text-xs font-semibold text-amber-800">
+              Account Approval is Pending...
+            </div>
+          </div>
+        ) : null}
+      </header>
 
       {/* Mobile drawer */}
       {menuOpen && (
         <>
-          <div className="fixed inset-0 z-40 bg-slate-900/30" />
+          <div className="fixed inset-0 z-[90] bg-slate-900/40 backdrop-blur-sm" />
 
           <aside
             ref={drawerRef}
-            className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white shadow-xl"
+            className="fixed inset-y-0 right-0 z-[100] w-72 max-w-[85vw] border-l border-slate-200 bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <span className="text-base font-semibold text-slate-900">
@@ -320,6 +333,7 @@ export default function Header() {
           </aside>
         </>
       )}
-    </header>
+
+    </>
   )
 }

@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
+import { useSelector } from 'react-redux'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 
 import AuthShell from '../../components/auth/AuthShell'
 import { useRegisterMutation } from '../../features/auth/usersApiSlice'
-import { setCredentials } from '../../features/auth/authSlice'
 
 export default function RegisterPage() {
-  const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -45,16 +43,15 @@ export default function RegisterPage() {
     }
 
     try {
-      const res = await register({
+      await register({
         name: name.trim(),
         phoneNumber: phoneNumber.trim(),
         email: email.trim(),
         password,
       }).unwrap()
 
-      dispatch(setCredentials(res.data))
-
-      navigate(getLandingPath(res.data), { replace: true })
+      toast.success('Registration submitted. Await admin approval.')
+      navigate('/login', { replace: true })
     } catch (err) {
       toast.error(err?.data?.message || err?.error || 'Registration failed')
     }

@@ -44,6 +44,9 @@ import AdminPriceRulesPage from "../pages/Admin/AdminPriceRulesPage";
 // Guards
 import RequireAdmin from "../components/auth/RequireAdmin";
 import RequireAuth from "../components/auth/RequireAuth";
+import RequireShopApproval from "../components/auth/RequireShopApproval";
+import RequireAccountApproval from "../components/auth/RequireAccountApproval";
+import AccountLandingRedirect from "../components/auth/AccountLandingRedirect";
 
 // Account layout + pages
 import AccountLayout from "../components/layout/AccountLayout";
@@ -70,46 +73,54 @@ export default function AppRoutes() {
       {/* Public routes */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/shop" element={<ShopPage />} />
-        <Route path="/shop/:id" element={<ProductDetailsPage />} />
-        <Route path="/cart" element={<CartPage />} />
 
         {/* Protected user routes */}
         <Route element={<RequireAuth />}>
+          <Route element={<RequireShopApproval />}>
+            <Route path="/shop" element={<ShopPage />} />
+            <Route path="/shop/:id" element={<ProductDetailsPage />} />
+            <Route path="/cart" element={<CartPage />} />
+          </Route>
+
           <Route element={<AccountLayout />}>
             {/* Default account landing */}
             <Route
               path="/account"
-              element={<Navigate to="/account/overview" replace />}
+              element={<AccountLandingRedirect />}
             />
 
             {/* Account */}
-            <Route path="/account/overview" element={<AccountOverviewPage />} />
             <Route path="/account/profile" element={<AccountProfilePage />} />
-            <Route path="/account/requests" element={<AccountRequestsPage />} />
-            <Route path="/account/orders" element={<AccountOrdersPage />} />
-            <Route
-              path="/account/invoices"
-              element={<AccountInvoicesReceiptPage />}
-            />
+            <Route element={<RequireAccountApproval />}>
+              <Route
+                path="/account/overview"
+                element={<AccountOverviewPage />}
+              />
+              <Route path="/account/requests" element={<AccountRequestsPage />} />
+              <Route path="/account/orders" element={<AccountOrdersPage />} />
+              <Route
+                path="/account/invoices"
+                element={<AccountInvoicesReceiptPage />}
+              />
 
-            {/* ✅ Billing section (single sidebar item) */}
-            <Route
-              path="/account/billing"
-              element={<Navigate to="/account/invoices" replace />}
-            />
-            <Route
-              path="/account/billing/invoices"
-              element={<Navigate to="/account/invoices" replace />}
-            />
-            <Route
-              path="/account/billing/invoices/:id"
-              element={<InvoiceRedirect />}
-            />
-            <Route
-              path="/account/billing/orders/:id"
-              element={<OrderRedirect />}
-            />
+              {/* Billing section (single sidebar item) */}
+              <Route
+                path="/account/billing"
+                element={<Navigate to="/account/invoices" replace />}
+              />
+              <Route
+                path="/account/billing/invoices"
+                element={<Navigate to="/account/invoices" replace />}
+              />
+              <Route
+                path="/account/billing/invoices/:id"
+                element={<InvoiceRedirect />}
+              />
+              <Route
+                path="/account/billing/orders/:id"
+                element={<OrderRedirect />}
+              />
+            </Route>
 
 
           </Route>
@@ -170,3 +181,4 @@ export default function AppRoutes() {
     </Routes>
   );
 }
+

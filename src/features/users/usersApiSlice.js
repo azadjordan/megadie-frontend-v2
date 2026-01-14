@@ -9,13 +9,17 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         search = "",
         role = "all",
         sort = "name",
+        approvalStatus = "all",
       } = {}) => {
         const params = new URLSearchParams();
         params.set("page", String(page));
         if (Number.isFinite(limit)) params.set("limit", String(limit));
         if (search) params.set("search", search);
         if (role && role !== "all") params.set("role", role);
-        if (sort && sort !== "newest") params.set("sort", sort);
+        if (sort) params.set("sort", sort);
+        if (approvalStatus && approvalStatus !== "all") {
+          params.set("approvalStatus", approvalStatus);
+        }
         return `/users?${params.toString()}`;
       },
       providesTags: (result) => {
@@ -41,6 +45,17 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         { type: "User", id: arg?.id },
       ],
     }),
+    updateUserApprovalStatus: builder.mutation({
+      query: ({ id, approvalStatus }) => ({
+        url: `/users/${id}/approval`,
+        method: "PUT",
+        body: { approvalStatus },
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "User", id: "LIST" },
+        { type: "User", id: arg?.id },
+      ],
+    }),
 
     updateUserPasswordByAdmin: builder.mutation({
       query: ({ id, password }) => ({
@@ -56,5 +71,6 @@ export const {
   useGetUsersAdminQuery,
   useGetUserByIdQuery,
   useUpdateUserMutation,
+  useUpdateUserApprovalStatusMutation,
   useUpdateUserPasswordByAdminMutation,
 } = usersApiSlice;

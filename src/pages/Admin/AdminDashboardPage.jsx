@@ -285,7 +285,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-8">
         <StatCard
           title="Requests to review"
           value={buildStatValue(
@@ -306,30 +306,34 @@ export default function AdminDashboardPage() {
           hint="Processing + shipping"
           to="/admin/orders"
         />
-        <StatCard
-          title="Unpaid balance"
-          value={buildMoneyValue(
-            invoiceSummaryLoading,
-            invoiceSummaryError,
-            unpaidBalanceMinor,
-            invoiceSummaryCurrency,
-            invoiceSummaryFactor
-          )}
-          hint={unpaidInvoicesHint}
-          to="/admin/invoices"
-        />
-        <StatCard
-          title="Overdue balance"
-          value={buildMoneyValue(
-            invoiceSummaryLoading,
-            invoiceSummaryError,
-            overdueBalanceMinor,
-            invoiceSummaryCurrency,
-            invoiceSummaryFactor
-          )}
-          hint={overdueInvoicesHint}
-          to="/admin/invoices"
-        />
+        <div className="col-span-2">
+          <StatCard
+            title="Unpaid balance"
+            value={buildMoneyValue(
+              invoiceSummaryLoading,
+              invoiceSummaryError,
+              unpaidBalanceMinor,
+              invoiceSummaryCurrency,
+              invoiceSummaryFactor
+            )}
+            hint={unpaidInvoicesHint}
+            to="/admin/invoices"
+          />
+        </div>
+        <div className="col-span-2">
+          <StatCard
+            title="Overdue balance"
+            value={buildMoneyValue(
+              invoiceSummaryLoading,
+              invoiceSummaryError,
+              overdueBalanceMinor,
+              invoiceSummaryCurrency,
+              invoiceSummaryFactor
+            )}
+            hint={overdueInvoicesHint}
+            to="/admin/invoices"
+          />
+        </div>
         <StatCard
           title="Payments recorded"
           value={buildStatValue(paymentsLoading, paymentsError, paymentsCount)}

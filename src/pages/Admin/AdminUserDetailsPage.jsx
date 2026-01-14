@@ -9,6 +9,7 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import {
   useGetUserByIdQuery,
   useUpdateUserMutation,
+  useUpdateUserApprovalStatusMutation,
   useUpdateUserPasswordByAdminMutation,
 } from "../../features/users/usersApiSlice";
 import { useGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
@@ -43,6 +44,10 @@ export default function AdminUserDetailsPage() {
   const [updateUser, { isLoading: isSaving, error: saveError }] =
     useUpdateUserMutation();
   const [
+    updateUserApprovalStatus,
+    { isLoading: isUpdatingApproval, error: approvalError },
+  ] = useUpdateUserApprovalStatusMutation();
+  const [
     updateUserPasswordByAdmin,
     { isLoading: isUpdatingPassword, error: passwordError },
   ] = useUpdateUserPasswordByAdminMutation();
@@ -58,7 +63,9 @@ export default function AdminUserDetailsPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState("Approved");
   const [saved, setSaved] = useState(false);
+  const [approvalSaved, setApprovalSaved] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -74,7 +81,9 @@ export default function AdminUserDetailsPage() {
     setPhoneNumber(user.phoneNumber || "");
     setAddress(user.address || "");
     setIsAdmin(Boolean(user.isAdmin));
+    setApprovalStatus(user.approvalStatus || "Approved");
     setSaved(false);
+    setApprovalSaved(false);
     setPassword("");
     setConfirmPassword("");
   }, [user?._id, user?.id]);
@@ -87,6 +96,12 @@ export default function AdminUserDetailsPage() {
     setEditRowId(null);
     setEditPriceStr("");
   }, [userId]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      setApprovalStatus("Approved");
+    }
+  }, [isAdmin]);
 
   const shouldLoadPricing = Boolean(userId) && activeTab === "pricing";
 
@@ -130,6 +145,10 @@ export default function AdminUserDetailsPage() {
   }, [user, name, email, phoneNumber, address, isAdmin]);
 
   const canUpdateInfo = hasInfoChanges && !isSaving;
+  const approvalBase = String(user?.approvalStatus || "Approved");
+  const hasApprovalChanges = approvalStatus !== approvalBase;
+  const canUpdateApproval =
+    Boolean(userId) && hasApprovalChanges && !isUpdatingApproval && !isAdmin;
 
   useEffect(() => {
     if (newRule && !availableRules.some((rule) => rule.code === newRule)) {
@@ -173,6 +192,22 @@ export default function AdminUserDetailsPage() {
       await updateUser(payload).unwrap();
       setSaved(true);
       toast.success("User info updated.");
+    } catch {
+      // ErrorMessage handles it
+    }
+  };
+
+  const onUpdateApproval = async () => {
+    if (!userId || !canUpdateApproval) return;
+    setApprovalSaved(false);
+
+    try {
+      await updateUserApprovalStatus({
+        id: userId,
+        approvalStatus,
+      }).unwrap();
+      setApprovalSaved(true);
+      toast.success("Approval status updated.");
     } catch {
       // ErrorMessage handles it
     }
@@ -308,6 +343,7 @@ export default function AdminUserDetailsPage() {
         <div className="flex flex-wrap gap-2">
           {[
             { id: "info", label: "User Info" },
+            { id: "approval", label: "Approval" },
             { id: "pricing", label: "User Pricing" },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -492,6 +528,70 @@ export default function AdminUserDetailsPage() {
               </div>
             ) : null}
           </div>
+        </div>
+      ) : activeTab === "approval" ? (
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <div className="text-sm font-semibold text-slate-900">
+            Approval Status
+          </div>
+          <div className="mt-1 text-sm text-slate-500">
+            Approve, reject, or move this user back to pending.
+          </div>
+
+          <div className="mt-4 max-w-sm">
+            <label className="mb-1 block text-xs font-semibold text-slate-600">
+              Current status
+            </label>
+            <select
+              value={approvalStatus}
+              onChange={(e) => {
+                setApprovalStatus(e.target.value);
+                setApprovalSaved(false);
+              }}
+              disabled={isAdmin}
+              className={[
+                "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
+                isAdmin ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
+              ].join(" ")}
+            >
+              <option value="Approved">Approved</option>
+              <option value="Pending">Pending</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+            {isAdmin ? (
+              <div className="mt-1 text-xs text-slate-500">
+                Admin accounts are always approved.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onUpdateApproval}
+              disabled={!canUpdateApproval}
+              className={[
+                "rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white",
+                canUpdateApproval
+                  ? "hover:bg-blue-500"
+                  : "cursor-not-allowed opacity-50",
+              ].join(" ")}
+            >
+              {isUpdatingApproval ? "Saving..." : "Update Approval"}
+            </button>
+
+            {approvalSaved ? (
+              <span className="text-xs font-semibold text-emerald-700">
+                Saved.
+              </span>
+            ) : null}
+          </div>
+
+          {approvalError ? (
+            <div className="mt-3">
+              <ErrorMessage error={approvalError} />
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">

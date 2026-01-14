@@ -1,6 +1,7 @@
 // src/components/layout/AdminLayout.jsx
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import {
   FiMenu,
   FiX,
@@ -13,9 +14,15 @@ import {
   FiBox,
   FiTag,
   FiArrowLeft,
+  FiLogOut,
+  FiUser,
 } from "react-icons/fi";
 
-function NavItem({ to, icon: Icon, label, onClick, end = false }) {
+import { apiSlice } from "../../app/apiSlice";
+import { logout as logoutAction } from "../../features/auth/authSlice";
+import { useLogoutMutation } from "../../features/auth/usersApiSlice";
+
+function NavItem({ to, icon: Icon, label, onClick, end = false, className = "" }) {
   return (
     <NavLink
       to={to}
@@ -28,6 +35,7 @@ function NavItem({ to, icon: Icon, label, onClick, end = false }) {
           isActive
             ? "bg-slate-900 text-white"
             : "text-slate-700 hover:bg-slate-100 hover:text-slate-900",
+          className,
         ].join(" ")
       }
     >
@@ -40,12 +48,30 @@ function NavItem({ to, icon: Icon, label, onClick, end = false }) {
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { userInfo } = useSelector((state) => state.auth);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close drawer on navigation
+  const [logoutApi, { isLoading: isLoggingOut }] = useLogoutMutation();
+
+  const adminLabel = userInfo?.name || userInfo?.email || "Admin";
+  const adminName = String(adminLabel).trim() || "Admin";
+
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
+
+  const handleLogout = async () => {
+    try {
+      await logoutApi().unwrap();
+    } catch {
+      // silent best-effort logout
+    } finally {
+      dispatch(logoutAction());
+      dispatch(apiSlice.util.resetApiState());
+      navigate("/", { replace: true });
+    }
+  };
 
   const items = useMemo(
     () => [
@@ -64,40 +90,42 @@ export default function AdminLayout() {
   return (
     <div className="min-h-[calc(100vh-var(--app-header-h,64px))] bg-slate-50">
       <div className="mx-auto w-[90%] max-w-screen-2xl px-4 py-4">
-        {/* Top bar */}
-        <div className="mb-4 flex items-center gap-3">
-          {/* Back to site button */}
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className={[
-              "inline-flex items-center gap-2 rounded-xl px-3 py-2",
-              "bg-violet-600 text-white",
-              "text-sm font-semibold",
-              "hover:bg-violet-700 transition",
-              "shadow-sm shadow-violet-200/40",
-            ].join(" ")}
-          >
-            <FiArrowLeft className="h-4 w-4" />
-            Back to site
-          </button>
-
-          {/* Mobile menu button */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="ml-1 inline-flex items-center justify-center rounded-xl bg-white p-2 shadow-sm ring-1 ring-slate-200 md:hidden"
-            aria-label="Open admin menu"
-          >
-            <FiMenu />
-          </button>
-        </div>
-
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
           {/* Desktop sidebar */}
           <aside className="hidden md:block">
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
-              <div className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <FiUser className="h-4 w-4 text-slate-500" />
+                  {adminName}
+                </div>
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-violet-200/40 transition hover:bg-violet-700"
+                  >
+                    <FiArrowLeft className="h-4 w-4" />
+                    Back to site
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className={[
+                      "inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
+                      "bg-rose-50 text-rose-600 ring-1 ring-rose-200",
+                      "hover:bg-rose-100 transition",
+                      isLoggingOut ? "cursor-not-allowed opacity-70" : "",
+                    ].join(" ")}
+                  >
+                    <FiLogOut className="h-4 w-4" />
+                    {isLoggingOut ? "Logging out..." : "Logout"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-2 mt-4 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 Navigation
               </div>
 
@@ -118,7 +146,7 @@ export default function AdminLayout() {
             <div className="mt-3 rounded-2xl bg-white p-3 text-sm shadow-sm ring-1 ring-slate-200">
               <div className="text-xs font-semibold text-slate-900">Tip</div>
               <div className="mt-1 text-xs text-slate-500">
-                Keep everything linked: Request → Order → Invoice → Payments.
+                Keep everything linked: Request -> Order -> Invoice -> Payments.
               </div>
             </div>
           </aside>
@@ -132,29 +160,60 @@ export default function AdminLayout() {
         </div>
       </div>
 
+      {/* Mobile floating menu toggle */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen((open) => !open)}
+        className="fixed right-4 top-4 z-[90] inline-flex items-center justify-center rounded-full bg-slate-900 p-3 text-white shadow-lg shadow-slate-900/30 md:hidden"
+        aria-label="Toggle admin navigation"
+      >
+        {mobileOpen ? <FiX className="h-5 w-5" /> : <FiMenu className="h-5 w-5" />}
+      </button>
+
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-[80] md:hidden">
           <div
-            className="absolute inset-0 bg-black/30"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute left-0 top-0 h-full w-[85%] max-w-[320px] bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <div className="text-sm font-semibold text-slate-900">
-                Navigation
-              </div>
+          <div className="absolute right-4 top-16 w-[85%] max-w-[320px] rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-200">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <FiUser className="h-4 w-4 text-slate-500" />
+              {adminName}
+            </div>
+            <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                onClick={() => setMobileOpen(false)}
-                className="rounded-xl p-2 text-slate-700 hover:bg-slate-100"
-                aria-label="Close admin menu"
+                onClick={() => {
+                  navigate("/");
+                  setMobileOpen(false);
+                }}
+                className="inline-flex h-11 basis-2/3 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-sm font-semibold text-white shadow-sm shadow-violet-200/40 transition hover:bg-violet-700"
               >
-                <FiX />
+                <FiArrowLeft className="h-4 w-4" />
+                Back to site
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className={[
+                  "inline-flex h-11 basis-1/3 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold",
+                  "bg-rose-50 text-rose-600 ring-1 ring-rose-200",
+                  "hover:bg-rose-100 transition",
+                  isLoggingOut ? "cursor-not-allowed opacity-70" : "",
+                ].join(" ")}
+              >
+                <FiLogOut className="h-4 w-4" />
+                {isLoggingOut ? "Logging out..." : "Logout"}
               </button>
             </div>
 
-            <div className="p-3">
+            <div className="mt-4 border-t border-slate-200 pt-3">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Navigation
+              </div>
               <nav className="flex flex-col gap-1">
                 {items.map((it) => (
                   <NavItem
@@ -164,6 +223,7 @@ export default function AdminLayout() {
                     label={it.label}
                     end={it.end}
                     onClick={() => setMobileOpen(false)}
+                    className="py-3 text-sm"
                   />
                 ))}
               </nav>

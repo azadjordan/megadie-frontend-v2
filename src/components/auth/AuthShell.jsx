@@ -53,7 +53,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
                 Welcome to your account space.
               </h1>
               <p className="mt-3 text-sm text-slate-600">
-                Sign in to continue or create an account in minutes.
+                Sign in to continue or create an account in a minute.
               </p>
             </div>
 

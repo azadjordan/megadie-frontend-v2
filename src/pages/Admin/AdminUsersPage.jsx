@@ -13,7 +13,8 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
-  const [sort, setSort] = useState("name");
+  const [approvalStatus, setApprovalStatus] = useState("all");
+  const [sort, setSort] = useState("newest");
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -30,6 +31,7 @@ export default function AdminUsersPage() {
     search: debouncedSearch,
     role,
     sort,
+    approvalStatus,
   });
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
@@ -62,7 +64,7 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_200px_200px_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_180px_180px_auto] md:items-end">
           <div>
             <label
               htmlFor="users-search"
@@ -106,6 +108,29 @@ export default function AdminUsersPage() {
 
           <div>
             <label
+              htmlFor="users-approval"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Approval
+            </label>
+            <select
+              id="users-approval"
+              value={approvalStatus}
+              onChange={(e) => {
+                setApprovalStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            >
+              <option value="all">All approvals</option>
+              <option value="Approved">Approved</option>
+              <option value="Pending">Pending</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+
+          <div>
+            <label
               htmlFor="users-sort"
               className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
             >
@@ -133,7 +158,8 @@ export default function AdminUsersPage() {
               onClick={() => {
                 setSearch("");
                 setRole("all");
-                setSort("name");
+                setApprovalStatus("all");
+                setSort("newest");
                 setPage(1);
               }}
             >
@@ -197,6 +223,7 @@ export default function AdminUsersPage() {
                 <tr>
                   <th className="px-4 py-3">User</th>
                   <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Approval</th>
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
@@ -205,6 +232,7 @@ export default function AdminUsersPage() {
                 {rows.map((u) => {
                   const userId = u._id || u.id;
                   const roleLabel = u.isAdmin ? "Admin" : "User";
+                  const approval = u.approvalStatus || "Approved";
 
                   return (
                     <tr key={userId} className="hover:bg-slate-50">
@@ -219,6 +247,20 @@ export default function AdminUsersPage() {
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-slate-700">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={[
+                            "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+                            approval === "Approved"
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                              : approval === "Rejected"
+                              ? "bg-rose-50 text-rose-700 ring-rose-200"
+                              : "bg-amber-50 text-amber-700 ring-amber-200",
+                          ].join(" ")}
+                        >
+                          {approval}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-slate-700">{roleLabel}</td>
                       <td className="px-4 py-3 text-center">
                         <Link
