@@ -72,15 +72,23 @@ function StatusBadge({ status, size = "default" }) {
 }
 
 function StockBadge({ finalized, size = "default" }) {
-  if (!finalized) {
-    return <span className="text-[11px] text-slate-400">-</span>;
-  }
   const base =
     "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
   const sizes = {
     default: "px-2.5 py-1 text-xs",
     compact: "px-2 py-0.5 text-[10px]",
   };
+  if (!finalized) {
+    return (
+      <span
+        className={`${base} ${
+          sizes[size] || sizes.default
+        } bg-amber-50 text-amber-700 ring-amber-200`}
+      >
+        Not Finalized
+      </span>
+    );
+  }
   return (
     <span
       className={`${base} ${sizes[size] || sizes.default} bg-emerald-50 text-emerald-700 ring-emerald-200`}

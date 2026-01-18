@@ -66,46 +66,15 @@ const sanitizeToken = (value) => {
     .replace(/^-+|-+$/g, "");
 };
 
-const SKU_MAP = {
-  productType: {
-    Ribbon: "RIB",
-    "Creasing Matrix": "CRM",
-    "Double Face Tape": "DFT",
-  },
-  categoryKey: {
-    grosgrain: "GRO",
-    satin: "SAT",
-  },
-  grade: {
-    Premium: "PREM",
-    Standard: "STD",
-    Economy: "ECO",
-  },
-  variant: {
-    "100 Yards": "100-YD",
-    "150 Yards": "150-YD",
-    "35 Yards": "35-YD",
-    "50 Meters": "50-M",
-    "50 Pieces": "50-PC",
-  },
-  finish: {
-    "Single Face": "SF",
-    "Double Face": "DF",
-  },
-  packingUnit: {
-    Roll: "ROLL",
-    Pack: "PACK",
-  },
-};
-
-const skuToken = (field, value) => {
+const skuToken = (skuTokens, field, value) => {
   if (!value) return "";
-  const map = SKU_MAP[field];
-  const raw = map?.[value] || value;
-  return sanitizeToken(raw);
+  const map = skuTokens?.[field];
+  const mapped = map?.[value];
+  if (mapped) return mapped;
+  return sanitizeToken(value);
 };
 
-const buildSkuPreview = ({
+const buildSkuPreview = (skuTokens, {
   productType,
   categoryKey,
   size,
@@ -117,15 +86,15 @@ const buildSkuPreview = ({
   packingUnit,
 }) => {
   const parts = [
-    skuToken("productType", productType),
-    skuToken("categoryKey", categoryKey),
-    sanitizeToken(size),
+    skuToken(skuTokens, "productType", productType),
+    skuToken(skuTokens, "categoryKey", categoryKey),
+    skuToken(skuTokens, "size", size),
     sanitizeToken(color),
     sanitizeToken(catalogCode),
-    skuToken("variant", variant),
-    skuToken("grade", grade),
-    skuToken("finish", finish),
-    skuToken("packingUnit", packingUnit),
+    skuToken(skuTokens, "variant", variant),
+    skuToken(skuTokens, "grade", grade),
+    skuToken(skuTokens, "finish", finish),
+    skuToken(skuTokens, "packingUnit", packingUnit),
   ].filter(Boolean);
 
   return parts.join("|") || "";
@@ -202,14 +171,28 @@ export default function AdminProductEditPage() {
   const grades = metaData?.grades ?? [];
   const variants = metaData?.variants ?? [];
   const finishes = metaData?.finishes ?? [];
-  const packingUnits = metaData?.packingUnits ?? ["Roll", "Pack"];
+  const packingUnits = metaData?.packingUnits ?? [];
   const tags = metaData?.tags ?? [];
   const catalogCodes = metaData?.ribbonCatalogCodes ?? [];
+  const skuTokens = metaData?.skuTokens ?? {};
 
   const priceRules = priceRulesData?.data ?? [];
   const categories = categoriesData ?? [];
 
   const product = productData ?? null;
+
+  const tagOptions = useMemo(() => {
+    const map = new Map();
+    tags.forEach((tag) => {
+      map.set(tag, { value: tag, isLegacy: false });
+    });
+    form.tags.forEach((tag) => {
+      if (!map.has(tag)) {
+        map.set(tag, { value: tag, isLegacy: true });
+      }
+    });
+    return Array.from(map.values());
+  }, [tags, form.tags]);
 
   useEffect(() => {
     if (!product || hasInitialized) return;
@@ -261,7 +244,7 @@ export default function AdminProductEditPage() {
   const preview = useMemo(() => {
     const resolvedType = selectedCategory?.productType || form.productType;
     const categoryLabel = selectedCategory?.label || selectedCategory?.key || "";
-    const sku = buildSkuPreview({
+    const sku = buildSkuPreview(skuTokens, {
       productType: resolvedType,
       categoryKey: selectedCategory?.key,
       size: form.size,
@@ -305,6 +288,7 @@ export default function AdminProductEditPage() {
     form.size,
     form.variant,
     selectedCategory,
+    skuTokens,
   ]);
 
   const updateField = (key, value) => {
@@ -348,6 +332,14 @@ export default function AdminProductEditPage() {
     const errors = {};
     if (!form.size) errors.size = "Size is required.";
     if (!form.packingUnit) errors.packingUnit = "Packing unit is required.";
+    if (form.productType === "Ribbon" && form.catalogCode) {
+      if (!catalogCodes.includes(form.catalogCode)) {
+        errors.catalogCode = "Select a valid catalog code.";
+      }
+    }
+    if (form.productType !== "Ribbon" && form.catalogCode) {
+      errors.catalogCode = "Catalog code is only available for Ribbon.";
+    }
     return errors;
   };
 
@@ -431,7 +423,7 @@ export default function AdminProductEditPage() {
       priceRule: form.priceRule,
       size: form.size,
       color: form.color?.trim() || undefined,
-      catalogCode: form.catalogCode?.trim() || undefined,
+      catalogCode: String(form.catalogCode || "").trim(),
       variant: form.variant || undefined,
       grade: form.grade || undefined,
       finish: form.finish || undefined,
@@ -464,8 +456,27 @@ export default function AdminProductEditPage() {
     }
   };
 
-  if ((productLoading && !productData) || (metaLoading && !metaData)) {
+  if (productLoading || metaLoading) {
     return <Loader />;
+  }
+
+  if (productError) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+        <ErrorMessage message="Unable to load product." error={productError} />
+      </div>
+    );
+  }
+
+  if (metaError || !metaData) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+        <ErrorMessage
+          message="Product metadata is unavailable. Editing is disabled."
+          error={metaError}
+        />
+      </div>
+    );
   }
 
   return (
@@ -487,17 +498,6 @@ export default function AdminProductEditPage() {
           </div>
         </div>
       </div>
-
-      {productError ? (
-        <ErrorMessage message="Unable to load product." error={productError} />
-      ) : null}
-
-      {metaError ? (
-        <ErrorMessage
-          message="Unable to load product metadata. Some fields may be unavailable."
-          error={metaError}
-        />
-      ) : null}
 
       <div className="grid gap-3 md:grid-cols-4">
         {STEPS.map((item, index) => {
@@ -562,6 +562,12 @@ export default function AdminProductEditPage() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
                 <option value="">Select type</option>
+                {form.productType &&
+                !productTypes.includes(form.productType) ? (
+                  <option value={form.productType}>
+                    Legacy: {form.productType}
+                  </option>
+                ) : null}
                 {productTypes.map((type) => (
                   <option key={type} value={type}>
                     {type}
@@ -662,6 +668,9 @@ export default function AdminProductEditPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">Select size</option>
+                  {form.size && !sizes.includes(form.size) ? (
+                    <option value={form.size}>Legacy: {form.size}</option>
+                  ) : null}
                   {sizes.map((size) => (
                     <option key={size} value={size}>
                       {size}
@@ -698,6 +707,12 @@ export default function AdminProductEditPage() {
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                   >
                     <option value="">Select catalog code</option>
+                    {form.catalogCode &&
+                    !catalogCodes.includes(form.catalogCode) ? (
+                      <option value={form.catalogCode}>
+                        Legacy: {form.catalogCode}
+                      </option>
+                    ) : null}
                     {catalogCodes.map((code) => (
                       <option key={code} value={code}>
                         {code}
@@ -705,13 +720,29 @@ export default function AdminProductEditPage() {
                     ))}
                   </select>
                 ) : (
-                  <input
-                    value={form.catalogCode}
-                    onChange={(e) => updateField("catalogCode", e.target.value)}
-                    placeholder="Optional"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={form.catalogCode || ""}
+                      disabled
+                      placeholder="Only for Ribbon"
+                      className="w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
+                    />
+                    {form.catalogCode ? (
+                      <button
+                        type="button"
+                        onClick={() => updateField("catalogCode", "")}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
                 )}
+                {fieldErrors.catalogCode ? (
+                  <div className="mt-1 text-xs text-rose-600">
+                    {fieldErrors.catalogCode}
+                  </div>
+                ) : null}
               </div>
 
               <div>
@@ -724,6 +755,11 @@ export default function AdminProductEditPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">None</option>
+                  {form.variant && !variants.includes(form.variant) ? (
+                    <option value={form.variant}>
+                      Legacy: {form.variant}
+                    </option>
+                  ) : null}
                   {variants.map((variant) => (
                     <option key={variant} value={variant}>
                       {variant}
@@ -742,6 +778,9 @@ export default function AdminProductEditPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">None</option>
+                  {form.grade && !grades.includes(form.grade) ? (
+                    <option value={form.grade}>Legacy: {form.grade}</option>
+                  ) : null}
                   {grades.map((grade) => (
                     <option key={grade} value={grade}>
                       {grade}
@@ -760,6 +799,9 @@ export default function AdminProductEditPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">None</option>
+                  {form.finish && !finishes.includes(form.finish) ? (
+                    <option value={form.finish}>Legacy: {form.finish}</option>
+                  ) : null}
                   {finishes.map((finish) => (
                     <option key={finish} value={finish}>
                       {finish}
@@ -778,6 +820,11 @@ export default function AdminProductEditPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">Select packing unit</option>
+                  {form.packingUnit && !packingUnits.includes(form.packingUnit) ? (
+                    <option value={form.packingUnit}>
+                      Legacy: {form.packingUnit}
+                    </option>
+                  ) : null}
                   {packingUnits.map((unit) => (
                     <option key={unit} value={unit}>
                       {unit}
@@ -914,18 +961,18 @@ export default function AdminProductEditPage() {
                 Tags
               </label>
               <div className="grid gap-2 md:grid-cols-3">
-                {tags.map((tag) => (
+                {tagOptions.map((tag) => (
                   <label
-                    key={tag}
+                    key={tag.value}
                     className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700"
                   >
                     <input
                       type="checkbox"
-                      checked={form.tags.includes(tag)}
-                      onChange={() => toggleTag(tag)}
+                      checked={form.tags.includes(tag.value)}
+                      onChange={() => toggleTag(tag.value)}
                       className="h-4 w-4 rounded border-slate-300 text-slate-900"
                     />
-                    {tag}
+                    {tag.isLegacy ? `Legacy: ${tag.value}` : tag.value}
                   </label>
                 ))}
               </div>

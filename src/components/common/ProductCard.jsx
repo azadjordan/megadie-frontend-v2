@@ -9,14 +9,52 @@ import QuantityControl from './QuantityControl'
 const FALLBACK_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20" font-weight="600" text-anchor="middle" dominant-baseline="middle">No image</text></svg>',
 )}`
+const OPTIMIZED_IMAGE_HINT =
+  /(?:^|[\\/_-])(medium|optimized)(?:[\\/_-]|$)|[?&](?:size|variant)=medium|[?&](?:w|width|q|quality)=\d+/i
+const HIGH_RES_IMAGE_HINT =
+  /(?:^|[\\/_-])(original|full|large)(?:[\\/_-]|$)|@2x|@3x|[_-](?:2x|3x)/i
 
-export default function ProductCard({ product }) {
-  const dispatch = useDispatch()
-  const image =
-    product?.images?.find((src) => typeof src === 'string' && src.trim()) ||
+const normalizeImageUrl = (src) => {
+  const trimmed = typeof src === 'string' ? src.trim() : ''
+  if (!trimmed || trimmed.startsWith('data:')) return trimmed
+
+  let next = trimmed
+  next = next.replace(/\/(original|full|large)\//i, '/medium/')
+  next = next.replace(
+    /([._-])(original|full|large)(?=([._-]|\.[a-z]+$|$))/i,
+    '$1medium',
+  )
+  next = next.replace(
+    /([?&](?:size|variant)=)(original|full|large)/i,
+    '$1medium',
+  )
+  return next
+}
+
+const pickOptimizedImage = (product) => {
+  const candidates = Array.isArray(product?.images) ? product.images : []
+  const cleaned = candidates
+    .filter((src) => typeof src === 'string')
+    .map((src) => src.trim())
+    .filter(Boolean)
+
+  const optimized = cleaned.filter((src) => OPTIMIZED_IMAGE_HINT.test(src))
+  const baseList = optimized.length ? optimized : cleaned
+  const fallback =
+    baseList.find((src) => !HIGH_RES_IMAGE_HINT.test(src)) || baseList[0]
+
+  const raw =
+    fallback ||
     (typeof product?.imageUrl === 'string' && product.imageUrl.trim()
       ? product.imageUrl
       : FALLBACK_IMAGE)
+
+  return normalizeImageUrl(raw)
+}
+
+export default function ProductCard({ product }) {
+  const dispatch = useDispatch()
+  const image = pickOptimizedImage(product)
   const name = product?.name || 'Untitled product'
   const productId = product?._id || product?.id || product?.sku
   const detailsPath = productId
@@ -58,32 +96,50 @@ export default function ProductCard({ product }) {
           className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2"
           aria-label={`View details for ${name}`}
         >
-          <div className="h-40 w-full overflow-hidden bg-slate-50">
+          <div className="relative h-40 w-full overflow-hidden bg-slate-50">
             <img
               src={image}
               alt={name}
               className="h-full w-full object-cover"
               loading="lazy"
               decoding="async"
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+              style={{ userSelect: 'none', WebkitUserDrag: 'none' }}
               onError={(e) => {
                 e.currentTarget.onerror = null
                 e.currentTarget.src = FALLBACK_IMAGE
               }}
             />
+            <div
+              className="absolute inset-0 bg-transparent"
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+              aria-hidden="true"
+            />
           </div>
         </Link>
       ) : (
-        <div className="h-40 w-full overflow-hidden bg-slate-100">
+        <div className="relative h-40 w-full overflow-hidden bg-slate-100">
           <img
             src={image}
             alt={name}
             className="h-full w-full object-cover"
             loading="lazy"
             decoding="async"
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+            style={{ userSelect: 'none', WebkitUserDrag: 'none' }}
             onError={(e) => {
               e.currentTarget.onerror = null
               e.currentTarget.src = FALLBACK_IMAGE
             }}
+          />
+          <div
+            className="absolute inset-0 bg-transparent"
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+            aria-hidden="true"
           />
         </div>
       )}

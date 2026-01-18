@@ -332,6 +332,7 @@ export default function AdminInventoryAllocationsPage() {
                   const productName = row?.product?.name || "Unknown product";
                   const productSku = row?.product?.sku || "";
                   const slotLabel = row?.slot?.label || "Unknown slot";
+                  const slotId = row?.slot?.id || row?.slot?._id || "";
                   const order = row?.order || {};
                   const orderId = order?.id || order?._id || "";
                   const orderNumber = order?.orderNumber || orderId || "-";
@@ -371,9 +372,20 @@ export default function AdminInventoryAllocationsPage() {
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
-                          {slotLabel}
-                        </div>
+                        {slotId ? (
+                          <Link
+                            to={`/admin/inventory/slots/${slotId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-slate-900 hover:underline"
+                          >
+                            {slotLabel}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-slate-900">
+                            {slotLabel}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {orderId ? (

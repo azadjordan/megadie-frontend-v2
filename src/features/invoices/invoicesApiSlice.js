@@ -100,6 +100,14 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       }),
       keepUnusedDataFor: 0,
     }),
+    getStatementOfAccountPdf: builder.query({
+      query: (userId) => ({
+        url: `/invoices/soa/${userId}`,
+        method: "GET",
+        responseHandler: (response) => response.blob(),
+      }),
+      keepUnusedDataFor: 0,
+    }),
 
     updateInvoiceByAdmin: builder.mutation({
       query: ({ id, ...body }) => ({
@@ -145,6 +153,7 @@ export const {
   useGetMyInvoiceSummaryQuery,
   useGetInvoiceByIdQuery,
   useLazyGetInvoicePdfQuery,
+  useLazyGetStatementOfAccountPdfQuery,
   useUpdateInvoiceByAdminMutation,
   useDeleteInvoiceByAdminMutation,
   useCreateInvoiceFromOrderMutation,

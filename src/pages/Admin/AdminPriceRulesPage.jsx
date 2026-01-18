@@ -10,6 +10,7 @@ import {
   useUpdatePriceRuleMutation,
   useDeletePriceRuleMutation,
 } from "../../features/priceRules/priceRulesApiSlice";
+import { useGetProductMetaQuery } from "../../features/products/productsApiSlice";
 
 const parsePrice = (value) => {
   if (value === "" || value === null || value === undefined) return null;
@@ -27,14 +28,25 @@ const getUsageTotals = (usage) => {
   );
 };
 
+const normalizeRuleCode = (value) =>
+  String(value || "").toUpperCase().replace(/\s*\|\s*/g, "|");
+
 export default function AdminPriceRulesPage() {
+  const [filterProductType, setFilterProductType] = useState("");
   const {
     data,
     isLoading,
     isFetching,
     isError,
     error,
-  } = useGetPriceRulesQuery();
+  } = useGetPriceRulesQuery(
+    filterProductType ? { productType: filterProductType } : undefined
+  );
+  const {
+    data: metaData,
+    isLoading: metaLoading,
+    error: metaError,
+  } = useGetProductMetaQuery();
 
   const [createPriceRule, { isLoading: isCreating, error: createError }] =
     useCreatePriceRuleMutation();
@@ -44,10 +56,13 @@ export default function AdminPriceRulesPage() {
     useDeletePriceRuleMutation();
 
   const [newCode, setNewCode] = useState("");
+  const [newProductType, setNewProductType] = useState("");
   const [newPriceStr, setNewPriceStr] = useState("");
   const [editId, setEditId] = useState(null);
   const [editPriceStr, setEditPriceStr] = useState("");
+  const [editProductType, setEditProductType] = useState("");
 
+  const productTypes = metaData?.productTypes ?? [];
   const rules = useMemo(() => data?.data || [], [data]);
   const isBusy = isCreating || isUpdating || isDeleting;
 
@@ -55,11 +70,16 @@ export default function AdminPriceRulesPage() {
     if (editId && !rules.some((rule) => rule._id === editId)) {
       setEditId(null);
       setEditPriceStr("");
+      setEditProductType("");
     }
   }, [editId, rules]);
 
   const newPrice = parsePrice(newPriceStr);
-  const canAdd = newCode.trim().length > 0 && newPrice != null && !isCreating;
+  const canAdd =
+    newCode.trim().length > 0 &&
+    newProductType &&
+    newPrice != null &&
+    !isCreating;
 
   const actionError = createError || updateError || deleteError;
 
@@ -67,7 +87,8 @@ export default function AdminPriceRulesPage() {
     if (!canAdd) return;
     try {
       await createPriceRule({
-        code: newCode.trim(),
+        code: normalizeRuleCode(newCode).trim(),
+        productType: newProductType,
         defaultPrice: newPrice,
       }).unwrap();
       setNewCode("");
@@ -82,20 +103,28 @@ export default function AdminPriceRulesPage() {
     if (!rule?._id) return;
     setEditId(rule._id);
     setEditPriceStr(String(rule.defaultPrice ?? ""));
+    setEditProductType(rule.productType || "");
   };
 
   const onCancelEdit = () => {
     setEditId(null);
     setEditPriceStr("");
+    setEditProductType("");
   };
 
   const onSaveEdit = async (rule) => {
     const price = parsePrice(editPriceStr);
-    if (!rule?._id || price == null) return;
+    const productType = String(editProductType || rule.productType || "").trim();
+    if (!rule?._id || price == null || !productType) return;
     try {
-      await updatePriceRule({ id: rule._id, defaultPrice: price }).unwrap();
+      await updatePriceRule({
+        id: rule._id,
+        defaultPrice: price,
+        productType,
+      }).unwrap();
       setEditId(null);
       setEditPriceStr("");
+      setEditProductType("");
       toast.success("Default price updated.");
     } catch {
       // ErrorMessage handles it
@@ -132,21 +161,29 @@ export default function AdminPriceRulesPage() {
             and quotes.
           </div>
         </div>
-        {isFetching ? (
-          <div className="text-xs font-semibold text-slate-400">
-            Refreshing...
-          </div>
-        ) : null}
       </div>
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
         <div className="text-xs font-semibold text-slate-700">Add rule</div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          <select
+            value={newProductType}
+            onChange={(e) => setNewProductType(e.target.value)}
+            disabled={isBusy || metaLoading}
+            className="min-w-[180px] rounded-xl bg-white px-3 py-2 text-xs text-slate-700 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20 disabled:bg-slate-50"
+          >
+            <option value="">Select product type</option>
+            {productTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
           <input
             type="text"
             value={newCode}
-            onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-            placeholder="RULE-CODE"
+            onChange={(e) => setNewCode(normalizeRuleCode(e.target.value))}
+            placeholder="RIB|GRO|25MM|A+|100YD-ROLL"
             className="min-w-[220px] rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             disabled={isBusy}
           />
@@ -175,7 +212,52 @@ export default function AdminPriceRulesPage() {
           </button>
         </div>
         <div className="mt-2 text-xs text-slate-500">
-          Codes are stored in uppercase and must be unique.
+          Use "|" between parts; dashes are allowed inside parts (e.g., 48PC-PACK).
+        </div>
+        {metaError ? (
+          <div className="mt-2 text-xs text-rose-600">
+            Unable to load product types.
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[220px_1fr] md:items-end">
+          <div>
+            <label
+              htmlFor="price-rule-filter-type"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Product type
+            </label>
+            <select
+              id="price-rule-filter-type"
+              value={filterProductType}
+              onChange={(e) => setFilterProductType(e.target.value)}
+              disabled={metaLoading || productTypes.length === 0}
+              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20 disabled:bg-slate-50"
+            >
+              <option value="">All product types</option>
+              {productTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap items-end justify-between gap-2 text-xs text-slate-600">
+            <div>
+              Showing{" "}
+              <span className="font-semibold text-slate-900">
+                {rules.length}
+              </span>{" "}
+              rule{rules.length === 1 ? "" : "s"}
+            </div>
+            {isFetching ? (
+              <div className="font-semibold text-slate-400">Refreshing...</div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -190,10 +272,14 @@ export default function AdminPriceRulesPage() {
       ) : rules.length === 0 ? (
         <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
           <div className="text-sm font-semibold text-slate-900">
-            No price rules yet
+            {filterProductType
+              ? "No price rules for this product type"
+              : "No price rules yet"}
           </div>
           <div className="mt-1 text-sm text-slate-500">
-            Create a rule to start assigning prices.
+            {filterProductType
+              ? "Choose another product type or create a new rule."
+              : "Create a rule to start assigning prices."}
           </div>
         </div>
       ) : (
@@ -203,6 +289,7 @@ export default function AdminPriceRulesPage() {
               <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Rule code</th>
+                  <th className="px-4 py-3">Product type</th>
                   <th className="px-4 py-3">Default price</th>
                   <th className="px-4 py-3">Usage</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -214,11 +301,44 @@ export default function AdminPriceRulesPage() {
                   const editPrice = parsePrice(editPriceStr);
                   const usage = rule.usage || {};
                   const usageTotal = getUsageTotals(usage);
+                  const ruleProductType = rule.productType || "";
+                  const isLegacyProductType =
+                    ruleProductType && !productTypes.includes(ruleProductType);
 
                   return (
                     <tr key={rule._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 text-xs font-semibold text-slate-900">
                         {rule.code}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        {isEditing ? (
+                          <select
+                            value={editProductType}
+                            onChange={(e) => setEditProductType(e.target.value)}
+                            className="w-full min-w-[160px] rounded-xl bg-white px-2 py-1.5 text-xs text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                          >
+                            <option value="">Select product type</option>
+                            {editProductType &&
+                            !productTypes.includes(editProductType) ? (
+                              <option value={editProductType}>
+                                Legacy: {editProductType}
+                              </option>
+                            ) : null}
+                            {productTypes.map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                          </select>
+                        ) : ruleProductType ? (
+                          <span>
+                            {isLegacyProductType
+                              ? `Legacy: ${ruleProductType}`
+                              : ruleProductType}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Unassigned</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {isEditing ? (
@@ -262,10 +382,10 @@ export default function AdminPriceRulesPage() {
                             <button
                               type="button"
                               onClick={() => onSaveEdit(rule)}
-                              disabled={isBusy || editPrice == null}
+                              disabled={isBusy || editPrice == null || !editProductType}
                               className={[
                                 "rounded-lg px-2.5 py-1 text-xs font-semibold",
-                                isBusy || editPrice == null
+                                isBusy || editPrice == null || !editProductType
                                   ? "cursor-not-allowed bg-slate-200 text-slate-400"
                                   : "bg-slate-900 text-white hover:bg-slate-800",
                               ].join(" ")}

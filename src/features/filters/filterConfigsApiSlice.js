@@ -23,7 +23,52 @@ export const filterConfigsApiSlice = apiSlice.injectEndpoints({
             ]
           : [{ type: 'FilterConfig', id: 'LIST' }],
     }),
+    // Admin: get one config by productType
+    getFilterConfig: builder.query({
+      query: (productType) => ({
+        url: `/filter-configs/${productType}`,
+      }),
+      transformResponse: (response) => response?.data ?? null,
+      providesTags: (_result, _err, productType) => [
+        { type: 'FilterConfig', id: productType },
+      ],
+    }),
+    // Admin: create config for productType
+    createFilterConfig: builder.mutation({
+      query: ({ productType, ...body }) => ({
+        url: `/filter-configs/${productType}`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'FilterConfig', id: 'LIST' }],
+    }),
+    // Admin: update config for productType
+    updateFilterConfig: builder.mutation({
+      query: ({ productType, ...body }) => ({
+        url: `/filter-configs/${productType}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: (_result, _err, arg) => [
+        { type: 'FilterConfig', id: arg?.productType },
+        { type: 'FilterConfig', id: 'LIST' },
+      ],
+    }),
+    // Admin: delete config for productType
+    deleteFilterConfig: builder.mutation({
+      query: (productType) => ({
+        url: `/filter-configs/${productType}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: [{ type: 'FilterConfig', id: 'LIST' }],
+    }),
   }),
 })
 
-export const { useGetFilterConfigsQuery } = filterConfigsApiSlice
+export const {
+  useGetFilterConfigsQuery,
+  useGetFilterConfigQuery,
+  useCreateFilterConfigMutation,
+  useUpdateFilterConfigMutation,
+  useDeleteFilterConfigMutation,
+} = filterConfigsApiSlice

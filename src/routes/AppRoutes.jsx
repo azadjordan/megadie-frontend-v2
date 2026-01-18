@@ -30,6 +30,7 @@ import AdminInvoiceEditPage from "../pages/Admin/AdminInvoiceEditPage";
 import AdminInventoryPage from "../pages/Admin/AdminInventoryPage";
 import AdminInventorySlotsPage from "../pages/Admin/AdminInventorySlotsPage";
 import AdminInventoryAllocationsPage from "../pages/Admin/AdminInventoryAllocationsPage";
+import AdminInventoryCategoriesPage from "../pages/Admin/AdminInventoryCategoriesPage";
 import AdminProductCreatePage from "../pages/Admin/AdminProductCreatePage";
 import AdminProductEditPage from "../pages/Admin/AdminProductEditPage";
 import AdminSlotDetailsPage from "../pages/Admin/AdminSlotDetailsPage";
@@ -38,6 +39,8 @@ import AdminUserDetailsPage from "../pages/Admin/AdminUserDetailsPage";
 import AdminRequestDetailsPage from "../pages/Admin/AdminRequestDetailsPage";
 import AdminOrderDetailsPage from "../pages/Admin/AdminOrderDetailsPage";
 import AdminPriceRulesPage from "../pages/Admin/AdminPriceRulesPage";
+import AdminFilterConfigsPage from "../pages/Admin/AdminFilterConfigsPage";
+import AdminFilterConfigEditPage from "../pages/Admin/AdminFilterConfigEditPage";
 
 
 
@@ -164,6 +167,10 @@ export default function AppRoutes() {
     <Route path="inventory/products" element={<AdminInventoryPage />} />
     <Route path="inventory/slots" element={<AdminInventorySlotsPage />} />
     <Route
+      path="inventory/categories"
+      element={<Navigate to="/admin/categories" replace />}
+    />
+    <Route
       path="inventory/allocations"
       element={<AdminInventoryAllocationsPage />}
     />
@@ -174,6 +181,12 @@ export default function AppRoutes() {
       element={<AdminProductEditPage />}
     />
     <Route path="price-rules" element={<AdminPriceRulesPage />} />
+    <Route path="categories" element={<AdminInventoryCategoriesPage />} />
+    <Route path="filter-configs" element={<AdminFilterConfigsPage />} />
+    <Route
+      path="filter-configs/:productType/edit"
+      element={<AdminFilterConfigEditPage />}
+    />
   </Route>
 </Route>
 

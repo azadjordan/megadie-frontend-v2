@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FiRefreshCw, FiSettings } from "react-icons/fi";
+import { FiRefreshCw, FiSettings, FiTrash2 } from "react-icons/fi";
+import { toast } from "react-toastify";
 import Pagination from "../../components/common/Pagination";
 import AdminInventoryTabs from "../../components/admin/AdminInventoryTabs";
 import InventoryLocateModal from "../../components/admin/InventoryLocateModal";
@@ -12,6 +13,10 @@ import {
   useLazyGetSlotItemsByProductQuery,
 } from "../../features/slotItems/slotItemsApiSlice";
 import { useLazyGetSlotsQuery } from "../../features/slots/slotsApiSlice";
+import {
+  useDeleteProductMutation,
+  useGetProductMetaQuery,
+} from "../../features/products/productsApiSlice";
 
 const SLOT_STORE_TABS = [
   { label: "All stores", value: "all" },
@@ -38,6 +43,7 @@ export default function AdminInventoryPage() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("recent");
   const [productStatus, setProductStatus] = useState("all");
+  const [productTypeFilter, setProductTypeFilter] = useState("all");
   const [productPage, setProductPage] = useState(1);
   const [productLimit, setProductLimit] = useState(25);
   const [locateProduct, setLocateProduct] = useState(null);
@@ -64,12 +70,27 @@ export default function AdminInventoryPage() {
   const isNewSlotDebouncing =
     trimmedNewSlotSearch !== debouncedNewSlotSearch;
 
+  const {
+    data: metaData,
+    isLoading: metaLoading,
+    error: metaError,
+  } = useGetProductMetaQuery();
+  const productTypes = metaData?.productTypes ?? [];
+
   const productParams = useMemo(() => {
     const params = { sort, page: productPage, limit: productLimit };
     if (debouncedSearch) params.q = debouncedSearch;
     if (productStatus !== "all") params.status = productStatus;
+    if (productTypeFilter !== "all") params.productType = productTypeFilter;
     return params;
-  }, [debouncedSearch, productStatus, sort, productPage, productLimit]);
+  }, [
+    debouncedSearch,
+    productStatus,
+    productTypeFilter,
+    sort,
+    productPage,
+    productLimit,
+  ]);
 
   const {
     data: inventoryData,
@@ -89,6 +110,9 @@ export default function AdminInventoryPage() {
   const [getSlots] = useLazyGetSlotsQuery();
   const [adjustSlotItem, { isLoading: adjustingStock }] =
     useAdjustSlotItemMutation();
+  const [deleteProduct, { isLoading: isDeleting }] =
+    useDeleteProductMutation();
+  const [deletingId, setDeletingId] = useState(null);
 
   const productRows = inventoryData?.rows ?? [];
   const productPagination = inventoryData?.pagination ?? null;
@@ -208,7 +232,7 @@ export default function AdminInventoryPage() {
   );
 
   const primaryAction = {
-    label: "Create New Product",
+    label: "+ New Product",
     onClick: () => navigate("/admin/inventory/products/new"),
   };
 
@@ -216,6 +240,7 @@ export default function AdminInventoryPage() {
     setQ("");
     setSort("recent");
     setProductStatus("all");
+    setProductTypeFilter("all");
     setProductPage(1);
     setProductLimit(25);
   };
@@ -434,6 +459,36 @@ export default function AdminInventoryPage() {
     }
   };
 
+  const friendlyApiError = (err) =>
+    err?.data?.message || err?.error || err?.message || "Something went wrong.";
+
+  const handleDeleteProduct = async (row) => {
+    if (!row?.id) return;
+    const onHand = Number(row.onHand || 0);
+    const allocated = Number(row.allocated || 0);
+    if (onHand > 0 || allocated > 0) {
+      toast.error(
+        `Cannot delete while on-hand (${formatQty(
+          onHand
+        )}) or allocated (${formatQty(allocated)}) quantities exist.`
+      );
+      return;
+    }
+
+    const ok = window.confirm("Delete this product? This cannot be undone.");
+    if (!ok) return;
+
+    try {
+      setDeletingId(row.id);
+      const res = await deleteProduct(row.id).unwrap();
+      toast.success(res?.message || "Product deleted.");
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -477,7 +532,7 @@ export default function AdminInventoryPage() {
         <div className="flex flex-col gap-3">
           <AdminInventoryTabs />
 
-          <div className="grid w-full grid-cols-1 gap-3 md:items-end md:grid-cols-[1fr_220px_160px_200px_auto]">
+          <div className="grid w-full grid-cols-1 gap-3 md:items-end md:grid-cols-[1fr_200px_220px_160px_200px_auto]">
             <div>
               <label
                 htmlFor="inventory-search"
@@ -500,6 +555,37 @@ export default function AdminInventoryPage() {
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               />
+            </div>
+
+            <div>
+              <label
+                htmlFor="inventory-product-type"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Product type
+              </label>
+              <select
+                id="inventory-product-type"
+                value={productTypeFilter}
+                onChange={(e) => {
+                  setProductTypeFilter(e.target.value);
+                  setProductPage(1);
+                }}
+                disabled={metaLoading || !productTypes.length}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20 disabled:bg-slate-50"
+              >
+                <option value="all">All product types</option>
+                {productTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              {metaError ? (
+                <div className="mt-1 text-[11px] text-rose-600">
+                  Unable to load product types.
+                </div>
+              ) : null}
             </div>
 
             <div>
@@ -649,10 +735,17 @@ export default function AdminInventoryPage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {sortedRows.map((row) => {
-                  const available = Math.max(
-                    0,
-                    Number(row.onHand || 0) - Number(row.allocated || 0)
-                  );
+                  const onHand = Number(row.onHand || 0);
+                  const allocated = Number(row.allocated || 0);
+                  const available = Math.max(0, onHand - allocated);
+                  const canDelete = onHand <= 0 && allocated <= 0;
+                  const isDeletingRow =
+                    isDeleting && String(deletingId) === String(row.id);
+                  const deleteTitle = canDelete
+                    ? "Delete product"
+                    : `Cannot delete while on-hand (${formatQty(
+                        onHand
+                      )}) or allocated (${formatQty(allocated)}) quantities exist.`;
                   return (
                     <tr key={row.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
@@ -662,10 +755,10 @@ export default function AdminInventoryPage() {
                         <div className="text-xs text-slate-500">{row.sku}</div>
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {formatQty(row.onHand)}
+                        {formatQty(onHand)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {formatQty(row.allocated)}
+                        {formatQty(allocated)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-900">
                         {formatQty(available)}
@@ -703,6 +796,24 @@ export default function AdminInventoryPage() {
                             className="inline-flex h-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
                           >
                             Stock
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProduct(row)}
+                            disabled={isDeletingRow}
+                            aria-disabled={!canDelete || isDeletingRow}
+                            className={[
+                              "inline-flex h-8 w-8 items-center justify-center rounded-lg border",
+                              isDeletingRow
+                                ? "cursor-not-allowed border-slate-200 bg-white text-slate-300"
+                                : canDelete
+                                ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+                                : "border-slate-200 bg-white text-slate-400 hover:bg-slate-50",
+                            ].join(" ")}
+                            title={deleteTitle}
+                            aria-label={deleteTitle}
+                          >
+                            <FiTrash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -774,4 +885,3 @@ export default function AdminInventoryPage() {
     </div>
   );
 }
-

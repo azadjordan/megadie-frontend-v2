@@ -9,11 +9,12 @@ import { parseNullableNumber } from "./helpers";
 export default function QuantitiesStep({
   items,
   showAvailability,
-  availabilityCheckedAt,
-  canRecheckAvailability,
-  isRecheckingAvailability,
-  onRecheckAvailability,
-  recheckAvailabilityError,
+  stockCheckedAt,
+  canCheckStock,
+  isCheckingStock,
+  onCheckStock,
+  stockCheckError,
+  stockCheckByProduct,
   canUpdateQty,
   updateQtyDisabled,
   isUpdatingQty,
@@ -62,21 +63,21 @@ export default function QuantitiesStep({
       <div className="mb-3 grid gap-2 lg:grid-cols-[1fr_auto] lg:items-center">
         <div className="text-xs text-slate-500">
           {showAvailability
-            ? availabilityCheckedAt
-              ? `Availability checked ${availabilityCheckedAt}`
-              : "No availability snapshot yet."
-            : "Availability hidden for cancelled quotes."}
+            ? stockCheckedAt
+              ? `Stock checked ${stockCheckedAt}`
+              : "No stock check yet."
+            : "Stock check hidden for cancelled quotes."}
         </div>
 
         {showAvailability ? (
           <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
             <button
               type="button"
-              onClick={onRecheckAvailability}
-              disabled={!canRecheckAvailability || isRecheckingAvailability}
+              onClick={onCheckStock}
+              disabled={!canCheckStock || isCheckingStock}
               className={[
                 "inline-flex min-w-[160px] items-center justify-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold transition",
-                !canRecheckAvailability || isRecheckingAvailability
+                !canCheckStock || isCheckingStock
                   ? "cursor-not-allowed bg-slate-300 text-white"
                   : "bg-slate-900 text-white hover:bg-slate-800",
               ].join(" ")}
@@ -84,20 +85,20 @@ export default function QuantitiesStep({
               <FiRefreshCw
                 className={[
                   "h-3.5 w-3.5",
-                  isRecheckingAvailability ? "animate-spin" : "",
+                  isCheckingStock ? "animate-spin" : "",
                 ].join(" ")}
                 aria-hidden="true"
               />
-              {isRecheckingAvailability ? "Rechecking..." : "Recheck Availability"}
+              {isCheckingStock ? "Checking..." : "Check Stock"}
             </button>
 
             <button
               type="button"
               onClick={onToggleEditQty}
-              disabled={!canUpdateQty || isUpdatingQty || isRecheckingAvailability}
+              disabled={!canUpdateQty || isUpdatingQty || isCheckingStock}
               className={[
                 "inline-flex min-w-[120px] items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
-                !canUpdateQty || isUpdatingQty || isRecheckingAvailability
+                !canUpdateQty || isUpdatingQty || isCheckingStock
                   ? "cursor-not-allowed border-slate-200 bg-white text-slate-400"
                   : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50",
               ].join(" ")}
@@ -108,9 +109,9 @@ export default function QuantitiesStep({
         ) : null}
       </div>
 
-      {recheckAvailabilityError ? (
+      {stockCheckError ? (
         <div className="mb-3">
-          <ErrorMessage error={recheckAvailabilityError} />
+          <ErrorMessage error={stockCheckError} />
         </div>
       ) : null}
 
@@ -141,19 +142,32 @@ export default function QuantitiesStep({
               const availableNow = Number.isFinite(Number(it.availableNow))
                 ? Number(it.availableNow)
                 : null;
-              const availableCap =
-                availableNow == null ? 0 : Math.max(0, Number(availableNow));
+              const productKey = String(it.productId || idx);
+              const stockRow = stockCheckByProduct?.get(productKey) || null;
+              const onHandValue = stockRow
+                ? Number(stockRow.onHand)
+                : availableNow;
+              const availableValue = stockRow
+                ? Number(stockRow.availableAfterReserve)
+                : null;
+              const availableCap = Number.isFinite(availableValue)
+                ? Math.max(0, availableValue)
+                : availableNow == null
+                ? 0
+                : Math.max(0, Number(availableNow));
               const requestedQty = Number.isFinite(Number(it.requestedQty))
                 ? Number(it.requestedQty)
                 : qty;
-              const shortage = Number.isFinite(Number(it.shortage))
-                ? Math.max(0, Number(it.shortage))
-                : availableNow != null
-                ? Math.max(0, requestedQty - availableNow)
-                : null;
-              const key = String(it.productId || idx);
+              const shortage =
+                showAvailability && Number.isFinite(availableCap)
+                  ? Math.max(0, requestedQty - availableCap)
+                  : null;
+              const key = productKey;
               const draftQty = Number(editDraft?.[key]);
-              const defaultQty = Number.isFinite(availableNow)
+              const hasAvailableCap = stockRow
+                ? Number.isFinite(availableValue)
+                : Number.isFinite(availableNow);
+              const defaultQty = hasAvailableCap
                 ? Math.min(requestedQty, availableCap)
                 : requestedQty;
               const fallbackQty = showAvailability ? defaultQty : qty;
@@ -174,11 +188,15 @@ export default function QuantitiesStep({
               const requestedDisplay = Number.isFinite(Number(requestedQty))
                 ? Number(requestedQty)
                 : "-";
-              const availableDisplay = availableNow == null ? "-" : availableNow;
-              const shortageDisplay = shortage == null ? "-" : shortage;
+              const onHandDisplay = Number.isFinite(onHandValue)
+                ? onHandValue
+                : "-";
+              const availableDisplay = Number.isFinite(availableValue)
+                ? availableValue
+                : "-";
               const availabilityTone =
-                showAvailability && availableNow != null
-                  ? Number(availableNow) <= 0
+                showAvailability && Number.isFinite(availableCap)
+                  ? Number(availableCap) <= 0
                     ? "bg-red-50 text-red-700"
                     : Number.isFinite(Number(shortage)) && Number(shortage) > 0
                     ? "bg-amber-50 text-amber-800"
@@ -206,7 +224,7 @@ export default function QuantitiesStep({
                               availabilityTone || "text-slate-600",
                             ].join(" ")}
                           >
-                            {`Avl ${availableDisplay} / Short ${shortageDisplay}`}
+                            {`Hand ${onHandDisplay} / Avl ${availableDisplay}`}
                           </span>
                         </div>
                       ) : null}

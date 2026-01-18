@@ -19,7 +19,10 @@ import {
   useMarkOrderDeliveredMutation,
 } from "../../features/orders/ordersApiSlice";
 import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
-import { useGetOrderAllocationsQuery } from "../../features/orderAllocations/orderAllocationsApiSlice";
+import {
+  useGetOrderAllocationsQuery,
+  useFinalizeOrderAllocationsMutation,
+} from "../../features/orderAllocations/orderAllocationsApiSlice";
 
 function formatDateTime(iso) {
   if (!iso) return "";
@@ -163,11 +166,67 @@ export default function AdminOrderDetailsPage() {
     isError: isAllocationsError,
   } = useGetOrderAllocationsQuery(orderId, { skip: !shouldLoadAllocations });
 
+  const [
+    finalizeAllocations,
+    { isLoading: isFinalizing, error: finalizeError },
+  ] = useFinalizeOrderAllocationsMutation();
+
   const allocations = Array.isArray(allocationsResult?.data)
     ? allocationsResult.data
     : Array.isArray(allocationsResult)
       ? allocationsResult
       : [];
+  const reservedAllocations = useMemo(
+    () =>
+      allocations.filter(
+        (row) => !row?.status || row.status === "Reserved"
+      ),
+    [allocations]
+  );
+  const deductedAllocations = useMemo(
+    () => allocations.filter((row) => row?.status === "Deducted"),
+    [allocations]
+  );
+  const hasAllocations = allocations.length > 0;
+  const hasDeductedAllocations = deductedAllocations.length > 0;
+
+  const reservedByProduct = useMemo(() => {
+    const map = new Map();
+    for (const row of reservedAllocations) {
+      const productId = resolveEntityId(row?.product);
+      if (!productId) continue;
+      map.set(productId, (map.get(productId) || 0) + (Number(row?.qty) || 0));
+    }
+    return map;
+  }, [reservedAllocations]);
+
+  const deductedByProduct = useMemo(() => {
+    const map = new Map();
+    for (const row of deductedAllocations) {
+      const productId = resolveEntityId(row?.product);
+      if (!productId) continue;
+      map.set(productId, (map.get(productId) || 0) + (Number(row?.qty) || 0));
+    }
+    return map;
+  }, [deductedAllocations]);
+
+  const isFullyReserved =
+    items.length > 0 &&
+    items.every((it) => {
+      const productId = resolveEntityId(it?.product);
+      const orderedQty = Number(it?.qty) || 0;
+      const reservedQty = productId ? reservedByProduct.get(productId) || 0 : 0;
+      return reservedQty === orderedQty;
+    });
+
+  const isFullyDeducted =
+    items.length > 0 &&
+    items.every((it) => {
+      const productId = resolveEntityId(it?.product);
+      const orderedQty = Number(it?.qty) || 0;
+      const deductedQty = productId ? deductedByProduct.get(productId) || 0 : 0;
+      return deductedQty === orderedQty;
+    });
   const hasBlockingAllocations = allocations.some(
     (row) =>
       !row?.status || row.status === "Reserved" || row.status === "Deducted"
@@ -220,6 +279,33 @@ export default function AdminOrderDetailsPage() {
     ? "Order is cancelled."
     : orderStatus !== "Shipping"
     ? "Order must be Shipping before managing allocations."
+    : "";
+  const isAllocationLocked =
+    ["Delivered", "Cancelled"].includes(orderStatus) || !canAllocate;
+  const hasPartialDeduction = hasDeductedAllocations && !isFullyDeducted;
+
+  let finalizeHint = "";
+  if (!isAllocationLocked && !isAllocationsLoading) {
+    if (!hasAllocations) {
+      finalizeHint = "No reservations yet.";
+    } else if (!isFullyReserved) {
+      finalizeHint = "Reserve all items before finalizing stock.";
+    } else {
+      finalizeHint = "Finalizing deducts reserved qty from stock.";
+    }
+  }
+
+  const canFinalize =
+    !isAllocationLocked &&
+    !isFullyDeducted &&
+    !hasPartialDeduction &&
+    hasAllocations &&
+    isFullyReserved &&
+    !isAllocationsLoading;
+  const finalizeTooltip = !canFinalize
+    ? isStockFinalized
+      ? "Stock already Finalized"
+      : finalizeHint || allocationLockReason
     : "";
 
   const isShipping = orderStatus === "Shipping";
@@ -428,6 +514,21 @@ export default function AdminOrderDetailsPage() {
       setShippingError(
         err?.data?.message || err?.error || "Failed to update shipping status."
       );
+    }
+  };
+
+  const handleFinalize = async () => {
+    if (!orderId || !canFinalize || isFinalizing) return;
+    const confirmed = window.confirm(
+      "Finalize stock for this order? This will deduct reserved qty and lock allocations."
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await finalizeAllocations(orderId).unwrap();
+      toast.success(res?.message || "Stock finalized.");
+    } catch {
+      // ErrorMessage handles failure state.
     }
   };
 
@@ -924,6 +1025,7 @@ export default function AdminOrderDetailsPage() {
             canCreateInvoice={canCreateInvoice}
             canShip={canShip}
             canDeliver={canDeliver}
+            canFinalize={canFinalize}
             canDelete={canDeleteOrder}
             createInvoiceReason={createInvoiceReason}
             shippingReason={shippingLockReason}
@@ -932,13 +1034,17 @@ export default function AdminOrderDetailsPage() {
             isStockFinalized={isStockFinalized}
             onCreateInvoice={openCreateModal}
             onShip={handleShip}
+            onFinalize={handleFinalize}
             onDeliver={openDeliverModal}
             onDelete={handleDeleteOrder}
             isCreatingInvoice={isCreating}
             isUpdatingStatus={isUpdatingStatus}
+            isFinalizing={isFinalizing}
             isDelivering={isDelivering}
             isDeleting={isDeleting}
             shippingError={shippingError}
+            finalizeTooltip={finalizeTooltip}
+            finalizeError={finalizeError}
           />
         </aside>
       </div>

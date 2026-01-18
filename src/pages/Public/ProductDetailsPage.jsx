@@ -12,6 +12,39 @@ import { useGetProductByIdQuery } from "../../features/products/productsApiSlice
 const placeholder = `data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20" font-weight="600" text-anchor="middle" dominant-baseline="middle">No image</text></svg>'
 )}`;
+const OPTIMIZED_IMAGE_HINT =
+  /(?:^|[\\/_-])(medium|optimized)(?:[\\/_-]|$)|[?&](?:size|variant)=medium|[?&](?:w|width|q|quality)=\d+/i;
+
+const normalizeImageUrl = (src) => {
+  const trimmed = typeof src === "string" ? src.trim() : "";
+  if (!trimmed || trimmed.startsWith("data:")) return trimmed;
+
+  let next = trimmed;
+  next = next.replace(/\/(original|full|large)\//i, "/medium/");
+  next = next.replace(
+    /([._-])(original|full|large)(?=([._-]|\.[a-z]+$|$))/i,
+    "$1medium"
+  );
+  next = next.replace(
+    /([?&](?:size|variant)=)(original|full|large)/i,
+    "$1medium"
+  );
+  return next;
+};
+
+const getOptimizedImages = (sources) => {
+  const cleaned = (Array.isArray(sources) ? sources : [])
+    .filter((src) => typeof src === "string")
+    .map((src) => src.trim())
+    .filter(Boolean);
+
+  if (!cleaned.length) return [];
+
+  const optimized = cleaned.filter((src) => OPTIMIZED_IMAGE_HINT.test(src));
+  const baseList = optimized.length ? optimized : cleaned;
+  const normalized = baseList.map((src) => normalizeImageUrl(src));
+  return Array.from(new Set(normalized));
+};
 
 export default function ProductDetailsPage() {
   const { id } = useParams();
@@ -32,11 +65,13 @@ export default function ProductDetailsPage() {
 
   const name = product?.name || "Untitled product";
   const images = useMemo(() => {
-    const list = Array.isArray(product?.images)
-      ? product.images.filter(Boolean)
-      : [];
-    const fallback = product?.imageUrl || placeholder;
-    return list.length ? list : [fallback];
+    const list = getOptimizedImages(product?.images);
+    if (list.length) return list;
+    const fallback =
+      typeof product?.imageUrl === "string" && product.imageUrl.trim()
+        ? product.imageUrl
+        : placeholder;
+    return [normalizeImageUrl(fallback)];
   }, [product]);
   const activeImage =
     images[Math.min(activeImageIndex, Math.max(images.length - 1, 0))];
@@ -127,17 +162,26 @@ export default function ProductDetailsPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-3">
           <div className="overflow-hidden rounded-3xl bg-white/90 shadow-sm ring-1 ring-slate-200/80">
-            <div className="grid min-h-[320px] place-items-center p-4 sm:min-h-[360px]">
+            <div className="relative grid min-h-[320px] place-items-center p-4 sm:min-h-[360px]">
               <img
                 src={activeImage}
                 alt={name}
                 className="h-auto w-auto max-h-[420px] max-w-full object-contain"
                 loading="lazy"
                 decoding="async"
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+                style={{ userSelect: "none", WebkitUserDrag: "none" }}
                 onError={(e) => {
                   e.currentTarget.onerror = null;
                   e.currentTarget.src = placeholder;
                 }}
+              />
+              <div
+                className="absolute inset-0 bg-transparent"
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
+                aria-hidden="true"
               />
             </div>
           </div>
@@ -152,7 +196,7 @@ export default function ProductDetailsPage() {
                     type="button"
                     onClick={() => setActiveImageIndex(idx)}
                     className={[
-                      "h-16 w-16 overflow-hidden rounded-xl border transition",
+                      "relative h-16 w-16 overflow-hidden rounded-xl border transition",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2",
                       isActive
                         ? "border-violet-400 ring-2 ring-violet-200"
@@ -166,10 +210,19 @@ export default function ProductDetailsPage() {
                       className="h-full w-full object-cover"
                       loading="lazy"
                       decoding="async"
+                      onContextMenu={(e) => e.preventDefault()}
+                      onDragStart={(e) => e.preventDefault()}
+                      style={{ userSelect: "none", WebkitUserDrag: "none" }}
                       onError={(e) => {
                         e.currentTarget.onerror = null;
                         e.currentTarget.src = placeholder;
                       }}
+                    />
+                    <div
+                      className="absolute inset-0 bg-transparent"
+                      onContextMenu={(e) => e.preventDefault()}
+                      onDragStart={(e) => e.preventDefault()}
+                      aria-hidden="true"
                     />
                   </button>
                 );

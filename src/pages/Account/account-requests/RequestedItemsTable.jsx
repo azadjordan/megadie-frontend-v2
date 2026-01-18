@@ -1,4 +1,4 @@
-import { FiAlertTriangle, FiClock } from "react-icons/fi";
+import { FiAlertTriangle, FiClock, FiTrash2 } from "react-icons/fi";
 
 import QuantityControlRequests from "../../../components/common/QantityControlRequests";
 
@@ -170,12 +170,14 @@ export default function RequestedItemsTable({
           showAvailabilityBadge &&
           Number.isFinite(Number(availableQty)) &&
           Number(availableQty) === 0;
-        const fadedClass = isUnavailable ? "opacity-50" : "";
 
         const showQtyControl = canEditRow;
         const controlValue = editingQty;
         const shouldShowZeroQtyNotice =
           canEditRow && Number(controlValue) === 0;
+        const shouldStrikeName = isUnavailable || shouldShowZeroQtyNotice;
+        const showRemoveAction = canEditRow;
+        const fadedClass = shouldStrikeName ? "opacity-50" : "";
         const isOverAvailable =
           canEditRow &&
           Number.isFinite(availableQty) &&
@@ -226,7 +228,18 @@ export default function RequestedItemsTable({
                 .filter(Boolean)
                 .join(" ")}
             >
-              <div className="line-clamp-4 text-[11px] sm:text-sm">{name}</div>
+              <div
+                className={[
+                  "line-clamp-4 text-[11px] sm:text-sm",
+                  shouldStrikeName
+                    ? "line-through decoration-rose-500 decoration-2"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {name}
+              </div>
             </div>
             <div className="col-span-3 sm:col-span-2 flex items-center justify-end text-right overflow-visible pr-0.5 sm:pr-1">
               <div className="flex w-full items-center justify-end gap-1 sm:gap-2">
@@ -314,8 +327,30 @@ export default function RequestedItemsTable({
                 <AvailabilityBadge
                   status={badgeStatus}
                   label={badgeLabel}
-                  className={fadedClass}
                 />
+              ) : null}
+              {showRemoveAction && !showPricingColumn ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onAdjustDraftQty(
+                      quoteId,
+                      productKey,
+                      -controlValue,
+                      Number(availableQty) || 0,
+                      fallbackQty
+                    )
+                  }
+                  className={[
+                    "ml-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-rose-500 transition hover:bg-rose-50 hover:text-rose-600",
+                    fadedClass,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-label="Set quantity to 0"
+                >
+                  <FiTrash2 className="h-3.5 w-3.5" />
+                </button>
               ) : null}
             </div>
             {showPricingColumn ? (
@@ -327,23 +362,43 @@ export default function RequestedItemsTable({
                   .filter(Boolean)
                   .join(" ")}
               >
-                {showFullPricing ? (
-                  <span className="inline-flex w-[8ch] justify-start">
-                    {Number.isFinite(Number(lineTotal))
-                      ? hasItemShortage && Number(availableQty) === 0
-                        ? "-"
-                        : `AED ${formatNumber(lineTotal)}`
-                      : "-"}
-                  </span>
-                ) : showWaitingIndicator ? (
-                  <span className="inline-flex w-[8ch] items-center justify-start text-slate-400">
-                    <FiClock className="h-4 w-4" />
-                  </span>
-                ) : (
-                  <span className="inline-flex w-[8ch] justify-start">
-                    -
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {showFullPricing ? (
+                    <span className="inline-flex w-[8ch] justify-start">
+                      {Number.isFinite(Number(lineTotal))
+                        ? hasItemShortage && Number(availableQty) === 0
+                          ? "-"
+                          : `AED ${formatNumber(lineTotal)}`
+                        : "-"}
+                    </span>
+                  ) : showWaitingIndicator ? (
+                    <span className="inline-flex w-[8ch] items-center justify-start text-slate-400">
+                      <FiClock className="h-4 w-4" />
+                    </span>
+                  ) : (
+                    <span className="inline-flex w-[8ch] justify-start">
+                      -
+                    </span>
+                  )}
+                  {showRemoveAction ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAdjustDraftQty(
+                          quoteId,
+                          productKey,
+                          -controlValue,
+                          Number(availableQty) || 0,
+                          fallbackQty
+                        )
+                      }
+                      className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-rose-500 transition hover:bg-rose-50 hover:text-rose-600"
+                      aria-label="Set quantity to 0"
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </div>

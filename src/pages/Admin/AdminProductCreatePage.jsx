@@ -58,46 +58,15 @@ const sanitizeToken = (value) => {
     .replace(/^-+|-+$/g, "");
 };
 
-const SKU_MAP = {
-  productType: {
-    Ribbon: "RIB",
-    "Creasing Matrix": "CRM",
-    "Double Face Tape": "DFT",
-  },
-  categoryKey: {
-    grosgrain: "GRO",
-    satin: "SAT",
-  },
-  grade: {
-    Premium: "PREM",
-    Standard: "STD",
-    Economy: "ECO",
-  },
-  variant: {
-    "100 Yards": "100-YD",
-    "150 Yards": "150-YD",
-    "35 Yards": "35-YD",
-    "50 Meters": "50-M",
-    "50 Pieces": "50-PC",
-  },
-  finish: {
-    "Single Face": "SF",
-    "Double Face": "DF",
-  },
-  packingUnit: {
-    Roll: "ROLL",
-    Pack: "PACK",
-  },
-};
-
-const skuToken = (field, value) => {
+const skuToken = (skuTokens, field, value) => {
   if (!value) return "";
-  const map = SKU_MAP[field];
-  const raw = map?.[value] || value;
-  return sanitizeToken(raw);
+  const map = skuTokens?.[field];
+  const mapped = map?.[value];
+  if (mapped) return mapped;
+  return sanitizeToken(value);
 };
 
-const buildSkuPreview = ({
+const buildSkuPreview = (skuTokens, {
   productType,
   categoryKey,
   size,
@@ -109,15 +78,15 @@ const buildSkuPreview = ({
   packingUnit,
 }) => {
   const parts = [
-    skuToken("productType", productType),
-    skuToken("categoryKey", categoryKey),
-    sanitizeToken(size),
+    skuToken(skuTokens, "productType", productType),
+    skuToken(skuTokens, "categoryKey", categoryKey),
+    skuToken(skuTokens, "size", size),
     sanitizeToken(color),
     sanitizeToken(catalogCode),
-    skuToken("variant", variant),
-    skuToken("grade", grade),
-    skuToken("finish", finish),
-    skuToken("packingUnit", packingUnit),
+    skuToken(skuTokens, "variant", variant),
+    skuToken(skuTokens, "grade", grade),
+    skuToken(skuTokens, "finish", finish),
+    skuToken(skuTokens, "packingUnit", packingUnit),
   ].filter(Boolean);
 
   return parts.join("|") || "";
@@ -187,9 +156,10 @@ export default function AdminProductCreatePage() {
   const grades = metaData?.grades ?? [];
   const variants = metaData?.variants ?? [];
   const finishes = metaData?.finishes ?? [];
-  const packingUnits = metaData?.packingUnits ?? ["Roll", "Pack"];
+  const packingUnits = metaData?.packingUnits ?? [];
   const tags = metaData?.tags ?? [];
   const catalogCodes = metaData?.ribbonCatalogCodes ?? [];
+  const skuTokens = metaData?.skuTokens ?? {};
 
   const priceRules = priceRulesData?.data ?? [];
   const categories = categoriesData ?? [];
@@ -206,7 +176,7 @@ export default function AdminProductCreatePage() {
   const preview = useMemo(() => {
     const resolvedType = selectedCategory?.productType || form.productType;
     const categoryLabel = selectedCategory?.label || selectedCategory?.key || "";
-    const sku = buildSkuPreview({
+    const sku = buildSkuPreview(skuTokens, {
       productType: resolvedType,
       categoryKey: selectedCategory?.key,
       size: form.size,
@@ -250,6 +220,7 @@ export default function AdminProductCreatePage() {
     form.size,
     form.variant,
     selectedCategory,
+    skuTokens,
   ]);
 
   const updateField = (key, value) => {
@@ -293,6 +264,14 @@ export default function AdminProductCreatePage() {
     const errors = {};
     if (!form.size) errors.size = "Size is required.";
     if (!form.packingUnit) errors.packingUnit = "Packing unit is required.";
+    if (form.productType === "Ribbon" && form.catalogCode) {
+      if (!catalogCodes.includes(form.catalogCode)) {
+        errors.catalogCode = "Select a valid catalog code.";
+      }
+    }
+    if (form.productType !== "Ribbon" && form.catalogCode) {
+      errors.catalogCode = "Catalog code is only available for Ribbon.";
+    }
     return errors;
   };
 
@@ -393,8 +372,19 @@ export default function AdminProductCreatePage() {
     }
   };
 
-  if (metaLoading && !metaData) {
+  if (metaLoading) {
     return <Loader />;
+  }
+
+  if (metaError || !metaData) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+        <ErrorMessage
+          message="Product metadata is unavailable. Product creation is disabled."
+          error={metaError}
+        />
+      </div>
+    );
   }
 
   return (
@@ -416,13 +406,6 @@ export default function AdminProductCreatePage() {
           </div>
         </div>
       </div>
-
-      {metaError ? (
-        <ErrorMessage
-          message="Unable to load product metadata. Some fields may be unavailable."
-          error={metaError}
-        />
-      ) : null}
 
       <div className="grid gap-3 md:grid-cols-4">
         {STEPS.map((item, index) => {
@@ -631,12 +614,17 @@ export default function AdminProductCreatePage() {
                   </select>
                 ) : (
                   <input
-                    value={form.catalogCode}
-                    onChange={(e) => updateField("catalogCode", e.target.value)}
-                    placeholder="Optional"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                    value=""
+                    disabled
+                    placeholder="Only for Ribbon"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
                   />
                 )}
+                {fieldErrors.catalogCode ? (
+                  <div className="mt-1 text-xs text-rose-600">
+                    {fieldErrors.catalogCode}
+                  </div>
+                ) : null}
               </div>
 
               <div>

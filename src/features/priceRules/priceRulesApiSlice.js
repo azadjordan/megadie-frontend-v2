@@ -3,7 +3,14 @@ import { apiSlice } from "../../app/apiSlice";
 export const priceRulesApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getPriceRules: builder.query({
-      query: () => "/price-rules",
+      query: (params = {}) => {
+        const search = new URLSearchParams();
+        if (params?.productType) {
+          search.set("productType", params.productType);
+        }
+        const queryString = search.toString();
+        return `/price-rules${queryString ? `?${queryString}` : ""}`;
+      },
       providesTags: (result) => {
         const listTag = { type: "PriceRule", id: "LIST" };
         const rows = result?.data || [];
@@ -18,19 +25,19 @@ export const priceRulesApiSlice = apiSlice.injectEndpoints({
     }),
 
     createPriceRule: builder.mutation({
-      query: ({ code, defaultPrice }) => ({
+      query: ({ code, defaultPrice, productType }) => ({
         url: "/price-rules",
         method: "POST",
-        body: { code, defaultPrice },
+        body: { code, defaultPrice, productType },
       }),
       invalidatesTags: [{ type: "PriceRule", id: "LIST" }],
     }),
 
     updatePriceRule: builder.mutation({
-      query: ({ id, defaultPrice }) => ({
+      query: ({ id, defaultPrice, productType }) => ({
         url: `/price-rules/${id}`,
         method: "PUT",
-        body: { defaultPrice },
+        body: { defaultPrice, productType },
       }),
       invalidatesTags: (_result, _error, arg) => [
         { type: "PriceRule", id: "LIST" },

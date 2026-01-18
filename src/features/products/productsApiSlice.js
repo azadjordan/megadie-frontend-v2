@@ -67,6 +67,14 @@ export const productsApiSlice = apiSlice.injectEndpoints({
         { type: 'InventoryProduct', id: 'LIST' },
       ],
     }),
+    // Admin delete product
+    deleteProduct: builder.mutation({
+      query: (id) => ({
+        url: `/products/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: [{ type: 'Product', id: 'LIST' }, { type: 'InventoryProduct', id: 'LIST' }],
+    }),
   }),
 })
 
@@ -76,4 +84,5 @@ export const {
   useGetProductMetaQuery,
   useCreateProductMutation,
   useUpdateProductMutation,
+  useDeleteProductMutation,
 } = productsApiSlice

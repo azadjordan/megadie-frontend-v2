@@ -275,20 +275,6 @@ export default function AccountRequestCard({
                   ) : null}
                 </div>
               ) : null}
-              {isEditing && (editLocalError || updateQuantitiesError) ? (
-                <div className="mt-2">
-                  {editLocalError ? (
-                    <div className="text-xs font-semibold text-rose-600">
-                      {editLocalError}
-                    </div>
-                  ) : null}
-                  {updateQuantitiesError ? (
-                    <div className="mt-2">
-                      <ErrorMessage error={updateQuantitiesError} />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
             {!isCancelled && quote.availabilityCheckedAt ? (
               <div className="mt-1 text-xs text-slate-500">
@@ -325,6 +311,20 @@ export default function AccountRequestCard({
               editMaxHit={editMaxHit}
               onAdjustDraftQty={onAdjustDraftQty}
             />
+            {isEditing && (editLocalError || updateQuantitiesError) ? (
+              <div className="mt-3">
+                {editLocalError ? (
+                  <div className="text-xs font-semibold text-rose-600">
+                    {editLocalError}
+                  </div>
+                ) : null}
+                {updateQuantitiesError ? (
+                  <div className="mt-2">
+                    <ErrorMessage error={updateQuantitiesError} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
           </div>
 

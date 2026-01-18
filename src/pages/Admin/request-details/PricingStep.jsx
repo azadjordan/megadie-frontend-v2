@@ -7,6 +7,7 @@ export default function PricingStep({
   onUnitPriceChange,
   deliveryChargeStr,
   setDeliveryChargeStr,
+  deliveryOptions,
   extraFeeStr,
   setExtraFeeStr,
   quoteLocked,
@@ -132,10 +133,7 @@ export default function PricingStep({
           <label className="mb-1 block text-xs font-semibold text-slate-600">
             Delivery charge
           </label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
+          <select
             value={deliveryChargeStr}
             disabled={quoteLocked}
             onChange={(e) => setDeliveryChargeStr(e.target.value)}
@@ -143,8 +141,13 @@ export default function PricingStep({
               "w-32 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
               quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
             ].join(" ")}
-            placeholder="0.00"
-          />
+          >
+            {(deliveryOptions || []).map((option) => (
+              <option key={option} value={String(option)}>
+                {option}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">

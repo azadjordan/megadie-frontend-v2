@@ -78,9 +78,6 @@ export default function StatusStep({
   canSetQuoted,
   canSetConfirmed,
   onUpdateStatus,
-  showConvertToOrder,
-  onConvertToOrder,
-  isCreatingOrder,
   isBusy,
   isUpdating,
   showUpdateError,
@@ -92,12 +89,6 @@ export default function StatusStep({
     if (nextStatus === currentStatus) return;
     onUpdateStatus(nextStatus);
   };
-
-  const convertDisabled =
-    isBusy ||
-    isCreatingOrder ||
-    quoteLocked ||
-    currentStatus !== "Confirmed";
 
   return (
     <StepCard
@@ -187,29 +178,9 @@ export default function StatusStep({
         ) : null}
       </div>
 
-        {showUpdateError ? (
-          <div className="mt-3">
-            <ErrorMessage error={updateError} />
-          </div>
-        ) : null}
-
-      {showConvertToOrder ? (
-        <div className="mt-4">
-          <div className="w-full sm:ml-auto sm:w-1/2">
-            <button
-              type="button"
-              onClick={onConvertToOrder}
-              disabled={convertDisabled}
-              className={[
-                "w-full rounded-xl px-5 py-3 text-sm font-semibold text-white transition",
-                !convertDisabled
-                  ? "bg-slate-900 hover:bg-slate-800"
-                  : "cursor-default bg-slate-300",
-              ].join(" ")}
-            >
-              {isCreatingOrder ? "Converting..." : "Convert to Order"}
-            </button>
-          </div>
+      {showUpdateError ? (
+        <div className="mt-3">
+          <ErrorMessage error={updateError} />
         </div>
       ) : null}
     </StepCard>

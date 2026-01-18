@@ -11,7 +11,11 @@ export default function SummaryPanel({
   total,
   status,
   ownerName,
-  }) {
+  showConvertToOrder,
+  onConvertToOrder,
+  isCreatingOrder,
+  convertDisabled,
+}) {
   const rows = [
     {
       label: "Client",
@@ -52,15 +56,41 @@ export default function SummaryPanel({
               key={row.label}
               className="flex items-center justify-between px-4 py-1.5"
             >
-              <span className={row.isTotal ? "font-semibold text-slate-700" : "text-slate-600"}>
+              <span
+                className={
+                  row.isTotal ? "font-semibold text-slate-700" : "text-slate-600"
+                }
+              >
                 {row.label}
               </span>
-              <span className={row.isTotal ? "font-semibold text-slate-900" : "text-slate-900"}>
+              <span
+                className={
+                  row.isTotal ? "font-semibold text-slate-900" : "text-slate-900"
+                }
+              >
                 {row.value}
               </span>
             </div>
           ))}
         </div>
+
+        {showConvertToOrder ? (
+          <div className="mt-4 border-t border-slate-200 pt-4">
+            <button
+              type="button"
+              onClick={onConvertToOrder}
+              disabled={convertDisabled}
+              className={[
+                "w-full rounded-xl px-5 py-3 text-sm font-semibold text-white transition",
+                !convertDisabled
+                  ? "bg-slate-900 hover:bg-slate-800"
+                  : "cursor-default bg-slate-300",
+              ].join(" ")}
+            >
+              {isCreatingOrder ? "Converting..." : "Convert to Order"}
+            </button>
+          </div>
+        ) : null}
       </StepCard>
     </div>
   );

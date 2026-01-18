@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import StepCard from "../request-details/StepCard";
 import { StatusBadge, StockBadge } from "./Badges";
+import ErrorMessage from "../../../components/common/ErrorMessage";
 
 export default function SummaryPanel({
   orderNumber,
@@ -20,18 +21,23 @@ export default function SummaryPanel({
   canCreateInvoice,
   canShip,
   canDeliver,
+  canFinalize,
   createInvoiceReason = "",
   shippingReason = "",
   deliverReason = "",
+  finalizeTooltip = "",
   onCreateInvoice,
   onShip,
+  onFinalize,
   onDeliver,
   onDelete,
   isCreatingInvoice,
   isUpdatingStatus,
+  isFinalizing,
   isDelivering,
   isDeleting,
   shippingError,
+  finalizeError,
   canDelete,
   deleteReason = "",
   isStockFinalized = false,
@@ -43,6 +49,8 @@ export default function SummaryPanel({
   const createInvoiceTooltip = !canCreateInvoice ? createInvoiceReason : "";
   const shippingTooltip = !canShip ? shippingReason : "";
   const deliverTooltip = !canDeliver ? deliverReason : "";
+  const finalizeTitle =
+    !canFinalize && finalizeTooltip ? finalizeTooltip : "";
   const deleteTooltip = !canDelete ? deleteReason : "";
 
   const rows = [
@@ -170,6 +178,27 @@ export default function SummaryPanel({
           </button>
           {shippingError ? (
             <div className="text-[11px] text-rose-600">{shippingError}</div>
+          ) : null}
+
+          <div title={finalizeTitle || undefined} className="w-full">
+            <button
+              type="button"
+              onClick={onFinalize}
+              disabled={!canFinalize || isFinalizing}
+              className={[
+                "w-full rounded-xl px-3 py-2 text-xs font-semibold text-white",
+                !canFinalize || isFinalizing
+                  ? "cursor-not-allowed bg-slate-300"
+                  : "bg-slate-900 hover:bg-slate-800",
+              ].join(" ")}
+            >
+              {isFinalizing ? "Finalizing..." : "Finalize Stock"}
+            </button>
+          </div>
+          {finalizeError ? (
+            <div className="mt-1">
+              <ErrorMessage error={finalizeError} />
+            </div>
           ) : null}
 
           <button

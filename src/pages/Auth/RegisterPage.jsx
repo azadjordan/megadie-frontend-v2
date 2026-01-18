@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 
 import AuthShell from '../../components/auth/AuthShell'
-import { useRegisterMutation } from '../../features/auth/usersApiSlice'
+import { setCredentials } from '../../features/auth/authSlice'
+import { useLoginMutation, useRegisterMutation } from '../../features/auth/usersApiSlice'
+
+const UAE_DIAL_CODE = '+971'
+const UAE_PHONE_REGEX = /^\+971\d{8,9}$/
 
 export default function RegisterPage() {
+  const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
 
   const { userInfo, isInitialized } = useSelector((state) => state.auth)
 
   const [name, setName] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState(UAE_DIAL_CODE)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -22,10 +27,19 @@ export default function RegisterPage() {
   const passwordsMatch = password.length >= 6 && password === confirmPassword
   const passwordsMismatch = hasConfirm && !passwordsMatch && !isTooShort
 
-  const [register, { isLoading }] = useRegisterMutation()
+  const [register, { isLoading: isRegistering }] = useRegisterMutation()
+  const [login, { isLoading: isLoggingIn }] = useLoginMutation()
+  const isSubmitting = isRegistering || isLoggingIn
 
-  const getLandingPath = (user) =>
-    user?.isAdmin ? '/admin' : '/account/overview'
+  const getLandingPath = (user) => {
+    if (user?.isAdmin) return '/admin'
+    const status = user?.approvalStatus
+    if (status && status !== 'Approved') return '/'
+    return '/account/overview'
+  }
+
+  const normalizeUaePhone = (value) =>
+    String(value || '').replace(/[^\d+]/g, '')
 
   useEffect(() => {
     if (!isInitialized) return
@@ -42,16 +56,46 @@ export default function RegisterPage() {
       return
     }
 
+    const trimmedEmail = email.trim()
+    const normalizedPhoneNumber = normalizeUaePhone(phoneNumber)
+
+    if (!UAE_PHONE_REGEX.test(normalizedPhoneNumber)) {
+      toast.error('Enter a valid UAE phone number starting with +971.')
+      return
+    }
+
     try {
-      await register({
+      const registerResponse = await register({
         name: name.trim(),
-        phoneNumber: phoneNumber.trim(),
-        email: email.trim(),
+        phoneNumber: normalizedPhoneNumber,
+        email: trimmedEmail,
         password,
       }).unwrap()
 
-      toast.success('Registration submitted. Await admin approval.')
-      navigate('/login', { replace: true })
+      try {
+        const loginResponse = await login({
+          email: trimmedEmail,
+          password,
+        }).unwrap()
+
+        dispatch(setCredentials(loginResponse.data))
+        toast.success(
+          registerResponse?.message ||
+            'Registration submitted. Await admin approval.'
+        )
+        navigate(getLandingPath(loginResponse.data), { replace: true })
+      } catch (loginError) {
+        toast.success(
+          registerResponse?.message ||
+            'Registration submitted. Await admin approval.'
+        )
+        toast.error(
+          loginError?.data?.message ||
+            loginError?.error ||
+            'Auto sign-in failed. Please sign in.'
+        )
+        navigate('/login', { replace: true })
+      }
     } catch (err) {
       toast.error(err?.data?.message || err?.error || 'Registration failed')
     }
@@ -76,7 +120,9 @@ export default function RegisterPage() {
     >
       <form onSubmit={submitHandler} className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700">Name</label>
+          <label className="text-sm font-semibold text-slate-700">
+            Client/Company Name
+          </label>
           <input
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="text"
@@ -95,6 +141,7 @@ export default function RegisterPage() {
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="tel"
             autoComplete="tel"
+            placeholder="+971 5X XXX XXXX"
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             required
@@ -171,11 +218,15 @@ export default function RegisterPage() {
 
         <button
           type="submit"
-          disabled={isLoading || !isInitialized}
+          disabled={isSubmitting || !isInitialized}
           className="w-full rounded-2xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
           style={{ backgroundColor: 'var(--accent)' }}
         >
-          {isLoading ? 'Creating account...' : 'Create account'}
+          {isRegistering
+            ? 'Creating account...'
+            : isLoggingIn
+            ? 'Signing in...'
+            : 'Create account'}
         </button>
       </form>
     </AuthShell>

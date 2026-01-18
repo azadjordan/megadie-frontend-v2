@@ -164,6 +164,11 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
       ],
     }),
 
+    getQuoteStockCheckByAdmin: builder.query({
+      query: (id) => `/quotes/admin/${id}/stock-check`,
+      keepUnusedDataFor: 0,
+    }),
+
     /* =========================
        DELETE /api/quotes/:id
        Private/Admin
@@ -280,6 +285,7 @@ export const {
   useUpdateQuoteNotesByAdminMutation,
   useUpdateQuoteStatusByAdminMutation,
   useRecheckQuoteAvailabilityByAdminMutation,
+  useLazyGetQuoteStockCheckByAdminQuery,
   useDeleteQuoteByAdminMutation,
 
   // User

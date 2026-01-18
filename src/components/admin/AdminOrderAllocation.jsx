@@ -1,5 +1,4 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { toast } from "react-toastify";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import ErrorMessage from "../common/ErrorMessage";
 import { useGetSlotItemsByProductQuery } from "../../features/slotItems/slotItemsApiSlice";
@@ -7,7 +6,6 @@ import {
   useGetOrderAllocationsQuery,
   useUpsertOrderAllocationMutation,
   useDeleteOrderAllocationMutation,
-  useFinalizeOrderAllocationsMutation,
 } from "../../features/orderAllocations/orderAllocationsApiSlice";
 
 function resolveProductId(product) {
@@ -40,6 +38,28 @@ function lineTotal(item) {
   return qty * unit;
 }
 
+function formatDateTime(iso) {
+  if (!iso) return "-";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatUserLabel(user) {
+  if (!user) return { name: "-", email: "" };
+  if (typeof user === "string") return { name: user, email: "" };
+  const name = user?.name || user?.email || "-";
+  const email = user?.name && user?.email ? user.email : "";
+  return { name, email };
+}
+
 const ALLOCATION_STATUS_STYLES = {
   Reserved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   Deducted: "bg-slate-100 text-slate-600 ring-slate-200",
@@ -57,6 +77,7 @@ function SlotItemsPanel({
   allocationsBySlot,
   allocationsList,
   allocationSummaryList,
+  showAllocationHistory = false,
   isLocked = false,
   lockMessage = "",
   onAvailabilityChange,
@@ -72,6 +93,10 @@ function SlotItemsPanel({
   const [actionError, setActionError] = useState("");
   const [isBulkPicking, setIsBulkPicking] = useState(false);
   const [isBulkUnpicking, setIsBulkUnpicking] = useState(false);
+  const showHistory =
+    showAllocationHistory &&
+    Array.isArray(allocationSummaryList) &&
+    allocationSummaryList.length > 0;
   const ordered = Number(orderedQty || 0);
   const reservedTotal = Number(allocatedTotal || 0);
   const remainingQty = Math.max(0, ordered - reservedTotal);
@@ -403,7 +428,7 @@ function SlotItemsPanel({
             : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400",
         ].join(" ")}
       >
-        <span>{open ? "Close" : "Reserve"}</span>
+        <span>{open ? "Close" : showHistory ? "View allocations" : "Reserve"}</span>
         {open ? (
           <FiChevronUp className="h-4 w-4" />
         ) : (
@@ -430,7 +455,87 @@ function SlotItemsPanel({
 
       {open ? (
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
-          {isLoading ? (
+          {showHistory ? (
+            <div>
+              <div className="border-b border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">
+                Allocation history
+              </div>
+              <div className="p-3">
+                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-4 py-2 text-center text-[11px] font-semibold text-slate-600">
+                    <div className="col-span-2">Slot</div>
+                    <div className="col-span-1">Qty</div>
+                    <div className="col-span-1">Status</div>
+                    <div className="col-span-2">Reserved by</div>
+                    <div className="col-span-2">Reserved at</div>
+                    <div className="col-span-2">Deducted by</div>
+                    <div className="col-span-2">Deducted at</div>
+                  </div>
+                  {(allocationSummaryList || []).map((row) => {
+                    const slotLabel = row?.slot?.label || "Unknown slot";
+                    const status = normalizeAllocationStatus(row?.status);
+                    const reservedBy = formatUserLabel(row?.by);
+                    const deductedBy = formatUserLabel(row?.deductedBy);
+                    return (
+                      <div
+                        key={row?.id || row?._id || `${slotLabel}-${row?.qty}`}
+                        className="grid grid-cols-12 gap-3 border-b border-slate-100 px-4 py-2 text-center text-xs text-slate-700 odd:bg-slate-100/60 last:border-b-0"
+                      >
+                        <div className="col-span-2 font-semibold text-slate-900">
+                          {slotLabel}
+                        </div>
+                        <div className="col-span-1 tabular-nums">
+                          {Number(row?.qty) || 0}
+                        </div>
+                        <div className="col-span-1 flex items-center justify-center">
+                          <span
+                            className={[
+                              "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset",
+                              ALLOCATION_STATUS_STYLES[status] ||
+                                ALLOCATION_STATUS_STYLES.Reserved,
+                            ].join(" ")}
+                          >
+                            {status}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="font-semibold text-slate-900">
+                            {reservedBy.name}
+                          </div>
+                          {reservedBy.email ? (
+                            <div className="text-[10px] text-slate-500">
+                              {reservedBy.email}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="col-span-2 text-[10px] text-slate-600">
+                          {formatDateTime(row?.createdAt)}
+                        </div>
+                        <div className="col-span-2">
+                          <div className="font-semibold text-slate-900">
+                            {deductedBy.name}
+                          </div>
+                          {deductedBy.email ? (
+                            <div className="text-[10px] text-slate-500">
+                              {deductedBy.email}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="col-span-2 text-[10px] text-slate-600">
+                          {formatDateTime(row?.deductedAt)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(allocationSummaryList || []).length === 0 ? (
+                    <div className="px-4 py-3 text-xs text-slate-500">
+                      No allocations found for this item.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div className="px-4 py-3 text-xs text-slate-500">
               Loading slots...
             </div>
@@ -678,6 +783,7 @@ function AllocationItemCard({
   showSlotActions = true,
   showDeducted = false,
   deductedQty = 0,
+  showAllocationHistory = false,
 }) {
   const name =
     item?.product?.name ||
@@ -687,6 +793,7 @@ function AllocationItemCard({
   const productId = resolveProductId(item?.product);
   const orderedQty = Number(item?.qty) || 0;
   const reservedQty = Number(allocationInfo?.total) || 0;
+  const isFullyReserved = orderedQty > 0 && reservedQty === orderedQty;
 
   const [availability, setAvailability] = useState({
     status: "idle",
@@ -729,14 +836,32 @@ function AllocationItemCard({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-        {stats.map((stat) => (
-          <span key={stat.label} className="rounded-lg bg-slate-100 px-2 py-1">
-            {stat.label}{" "}
-            <span className="ml-1 font-semibold text-slate-900 tabular-nums">
-              {stat.value}
+        {stats.map((stat) => {
+          const highlight =
+            isFullyReserved &&
+            (stat.label === "Ordered" || stat.label === "Reserved");
+          return (
+            <span
+              key={stat.label}
+              className={[
+                "rounded-lg px-2 py-1",
+                highlight
+                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                  : "bg-slate-100 text-slate-600",
+              ].join(" ")}
+            >
+              {stat.label}{" "}
+              <span
+                className={[
+                  "ml-1 font-semibold tabular-nums",
+                  highlight ? "text-emerald-900" : "text-slate-900",
+                ].join(" ")}
+              >
+                {stat.value}
+              </span>
             </span>
-          </span>
-        ))}
+          );
+        })}
       </div>
 
       {showSlotActions ? (
@@ -749,6 +874,7 @@ function AllocationItemCard({
             allocationsBySlot={allocationInfo?.bySlot}
             allocationsList={allocationInfo?.list}
             allocationSummaryList={allocationSummary}
+            showAllocationHistory={showAllocationHistory}
             isLocked={isAllocationLocked}
             lockMessage={allocationLockMessage}
             onAvailabilityChange={showAvailability ? setAvailability : undefined}
@@ -796,10 +922,6 @@ export default function AdminOrderAllocation({
     error: allocationsError,
   } = useGetOrderAllocationsQuery(orderId, { skip: !shouldLoadAllocations });
 
-  const [
-    finalizeAllocations,
-    { isLoading: isFinalizing, error: finalizeError },
-  ] = useFinalizeOrderAllocationsMutation();
 
   const allocations = Array.isArray(allocationsResult?.data)
     ? allocationsResult.data
@@ -875,65 +997,7 @@ export default function AdminOrderAllocation({
       0
     );
 
-    const isFullyReserved =
-      rows.length > 0 &&
-      rows.every((it) => {
-        const productId = resolveProductId(it?.product);
-        const orderedQty = Number(it?.qty) || 0;
-        const reservedQty = Number(
-          allocationsByProduct.get(productId)?.total || 0
-        );
-        return reservedQty === orderedQty;
-      });
-
-    const isFullyDeducted =
-      rows.length > 0 &&
-      rows.every((it) => {
-        const productId = resolveProductId(it?.product);
-        const orderedQty = Number(it?.qty) || 0;
-        const deductedQty = Number(
-          deductedByProduct.get(productId)?.total || 0
-        );
-        return deductedQty === orderedQty;
-      });
-
-    const hasPartialDeduction = hasDeducted && !isFullyDeducted;
-    const isFinalized = isFullyDeducted;
-    const hasAllocations = allocations.length > 0;
     const isAllocationLocked = isOrderLocked || hasDeducted;
-
-    let finalizeHint = "";
-    if (!isAllocationLocked && !isAllocationsLoading) {
-      if (!hasAllocations) {
-        finalizeHint = "No reservations yet.";
-      } else if (!isFullyReserved) {
-        finalizeHint = "Reserve all items before finalizing stock.";
-      } else {
-        finalizeHint = "Finalizing deducts reserved qty from stock.";
-      }
-    }
-
-    const canFinalize =
-      !isOrderLocked &&
-      !isFinalized &&
-      !hasPartialDeduction &&
-      hasAllocations &&
-      isFullyReserved &&
-      !isAllocationsLoading;
-
-    const handleFinalize = async () => {
-      if (!orderId || !canFinalize) return;
-      const confirmed = window.confirm(
-        "Finalize stock for this order? This will deduct reserved qty and lock allocations."
-      );
-      if (!confirmed) return;
-      try {
-        const res = await finalizeAllocations(orderId).unwrap();
-        toast.success(res?.message || "Stock finalized.");
-      } catch {
-        // ErrorMessage handles failure state.
-      }
-    };
 
     let allocationLockMessage = "";
     if (hasDeducted) {
@@ -958,23 +1022,6 @@ export default function AdminOrderAllocation({
               </div>
             </div>
 
-            {showFinalizeControls ? (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleFinalize}
-                  disabled={!canFinalize || isFinalizing}
-                  className={[
-                    "inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
-                    !canFinalize || isFinalizing
-                      ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
-                      : "border-slate-900 bg-slate-900 text-white hover:bg-slate-800",
-                  ].join(" ")}
-                >
-                  {isFinalizing ? "Finalizing..." : "Finalize stock"}
-                </button>
-              </div>
-            ) : null}
           </div>
 
           <div className="mt-2 flex flex-wrap gap-2">
@@ -998,10 +1045,6 @@ export default function AdminOrderAllocation({
             </span>
           </div>
 
-          {showFinalizeControls && finalizeHint ? (
-            <div className="mt-2 text-xs text-slate-500">{finalizeHint}</div>
-          ) : null}
-
           {isAllocationsLoading ? (
             <div className="mt-2 text-xs text-slate-500">
               Loading reservations...
@@ -1010,11 +1053,6 @@ export default function AdminOrderAllocation({
           {isAllocationsError ? (
             <div className="mt-2">
               <ErrorMessage error={allocationsError} />
-            </div>
-          ) : null}
-          {showFinalizeControls && finalizeError ? (
-            <div className="mt-2">
-              <ErrorMessage error={finalizeError} />
             </div>
           ) : null}
           {isAllocationLocked ? (
@@ -1039,6 +1077,9 @@ export default function AdminOrderAllocation({
               };
             const allocationSummary =
               allocationSummaryByProduct.get(productId)?.list || [];
+            const hasDeductedForItem = allocationSummary.some(
+              (row) => normalizeAllocationStatus(row?.status) === "Deducted"
+            );
             const deductedQty = Number(
               deductedByProduct.get(productId)?.total || 0
             );
@@ -1056,6 +1097,7 @@ export default function AdminOrderAllocation({
                 showSlotActions={showSlotActions}
                 showDeducted={showFinalizeControls}
                 deductedQty={deductedQty}
+                showAllocationHistory={hasDeductedForItem}
               />
             );
           })

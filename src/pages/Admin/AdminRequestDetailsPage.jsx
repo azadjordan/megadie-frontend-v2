@@ -13,7 +13,7 @@ import {
   useUpdateQuotePricingByAdminMutation,
   useUpdateQuoteNotesByAdminMutation,
   useUpdateQuoteStatusByAdminMutation,
-  useRecheckQuoteAvailabilityByAdminMutation,
+  useLazyGetQuoteStockCheckByAdminQuery,
 } from "../../features/quotes/quotesApiSlice";
 import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
 import { useGetAdminUsersQuery } from "../../features/auth/usersApiSlice";
@@ -34,6 +34,18 @@ import {
   parseNullableNumber,
   toInputValue,
 } from "./request-details/helpers";
+
+const DELIVERY_CHARGE_OPTIONS = [0, 10, 12, 15, 20, 25, 30, 35, 40, 50];
+const DEFAULT_DELIVERY_CHARGE = 15;
+
+const buildDeliveryOptions = (currentValue) => {
+  const options = [...DELIVERY_CHARGE_OPTIONS];
+  const numeric = Number(currentValue);
+  if (Number.isFinite(numeric) && !options.includes(numeric)) {
+    options.push(numeric);
+  }
+  return options.sort((a, b) => a - b);
+};
 
 export default function AdminRequestDetailsPage() {
   const { id } = useParams();
@@ -91,9 +103,9 @@ export default function AdminRequestDetailsPage() {
     { isLoading: isUpdatingStatus, error: updateStatusError },
   ] = useUpdateQuoteStatusByAdminMutation();
   const [
-    recheckQuoteAvailability,
-    { isLoading: isRecheckingAvailability, error: recheckAvailabilityError },
-  ] = useRecheckQuoteAvailabilityByAdminMutation();
+    loadQuoteStockCheck,
+    { isFetching: isCheckingStock, error: stockCheckError },
+  ] = useLazyGetQuoteStockCheckByAdminQuery();
   const [createOrderFromQuote, { isLoading: isCreatingOrder }] =
     useCreateOrderFromQuoteMutation();
 
@@ -105,9 +117,12 @@ export default function AdminRequestDetailsPage() {
   const [items, setItems] = useState([]);
   const [editDraft, setEditDraft] = useState({});
   const [isEditingQty, setIsEditingQty] = useState(false);
+  const [stockCheckData, setStockCheckData] = useState(null);
 
   // Step 3
-  const [deliveryChargeStr, setDeliveryChargeStr] = useState("0");
+  const [deliveryChargeStr, setDeliveryChargeStr] = useState(
+    String(DEFAULT_DELIVERY_CHARGE)
+  );
   const [extraFeeStr, setExtraFeeStr] = useState("0");
 
   // Step 4
@@ -140,13 +155,16 @@ export default function AdminRequestDetailsPage() {
       })
     );
 
-    setDeliveryChargeStr(toInputValue(quote.deliveryCharge));
+    setDeliveryChargeStr(
+      toInputValue(quote.deliveryCharge) || String(DEFAULT_DELIVERY_CHARGE)
+    );
     setExtraFeeStr(toInputValue(quote.extraFee));
     setAdminToAdminNote(quote.adminToAdminNote || "");
     setAdminToClientNote(quote.adminToClientNote || "");
 
     setEditDraft({});
     setIsEditingQty(false);
+    setStockCheckData(null);
   }, [quote?.id, quote?._id, quote?.updatedAt, quote?.availabilityCheckedAt]);
 
   const selectedUser = useMemo(() => {
@@ -165,15 +183,28 @@ export default function AdminRequestDetailsPage() {
   const quoteId = quote?.id || quote?._id;
   const backendStatus = quote?.status || "Processing";
   const showAvailability = backendStatus !== "Cancelled";
-  const availabilityCheckedAt =
-    showAvailability && quote?.availabilityCheckedAt
-      ? formatDateTime(quote.availabilityCheckedAt)
-      : "";
-  const canRecheckAvailability = showAvailability && Boolean(quoteId);
-
   // keep for business logic: lock if already converted to order
   const orderCreated = Boolean(quote?.order);
   const quoteLocked = orderCreated;
+
+  const stockCheckItems = Array.isArray(stockCheckData?.items)
+    ? stockCheckData.items
+    : [];
+  const stockCheckedAt =
+    showAvailability && stockCheckData?.checkedAt
+      ? formatDateTime(stockCheckData.checkedAt)
+      : "";
+  const canCheckStock = showAvailability && Boolean(quoteId) && !quoteLocked;
+
+  const stockCheckByProduct = useMemo(() => {
+    const map = new Map();
+    for (const row of stockCheckItems) {
+      const productId = String(row?.productId || "");
+      if (!productId) continue;
+      map.set(productId, row);
+    }
+    return map;
+  }, [stockCheckItems]);
 
   const hasMissingProductId = useMemo(
     () => (items || []).some((it) => !it.productId),
@@ -211,7 +242,7 @@ export default function AdminRequestDetailsPage() {
     !canUpdateQtyAdmin ||
     !isEditingQty ||
     isUpdatingQuantities ||
-    isRecheckingAvailability ||
+    isCheckingStock ||
     isUpdatingOwner ||
     isUpdatingPricing ||
     isUpdatingNotes ||
@@ -265,6 +296,10 @@ export default function AdminRequestDetailsPage() {
     ? Number(quote.totalPrice)
     : Math.max(0, savedItemsTotal + deliveryChargeSaved + extraFeeSaved);
   const ownerName = quote?.user?.name || "";
+  const deliveryOptions = useMemo(
+    () => buildDeliveryOptions(deliveryChargeStr),
+    [deliveryChargeStr]
+  );
 
   const canUpdateOwner = useMemo(() => {
     if (!quoteId || quoteLocked) return false;
@@ -375,7 +410,7 @@ export default function AdminRequestDetailsPage() {
     isLoadingPriceRules ||
     isUpdatingNotes ||
     isUpdatingStatus ||
-    isRecheckingAvailability ||
+    isCheckingStock ||
     isCreatingOrder;
 
   const showOwnerUpdateError = Boolean(updateOwnerError);
@@ -529,21 +564,26 @@ export default function AdminRequestDetailsPage() {
     }
   };
 
-  const onRecheckAvailability = async () => {
-    if (!quoteId || !canRecheckAvailability) return;
+  const onCheckStock = async () => {
+    if (!quoteId || !canCheckStock) return;
 
     try {
-      await recheckQuoteAvailability(quoteId).unwrap();
-      toast.success("Availability refreshed.");
-      await refetchQuote();
+      const res = await loadQuoteStockCheck(quoteId).unwrap();
+      setStockCheckData(res?.data || null);
+      toast.success("Stock checked.");
     } catch (err) {
-      toast.error(resolveToastError(err, "Failed to refresh availability."));
+      toast.error(resolveToastError(err, "Failed to check stock."));
     }
   };
 
   const canConvertToOrder =
     Boolean(quoteId) && backendStatus === "Confirmed" && !orderCreated;
   const showConvertToOrder = Boolean(quoteId) && !orderCreated;
+  const convertDisabled =
+    isBusy ||
+    isCreatingOrder ||
+    quoteLocked ||
+    backendStatus !== "Confirmed";
 
   const onConvertToOrder = async () => {
     if (!canConvertToOrder) return;
@@ -615,11 +655,12 @@ export default function AdminRequestDetailsPage() {
           <QuantitiesStep
             items={items}
             showAvailability={showAvailability}
-            availabilityCheckedAt={availabilityCheckedAt}
-            canRecheckAvailability={canRecheckAvailability}
-            isRecheckingAvailability={isRecheckingAvailability}
-            onRecheckAvailability={onRecheckAvailability}
-            recheckAvailabilityError={recheckAvailabilityError}
+            stockCheckedAt={stockCheckedAt}
+            canCheckStock={canCheckStock}
+            isCheckingStock={isCheckingStock}
+            onCheckStock={onCheckStock}
+            stockCheckError={stockCheckError}
+            stockCheckByProduct={stockCheckByProduct}
             canUpdateQty={canUpdateQtyAdmin}
             updateQtyDisabled={updateQtyDisabled}
             isUpdatingQty={isUpdatingQuantities}
@@ -640,6 +681,7 @@ export default function AdminRequestDetailsPage() {
             onUnitPriceChange={onUnitPriceChange}
             deliveryChargeStr={deliveryChargeStr}
             setDeliveryChargeStr={setDeliveryChargeStr}
+            deliveryOptions={deliveryOptions}
             extraFeeStr={extraFeeStr}
             setExtraFeeStr={setExtraFeeStr}
             quoteLocked={quoteLocked}
@@ -678,9 +720,6 @@ export default function AdminRequestDetailsPage() {
             canSetQuoted={hasAnyAvailability}
             canSetConfirmed={!hasAvailabilityShortage}
             onUpdateStatus={onUpdateStatus}
-            showConvertToOrder={showConvertToOrder}
-            onConvertToOrder={onConvertToOrder}
-            isCreatingOrder={isCreatingOrder}
             isBusy={isBusy}
             isUpdating={isUpdatingStatus}
             showUpdateError={showStatusError}
@@ -881,6 +920,10 @@ export default function AdminRequestDetailsPage() {
             total={totalSaved}
             status={backendStatus}
             ownerName={ownerName}
+            showConvertToOrder={showConvertToOrder}
+            onConvertToOrder={onConvertToOrder}
+            isCreatingOrder={isCreatingOrder}
+            convertDisabled={convertDisabled}
           />
         </aside>
       </div>

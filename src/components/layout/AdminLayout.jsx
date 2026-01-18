@@ -13,6 +13,8 @@ import {
   FiUsers,
   FiBox,
   FiTag,
+  FiFilter,
+  FiGrid,
   FiArrowLeft,
   FiLogOut,
   FiUser,
@@ -82,7 +84,9 @@ export default function AdminLayout() {
       { to: "/admin/payments", label: "Payments", icon: FiDollarSign },
       { to: "/admin/users", label: "Users", icon: FiUsers },
       { to: "/admin/inventory", label: "Inventory", icon: FiBox },
+      { to: "/admin/categories", label: "Categories", icon: FiGrid },
       { to: "/admin/price-rules", label: "Pricing Rules", icon: FiTag },
+      { to: "/admin/filter-configs", label: "Filter Configs", icon: FiFilter },
     ],
     []
   );
