@@ -787,6 +787,7 @@ function AllocationItemCard({
 }) {
   const name =
     item?.product?.name ||
+    item?.productName ||
     (typeof item?.product === "string" ? item.product : "") ||
     "Untitled product";
   const sku = item?.sku || item?.product?.sku || "";
@@ -1139,6 +1140,7 @@ export default function AdminOrderAllocation({
         rows.map((it, idx) => {
           const name =
             it?.product?.name ||
+            it?.productName ||
             (typeof it?.product === "string" ? it.product : "") ||
             "Untitled product";
           const sku = it?.sku || it?.product?.sku || "";

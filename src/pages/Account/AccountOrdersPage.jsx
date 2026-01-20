@@ -281,6 +281,7 @@ export default function AccountOrdersPage() {
                           orderItems.map((it, idx) => {
                             const name =
                               it?.product?.name ||
+                              it?.productName ||
                               (typeof it?.product === "string"
                                 ? it.product
                                 : "") ||
