@@ -13,6 +13,7 @@ import {
   useUpdateQuotePricingByAdminMutation,
   useUpdateQuoteNotesByAdminMutation,
   useUpdateQuoteStatusByAdminMutation,
+  useRecheckQuoteAvailabilityByAdminMutation,
   useLazyGetQuoteStockCheckByAdminQuery,
 } from "../../features/quotes/quotesApiSlice";
 import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
@@ -102,6 +103,10 @@ export default function AdminRequestDetailsPage() {
     updateQuoteStatusByAdmin,
     { isLoading: isUpdatingStatus, error: updateStatusError },
   ] = useUpdateQuoteStatusByAdminMutation();
+  const [
+    recheckQuoteAvailabilityByAdmin,
+    { isLoading: isRecheckingAvailability },
+  ] = useRecheckQuoteAvailabilityByAdminMutation();
   const [
     loadQuoteStockCheck,
     { isFetching: isCheckingStock, error: stockCheckError },
@@ -194,6 +199,7 @@ export default function AdminRequestDetailsPage() {
     showAvailability && stockCheckData?.checkedAt
       ? formatDateTime(stockCheckData.checkedAt)
       : "";
+  const isCheckingAvailability = isCheckingStock || isRecheckingAvailability;
   const canCheckStock = showAvailability && Boolean(quoteId) && !quoteLocked;
 
   const stockCheckByProduct = useMemo(() => {
@@ -242,7 +248,7 @@ export default function AdminRequestDetailsPage() {
     !canUpdateQtyAdmin ||
     !isEditingQty ||
     isUpdatingQuantities ||
-    isCheckingStock ||
+    isCheckingAvailability ||
     isUpdatingOwner ||
     isUpdatingPricing ||
     isUpdatingNotes ||
@@ -410,7 +416,7 @@ export default function AdminRequestDetailsPage() {
     isLoadingPriceRules ||
     isUpdatingNotes ||
     isUpdatingStatus ||
-    isCheckingStock ||
+    isCheckingAvailability ||
     isCreatingOrder;
 
   const showOwnerUpdateError = Boolean(updateOwnerError);
@@ -568,8 +574,10 @@ export default function AdminRequestDetailsPage() {
     if (!quoteId || !canCheckStock) return;
 
     try {
+      await recheckQuoteAvailabilityByAdmin(quoteId).unwrap();
       const res = await loadQuoteStockCheck(quoteId).unwrap();
       setStockCheckData(res?.data || null);
+      await refetchQuote();
       toast.success("Stock checked.");
     } catch (err) {
       toast.error(resolveToastError(err, "Failed to check stock."));
@@ -657,7 +665,7 @@ export default function AdminRequestDetailsPage() {
             showAvailability={showAvailability}
             stockCheckedAt={stockCheckedAt}
             canCheckStock={canCheckStock}
-            isCheckingStock={isCheckingStock}
+            isCheckingStock={isCheckingAvailability}
             onCheckStock={onCheckStock}
             stockCheckError={stockCheckError}
             stockCheckByProduct={stockCheckByProduct}
