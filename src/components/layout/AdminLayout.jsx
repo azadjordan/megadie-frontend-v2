@@ -150,7 +150,8 @@ export default function AdminLayout() {
             <div className="mt-3 rounded-2xl bg-white p-3 text-sm shadow-sm ring-1 ring-slate-200">
               <div className="text-xs font-semibold text-slate-900">Tip</div>
               <div className="mt-1 text-xs text-slate-500">
-                Keep everything linked: Request -> Order -> Invoice -> Payments.
+                Keep everything linked: Request -&gt; Order -&gt; Invoice -&gt;
+                Payments.
               </div>
             </div>
           </aside>
