@@ -164,11 +164,13 @@ function ActivityList({ items }) {
   return (
     <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
       <div className="text-sm font-semibold text-slate-900">
-        Recent activity
+        Quotes needing action
       </div>
       <div className="mt-4 space-y-3">
         {items.length === 0 ? (
-          <div className="text-sm text-slate-500">No activity yet.</div>
+          <div className="text-sm text-slate-500">
+            No quotes awaiting your confirmation.
+          </div>
         ) : (
           items.map((item) => (
             <Link
@@ -223,30 +225,15 @@ export default function AccountOverviewPage() {
   const processingQuotes = quotes.filter((q) => q.status === "Processing");
   const quotedQuotes = quotes.filter((q) => q.status === "Quoted");
   const showReadyQuotes = quotedQuotes.length > 0;
-  const activityItems = [
-    ...quotes.map((q) => ({
+  const activityItems = quotedQuotes
+    .map((q) => ({
       id: `quote-${q._id}`,
       label: `Quote ${q.quoteNumber || String(q._id).slice(-6).toUpperCase()}`,
       date: q.createdAt,
       status: q.status,
       to: "/account/requests",
-      statusLabel: q.status === "Processing" ? "Preparing" : null,
-    })),
-    ...orders.map((o) => ({
-      id: `order-${o._id}`,
-      label: `Order ${o.orderNumber || String(o._id).slice(-6)}`,
-      date: o.createdAt,
-      status: o.status,
-      to: "/account/orders",
-    })),
-    ...invoices.map((inv) => ({
-      id: `invoice-${inv._id}`,
-      label: `Invoice ${inv.invoiceNumber || String(inv._id).slice(-6)}`,
-      date: inv.createdAt,
-      status: inv.status === "Cancelled" ? "Cancelled" : inv.paymentStatus,
-      to: "/account/invoices",
-    })),
-  ]
+      statusLabel: "Needs action",
+    }))
     .filter((item) => item.date)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 6);
@@ -269,7 +256,7 @@ export default function AccountOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-3">
           <span className="h-8 w-1 rounded-full bg-violet-500" aria-hidden="true" />
           <div>

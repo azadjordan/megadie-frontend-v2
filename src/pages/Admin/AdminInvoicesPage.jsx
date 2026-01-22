@@ -459,8 +459,10 @@ export default function AdminInvoicesPage() {
             </button>
           </div>
         </div>
+      </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+      <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
           <div>
             Showing{" "}
             <span className="font-semibold text-slate-900">{rows.length}</span> of{" "}

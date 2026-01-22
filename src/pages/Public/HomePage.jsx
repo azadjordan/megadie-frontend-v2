@@ -74,7 +74,7 @@ export default function HomePage() {
           }}
         />
 
-        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
+        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
           <div className="space-y-6 motion-safe:animate-rise">
             <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
               Industrial supply partner
@@ -157,7 +157,7 @@ export default function HomePage() {
       </section>
 
       <section className="bg-white/80 py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-7xl px-6">
           <div className="mb-10 flex items-center gap-3">
             <span
               className="h-10 w-1 rounded-full"
@@ -200,7 +200,7 @@ export default function HomePage() {
       </section>
 
       <section className="py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-7xl px-6">
           <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
@@ -244,7 +244,7 @@ export default function HomePage() {
       </section>
 
       <section className="bg-white/80 py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-7xl px-6">
           <div className="mb-10 text-center">
             <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
               Client voice

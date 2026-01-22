@@ -43,6 +43,8 @@ export default function AccountRequestsPage() {
 
   const quotes = useMemo(() => data?.data || [], [data]);
   const pagination = data?.pagination;
+  const showPagination = Boolean(pagination) && quotes.length > 0;
+  const showControls = quotes.length > 0;
   useEffect(() => {
     setOpen({});
     setEditingQuoteId(null);
@@ -296,8 +298,11 @@ export default function AccountRequestsPage() {
             </div>
           </div>
         </div>
-        {pagination ? (
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-4">
+      </div>
+
+      {showControls ? (
+        <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Filter
@@ -335,19 +340,21 @@ export default function AccountRequestsPage() {
                 </button>
               </div>
             </div>
-            <Pagination
-              pagination={pagination}
-              onPageChange={(next) => setPage(next)}
-              variant="compact"
-              showSummary={false}
-              showNumbers={false}
-            />
+            {showPagination ? (
+              <Pagination
+                pagination={pagination}
+                onPageChange={(next) => setPage(next)}
+                variant="compact"
+                showSummary={false}
+                showNumbers={false}
+              />
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {quotes.length === 0 ? (
-        <div className="rounded-3xl border border-white/70 bg-white/85 p-6 shadow-sm shadow-slate-200/40">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           <div className="text-sm font-semibold text-slate-900">
             No requests yet
           </div>

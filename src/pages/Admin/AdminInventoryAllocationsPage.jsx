@@ -260,31 +260,33 @@ export default function AdminInventoryAllocationsPage() {
               </button>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-            <div>
-              Showing{" "}
-              <span className="font-semibold text-slate-900">
-                {allocations.length}
-              </span>{" "}
-              of{" "}
-              <span className="font-semibold text-slate-900">
-                {totalAllocations}
-              </span>{" "}
-              allocations
-              {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
-              {!isDebouncing && isFetching ? (
-                <span className="ml-2">(Refreshing...)</span>
-              ) : null}
-            </div>
-            {pagination ? (
-              <Pagination
-                pagination={pagination}
-                onPageChange={setPage}
-                variant="compact"
-              />
+      <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+          <div>
+            Showing{" "}
+            <span className="font-semibold text-slate-900">
+              {allocations.length}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-slate-900">
+              {totalAllocations}
+            </span>{" "}
+            allocations
+            {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
+            {!isDebouncing && isFetching ? (
+              <span className="ml-2">(Refreshing...)</span>
             ) : null}
           </div>
+          {pagination ? (
+            <Pagination
+              pagination={pagination}
+              onPageChange={setPage}
+              variant="compact"
+            />
+          ) : null}
         </div>
       </div>
 

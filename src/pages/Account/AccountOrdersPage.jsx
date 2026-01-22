@@ -64,6 +64,7 @@ export default function AccountOrdersPage() {
 
   const rows = useMemo(() => data?.data || [], [data]);
   const pagination = data?.pagination;
+  const showPagination = Boolean(pagination) && rows.length > 0;
 
   const toggle = (id) => setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
 
@@ -95,8 +96,11 @@ export default function AccountOrdersPage() {
             </div>
           </div>
         </div>
-        {pagination ? (
-          <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
+      </div>
+
+      {showPagination ? (
+        <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Pagination
               pagination={pagination}
               onPageChange={(next) => setPage(next)}
@@ -105,8 +109,8 @@ export default function AccountOrdersPage() {
               showNumbers={false}
             />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
@@ -119,7 +123,7 @@ export default function AccountOrdersPage() {
           <div className="mt-4">
             <Link
               to="/account/requests"
-              className="inline-flex items-center rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700"
+              className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               View requests
             </Link>

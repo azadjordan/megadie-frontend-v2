@@ -108,6 +108,8 @@ export default function AccountInvoicesReceiptPage() {
       hasNext: q.data.page < (q.data.pages || 1),
     };
   }, [q.data]);
+  const showPagination = Boolean(pagination) && invoices.length > 0;
+  const showControls = invoices.length > 0;
 
   if (q.isLoading) {
     return (
@@ -165,9 +167,11 @@ export default function AccountInvoicesReceiptPage() {
             </div>
           </div>
         </div>
+      </div>
 
-        {pagination ? (
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-4">
+      {showControls ? (
+        <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Filter
@@ -205,16 +209,18 @@ export default function AccountInvoicesReceiptPage() {
                 </button>
               </div>
             </div>
-            <Pagination
-              pagination={pagination}
-              onPageChange={(next) => setPage(next)}
-              variant="compact"
-              showSummary={false}
-              showNumbers={false}
-            />
+            {showPagination ? (
+              <Pagination
+                pagination={pagination}
+                onPageChange={(next) => setPage(next)}
+                variant="compact"
+                showSummary={false}
+                showNumbers={false}
+              />
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {invoices.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">

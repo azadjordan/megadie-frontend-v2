@@ -669,26 +669,28 @@ export default function AdminInventoryPage() {
               </button>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
-            <div>
-              Showing{" "}
-              <span className="font-semibold text-slate-900">
-                {filteredRows.length}
-              </span>{" "}
-              of{" "}
-              <span className="font-semibold text-slate-900">{totalItems}</span>{" "}
-              {countLabel}
-              {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
-            </div>
-            {productPagination ? (
-              <Pagination
-                pagination={productPagination}
-                onPageChange={setProductPage}
-                variant="compact"
-              />
-            ) : null}
+      <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+          <div>
+            Showing{" "}
+            <span className="font-semibold text-slate-900">
+              {filteredRows.length}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-slate-900">{totalItems}</span>{" "}
+            {countLabel}
+            {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
           </div>
+          {productPagination ? (
+            <Pagination
+              pagination={productPagination}
+              onPageChange={setProductPage}
+              variant="compact"
+            />
+          ) : null}
         </div>
       </div>
 

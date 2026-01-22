@@ -33,7 +33,7 @@ const ScrollToTopButton = () => {
     <div className="fixed right-6 z-50 bottom-[calc(5rem+env(safe-area-inset-bottom))] sm:bottom-6 lg:bottom-4">
       <button
         onClick={scrollToTop}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-violet-200 shadow-lg transition-all hover:bg-violet-600"
+        className="relative flex h-12 w-12 items-center justify-center rounded-full bg-violet-200 shadow-lg transition-all hover:bg-violet-600"
         aria-label="Scroll to top"
       >
         {/* SVG Progress Circle */}
@@ -59,8 +59,8 @@ const ScrollToTopButton = () => {
         {/* Up Arrow */}
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          width="30"
-          height="30"
+          width="32"
+          height="32"
           viewBox="0 0 24 24"
           fill="none"
           stroke="white"

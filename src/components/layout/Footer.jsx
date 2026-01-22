@@ -10,7 +10,7 @@ export default function Footer({ className = "" }) {
         className,
       ].join(" ")}
     >
-      <div className="mx-auto max-w-6xl px-4 py-10">
+      <div className="mx-auto max-w-7xl px-4 py-10">
         <div className="grid gap-8 md:grid-cols-[1.3fr_0.9fr_0.8fr]">
           <div className="space-y-3">
             <Link

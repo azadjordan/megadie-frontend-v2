@@ -82,7 +82,7 @@ export default function CartPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
@@ -133,6 +133,13 @@ export default function CartPage() {
                   const image =
                     product?.images?.[0] || product?.imageUrl || placeholder;
                   const name = product?.name || "Untitled product";
+                  const tags = [
+                    product?.packingUnit,
+                    product?.grade,
+                    product?.catalogCode
+                      ? `Code ${product.catalogCode}`
+                      : null,
+                  ].filter(Boolean);
 
                   return (
                     <div
@@ -162,9 +169,22 @@ export default function CartPage() {
                         />
 
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="line-clamp-1 text-sm font-semibold text-slate-900">
                             {name}
                           </p>
+                          {tags.length > 0 && (
+                            <div className="mt-1 flex min-w-0 flex-nowrap gap-1 overflow-hidden text-[11px] text-slate-600">
+                              {tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200/70"
+                                  title={tag}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">

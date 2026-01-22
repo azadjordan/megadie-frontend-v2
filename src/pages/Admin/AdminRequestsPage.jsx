@@ -313,7 +313,7 @@ export default function AdminRequestsPage() {
         </div>
       </div>
 
-      {/* Filters + Pagination */}
+      {/* Filters */}
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <div className="h-10 rounded-xl bg-white/60 ring-1 ring-slate-200" />
@@ -328,8 +328,11 @@ export default function AdminRequestsPage() {
             </button>
           </div>
         </div>
+      </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+      {/* Pagination */}
+      <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
           <div>
             Showing{" "}
             <span className="font-semibold text-slate-900">{rows.length}</span> of{" "}
@@ -353,6 +356,15 @@ export default function AdminRequestsPage() {
       ) : isError ? (
         <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
           <ErrorMessage error={error} />
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
+          <div className="text-sm font-semibold text-slate-900">
+            No requests found
+          </div>
+          <div className="mt-1 text-sm text-slate-500">
+            Requests will appear here once clients submit them.
+          </div>
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">

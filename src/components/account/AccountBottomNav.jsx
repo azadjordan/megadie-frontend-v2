@@ -16,7 +16,7 @@ const itemClass = ({ isActive }) =>
 export default function AccountBottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)] lg:hidden">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         <NavLink to="/account/overview" className={itemClass} end>
           <FiHome className="h-5 w-5" />
           Overview

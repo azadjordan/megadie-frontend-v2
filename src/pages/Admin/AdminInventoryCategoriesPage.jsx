@@ -343,6 +343,30 @@ export default function AdminInventoryCategoriesPage() {
         </div>
       </div>
 
+      <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+          <div>
+            Showing{" "}
+            <span className="font-semibold text-slate-900">
+              {categories.length}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-slate-900">
+              {totalCategories}
+            </span>{" "}
+            categories
+            {isFetching ? <span className="ml-2">(Updating...)</span> : null}
+          </div>
+          {pagination ? (
+            <Pagination
+              pagination={pagination}
+              onPageChange={(next) => setPage(next)}
+              tone="violet"
+            />
+          ) : null}
+        </div>
+      </div>
+
       <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
         <div className="grid grid-cols-12 gap-2 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
           <div className="col-span-4">Label</div>
@@ -437,14 +461,6 @@ export default function AdminInventoryCategoriesPage() {
           })
         )}
       </div>
-
-      {pagination ? (
-        <Pagination
-          pagination={pagination}
-          onPageChange={(next) => setPage(next)}
-          tone="violet"
-        />
-      ) : null}
 
       {isCreateOpen ? (
         <div
