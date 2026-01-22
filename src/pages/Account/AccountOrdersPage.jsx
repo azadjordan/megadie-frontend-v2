@@ -317,13 +317,6 @@ export default function AccountOrdersPage() {
             })}
           </div>
 
-          {pagination ? (
-            <Pagination
-              pagination={pagination}
-              onPageChange={(next) => setPage(next)}
-              tone="violet"
-            />
-          ) : null}
         </>
       )}
     </div>

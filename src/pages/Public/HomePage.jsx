@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 
 const fallbackImg =
   'https://via.placeholder.com/300x200?text=Image+Unavailable'
@@ -50,6 +51,8 @@ const testimonials = [
 ]
 
 export default function HomePage() {
+  const { userInfo } = useSelector((state) => state.auth)
+
   return (
     <div
       className="w-full bg-[#f5f3ff] font-['Outfit'] text-slate-900"
@@ -94,12 +97,14 @@ export default function HomePage() {
               >
                 Browse products
               </Link>
-              <Link
-                to="/contact"
-                className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
-              >
-                Talk to us
-              </Link>
+              {!userInfo ? (
+                <Link
+                  to="/login"
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+                >
+                  Register
+                </Link>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-slate-500">
               <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1">

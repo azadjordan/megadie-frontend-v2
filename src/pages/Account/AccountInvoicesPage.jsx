@@ -279,13 +279,6 @@ export default function AccountInvoicesPage() {
             })}
           </div>
 
-          {pagination ? (
-            <Pagination
-              pagination={pagination}
-              onPageChange={(next) => setPage(next)}
-              tone="violet"
-            />
-          ) : null}
         </>
       )}
     </div>

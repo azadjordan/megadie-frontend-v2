@@ -312,6 +312,7 @@ export default function AccountInvoicesReceiptPage() {
                         {orderItems.map((item, idx) => {
                           const name =
                             item?.product?.name ||
+                            item?.productName ||
                             item?.sku ||
                             (typeof item?.product === "string" ? item.product : "Item");
                           const qty = Number(item?.qty) || 0;
@@ -379,13 +380,6 @@ export default function AccountInvoicesReceiptPage() {
             })}
           </div>
 
-          {pagination ? (
-            <Pagination
-              pagination={pagination}
-              onPageChange={(next) => setPage(next)}
-              tone="violet"
-            />
-          ) : null}
         </>
       )}
     </div>
