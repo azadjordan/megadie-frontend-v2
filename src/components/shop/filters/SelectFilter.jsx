@@ -4,6 +4,8 @@ export default function SelectFilter({
   selected = [],
   onToggle,
   disabled = false,
+  labelByValue = null,
+  explanationByValue = null,
 }) {
   const values = field?.allowedValues ?? []
   const multi = field?.multi !== false
@@ -51,11 +53,19 @@ export default function SelectFilter({
         ].join(' ')}
       >
         {!multi && <option value="">All</option>}
-        {values.map((v) => (
-          <option key={v} value={v}>
-            {v}
-          </option>
-        ))}
+        {values.map((v) => {
+          const label = (labelByValue && labelByValue[v]) || v
+          const explanation =
+            explanationByValue && explanationByValue[v]
+              ? explanationByValue[v]
+              : null
+          const display = explanation ? `${label} - ${explanation}` : label
+          return (
+            <option key={v} value={v}>
+              {display}
+            </option>
+          )
+        })}
       </select>
 
       {multi && (

@@ -16,8 +16,12 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [recentEmails, setRecentEmails] = useState([])
 
   const [login, { isLoading }] = useLoginMutation()
+
+  const RECENT_EMAILS_KEY = 'megadie.recentEmails'
+  const RECENT_EMAILS_MAX = 8
 
   const getLandingPath = (user) => {
     if (user?.isAdmin) return '/admin'
@@ -33,6 +37,23 @@ export default function LoginPage() {
     navigate(getLandingPath(userInfo), { replace: true })
   }, [isInitialized, userInfo, navigate])
 
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return
+      const raw = window.localStorage.getItem(RECENT_EMAILS_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed
+          .map((value) => String(value || '').trim())
+          .filter(Boolean)
+        setRecentEmails(cleaned)
+      }
+    } catch (_err) {
+      // Ignore localStorage failures and fall back to browser autofill.
+    }
+  }, [])
+
   const submitHandler = async (e) => {
     e.preventDefault()
 
@@ -43,6 +64,19 @@ export default function LoginPage() {
       }).unwrap()
 
       dispatch(setCredentials(res.data))
+
+      try {
+        if (typeof window !== 'undefined') {
+          const normalized = email.trim().toLowerCase()
+          const next = [normalized, ...recentEmails]
+          const deduped = Array.from(new Set(next)).filter(Boolean)
+          const capped = deduped.slice(0, RECENT_EMAILS_MAX)
+          window.localStorage.setItem(RECENT_EMAILS_KEY, JSON.stringify(capped))
+          setRecentEmails(capped)
+        }
+      } catch (_err) {
+        // Ignore localStorage failures and fall back to browser autofill.
+      }
 
       navigate(getLandingPath(res.data), { replace: true })
     } catch (err) {
@@ -74,10 +108,18 @@ export default function LoginPage() {
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="email"
             autoComplete="email"
+            list="recent-emails"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+          {recentEmails.length ? (
+            <datalist id="recent-emails">
+              {recentEmails.map((recentEmail) => (
+                <option key={recentEmail} value={recentEmail} />
+              ))}
+            </datalist>
+          ) : null}
         </div>
 
         <div>

@@ -241,6 +241,8 @@ export default function AdminProductEditPage() {
     );
   }, [categories, form.categoryId]);
 
+  const sizeOptions = sizes;
+
   const preview = useMemo(() => {
     const resolvedType = selectedCategory?.productType || form.productType;
     const categoryLabel = selectedCategory?.label || selectedCategory?.key || "";
@@ -301,7 +303,6 @@ export default function AdminProductEditPage() {
       ...prev,
       productType: value,
       categoryId: "",
-      catalogCode: value === "Ribbon" ? prev.catalogCode : "",
     }));
     setFieldErrors((prev) => ({
       ...prev,
@@ -332,13 +333,8 @@ export default function AdminProductEditPage() {
     const errors = {};
     if (!form.size) errors.size = "Size is required.";
     if (!form.packingUnit) errors.packingUnit = "Packing unit is required.";
-    if (form.productType === "Ribbon" && form.catalogCode) {
-      if (!catalogCodes.includes(form.catalogCode)) {
-        errors.catalogCode = "Select a valid catalog code.";
-      }
-    }
-    if (form.productType !== "Ribbon" && form.catalogCode) {
-      errors.catalogCode = "Catalog code is only available for Ribbon.";
+    if (form.catalogCode && !catalogCodes.includes(form.catalogCode)) {
+      errors.catalogCode = "Select a valid catalog code.";
     }
     return errors;
   };
@@ -668,10 +664,10 @@ export default function AdminProductEditPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">Select size</option>
-                  {form.size && !sizes.includes(form.size) ? (
+                  {form.size && !sizeOptions.includes(form.size) ? (
                     <option value={form.size}>Legacy: {form.size}</option>
                   ) : null}
-                  {sizes.map((size) => (
+                  {sizeOptions.map((size) => (
                     <option key={size} value={size}>
                       {size}
                     </option>
@@ -700,44 +696,24 @@ export default function AdminProductEditPage() {
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   Catalog code
                 </label>
-                {form.productType === "Ribbon" ? (
-                  <select
-                    value={form.catalogCode}
-                    onChange={(e) => updateField("catalogCode", e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                  >
-                    <option value="">Select catalog code</option>
-                    {form.catalogCode &&
-                    !catalogCodes.includes(form.catalogCode) ? (
-                      <option value={form.catalogCode}>
-                        Legacy: {form.catalogCode}
-                      </option>
-                    ) : null}
-                    {catalogCodes.map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      value={form.catalogCode || ""}
-                      disabled
-                      placeholder="Only for Ribbon"
-                      className="w-full flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
-                    />
-                    {form.catalogCode ? (
-                      <button
-                        type="button"
-                        onClick={() => updateField("catalogCode", "")}
-                        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                      >
-                        Clear
-                      </button>
-                    ) : null}
-                  </div>
-                )}
+                <select
+                  value={form.catalogCode}
+                  onChange={(e) => updateField("catalogCode", e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  <option value="">Select catalog code</option>
+                  {form.catalogCode &&
+                  !catalogCodes.includes(form.catalogCode) ? (
+                    <option value={form.catalogCode}>
+                      Legacy: {form.catalogCode}
+                    </option>
+                  ) : null}
+                  {catalogCodes.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
                 {fieldErrors.catalogCode ? (
                   <div className="mt-1 text-xs text-rose-600">
                     {fieldErrors.catalogCode}

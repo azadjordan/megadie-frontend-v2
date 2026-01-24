@@ -6,6 +6,7 @@ export default function OwnerStep({
   userId,
   setUserId,
   selectedUser,
+  originalOwnerId,
   showOwnerEditor,
   setShowOwnerEditor,
   users,
@@ -31,7 +32,14 @@ export default function OwnerStep({
         <div className="text-xs font-semibold text-slate-600">Owner</div>
         <button
           type="button"
-          onClick={() => setShowOwnerEditor((prev) => !prev)}
+          onClick={() => {
+            if (showOwnerEditor) {
+              setUserId(originalOwnerId || "");
+              setShowOwnerEditor(false);
+              return;
+            }
+            setShowOwnerEditor(true);
+          }}
           disabled={quoteLocked}
           className={[
             "rounded-xl px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition",
@@ -40,7 +48,7 @@ export default function OwnerStep({
               : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
           ].join(" ")}
         >
-          {showOwnerEditor ? "Hide" : "Change owner"}
+          {showOwnerEditor ? "Cancel" : "Change owner"}
         </button>
       </div>
 

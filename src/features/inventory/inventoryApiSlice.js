@@ -49,5 +49,6 @@ export const inventoryApiSlice = apiSlice.injectEndpoints({
 
 export const {
   useGetInventoryProductsQuery,
+  useLazyGetInventoryProductsQuery,
   useGetInventoryAllocationsQuery,
 } = inventoryApiSlice;

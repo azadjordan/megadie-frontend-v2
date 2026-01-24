@@ -7,10 +7,13 @@ import {
 } from "../../features/slots/slotsApiSlice";
 import {
   useGetSlotItemsBySlotQuery,
+  useAdjustSlotItemMutation,
   useMoveSlotItemsMutation,
   useClearSlotItemsMutation,
 } from "../../features/slotItems/slotItemsApiSlice";
+import { useLazyGetInventoryProductsQuery } from "../../features/inventory/inventoryApiSlice";
 import InventoryMoveModal from "../../components/admin/InventoryMoveModal";
+import InventorySlotStockModal from "../../components/admin/InventorySlotStockModal";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 const formatQty = (value) => {
@@ -64,6 +67,15 @@ export default function AdminSlotDetailsPage() {
   const [moveTargetSlot, setMoveTargetSlot] = useState(null);
   const [moveError, setMoveError] = useState("");
   const [clearError, setClearError] = useState("");
+  const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [stockSearch, setStockSearch] = useState("");
+  const [stockSearchRows, setStockSearchRows] = useState([]);
+  const [stockSearchError, setStockSearchError] = useState("");
+  const [stockSelected, setStockSelected] = useState({});
+  const [stockSubmitError, setStockSubmitError] = useState("");
+  const [stockSubmitSuccess, setStockSubmitSuccess] = useState("");
+  const [stockSubmitFailures, setStockSubmitFailures] = useState([]);
+  const [stockSubmitting, setStockSubmitting] = useState(false);
   const selectAllRef = useRef(null);
 
   const {
@@ -84,6 +96,9 @@ export default function AdminSlotDetailsPage() {
     useMoveSlotItemsMutation();
   const [clearSlotItems, { isLoading: clearingSlotItems }] =
     useClearSlotItemsMutation();
+  const [loadInventoryProducts, { isFetching: stockSearchLoading }] =
+    useLazyGetInventoryProductsQuery();
+  const [adjustSlotItem] = useAdjustSlotItemMutation();
 
   const slotItems = slotItemsResult?.data ?? [];
   const slotItemIds = useMemo(
@@ -97,6 +112,9 @@ export default function AdminSlotDetailsPage() {
   const trimmedMoveSearch = moveSearch.trim();
   const debouncedMoveSearch = useDebouncedValue(trimmedMoveSearch, 600);
   const isMoveDebouncing = trimmedMoveSearch !== debouncedMoveSearch;
+  const trimmedStockSearch = stockSearch.trim();
+  const debouncedStockSearch = useDebouncedValue(trimmedStockSearch, 600);
+  const isStockDebouncing = trimmedStockSearch !== debouncedStockSearch;
   const slotStatus = slot?.isActive === false ? "Inactive" : "Active";
   const totalQty = slotItems.reduce(
     (sum, item) => sum + (Number(item.qty) || 0),
@@ -210,6 +228,41 @@ export default function AdminSlotDetailsPage() {
   }, [moveModalOpen, debouncedMoveSearch, slotId, loadSlots]);
 
   useEffect(() => {
+    if (!stockModalOpen) return;
+    const query = debouncedStockSearch.trim();
+    if (!query) {
+      setStockSearchRows([]);
+      setStockSearchError("");
+      return;
+    }
+
+    let cancelled = false;
+    const loadProducts = async () => {
+      setStockSearchError("");
+      try {
+        const batch = await loadInventoryProducts({
+          q: query,
+          page: 1,
+          limit: 50,
+        }).unwrap();
+        const rows = Array.isArray(batch?.rows) ? batch.rows : [];
+        if (!cancelled) setStockSearchRows(rows);
+      } catch (err) {
+        if (!cancelled) {
+          setStockSearchError(
+            err?.data?.message || err?.error || "Unable to load products."
+          );
+        }
+      }
+    };
+
+    loadProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [stockModalOpen, debouncedStockSearch, loadInventoryProducts]);
+
+  useEffect(() => {
     if (!selectionMode) return;
     setSelectedSlotItemIds((prev) => {
       if (!prev.size) return prev;
@@ -318,6 +371,152 @@ export default function AdminSlotDetailsPage() {
   const closeClearModal = () => {
     setClearModalOpen(false);
     setClearError("");
+  };
+
+  const openStockModal = () => {
+    setStockModalOpen(true);
+    setStockSearch("");
+    setStockSearchRows([]);
+    setStockSearchError("");
+    setStockSelected({});
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const closeStockModal = () => {
+    setStockModalOpen(false);
+    setStockSearch("");
+    setStockSearchRows([]);
+    setStockSearchError("");
+    setStockSelected({});
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const handleStockSearchChange = (value) => {
+    setStockSearch(value);
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const toggleStockProduct = (product) => {
+    const productId = product?.id || product?._id;
+    if (!productId) return;
+    const key = String(productId);
+    setStockSelected((prev) => {
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = { product, qty: "1" };
+      }
+      return next;
+    });
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const handleStockQtyChange = (productId, value) => {
+    const key = String(productId);
+    setStockSelected((prev) => {
+      if (!prev[key]) return prev;
+      return { ...prev, [key]: { ...prev[key], qty: value } };
+    });
+  };
+
+  const handleRemoveSelected = (productId) => {
+    const key = String(productId);
+    setStockSelected((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setStockSelected({});
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const handleStockSubmit = async () => {
+    const resolvedSlotId = String(slot?._id || slot?.id || slotId || "");
+    if (!resolvedSlotId) {
+      setStockSubmitError("Missing slot id.");
+      return;
+    }
+
+    const entries = Object.entries(stockSelected || {});
+    if (entries.length === 0) {
+      setStockSubmitError("Select at least one SKU.");
+      return;
+    }
+
+    setStockSubmitting(true);
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+
+    const failures = [];
+    let successCount = 0;
+
+    for (const [productId, entry] of entries) {
+      const qtyValue = Number(entry.qty);
+      if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
+        failures.push({
+          productId,
+          name: entry.product?.name,
+          sku: entry.product?.sku,
+          message: "Qty must be a positive number.",
+        });
+        continue;
+      }
+
+      try {
+        await adjustSlotItem({
+          productId,
+          slotId: resolvedSlotId,
+          deltaQty: qtyValue,
+        }).unwrap();
+        successCount += 1;
+      } catch (err) {
+        failures.push({
+          productId,
+          name: entry.product?.name,
+          sku: entry.product?.sku,
+          message: err?.data?.message || err?.error || "Unable to add stock.",
+        });
+      }
+    }
+
+    if (failures.length > 0) {
+      const failedIds = new Set(failures.map((failure) => failure.productId));
+      setStockSelected((prev) => {
+        const next = {};
+        Object.entries(prev || {}).forEach(([id, value]) => {
+          if (failedIds.has(id)) next[id] = value;
+        });
+        return next;
+      });
+      setStockSubmitFailures(failures);
+      setStockSubmitError(`Failed to add ${failures.length} SKU(s).`);
+    } else {
+      setStockSelected({});
+      setStockSearch("");
+      setStockSearchRows([]);
+    }
+
+    if (successCount > 0) {
+      setStockSubmitSuccess(`Added stock for ${successCount} SKU(s).`);
+    }
+
+    setStockSubmitting(false);
   };
 
   const handleMoveSearchChange = (value) => {
@@ -507,6 +706,19 @@ export default function AdminSlotDetailsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  onClick={openStockModal}
+                  disabled={slotItemsBusy || isActionBusy}
+                  className={[
+                    "inline-flex h-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100",
+                    slotItemsBusy || isActionBusy
+                      ? "cursor-not-allowed opacity-60"
+                      : "",
+                  ].join(" ")}
+                >
+                  Stock
+                </button>
+                <button
+                  type="button"
                   onClick={toggleSelectionMode}
                   disabled={!hasSlotItems || slotItemsBusy || isActionBusy}
                   className={[
@@ -523,25 +735,6 @@ export default function AdminSlotDetailsPage() {
                 </button>
                 {selectionMode ? (
                   <>
-                    <label
-                      className={[
-                        "inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700",
-                        !hasSlotItems || slotItemsBusy || isActionBusy
-                          ? "cursor-not-allowed opacity-60"
-                          : "",
-                      ].join(" ")}
-                    >
-                      <input
-                        ref={selectAllRef}
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={toggleSelectAll}
-                        disabled={!hasSlotItems || slotItemsBusy || isActionBusy}
-                        aria-label="Select all items"
-                        className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-                      />
-                      Select all
-                    </label>
                     <button
                       type="button"
                       onClick={() => openMoveModal("selected")}
@@ -632,7 +825,31 @@ export default function AdminSlotDetailsPage() {
                 <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                   <tr>
                     {selectionMode ? (
-                      <th className="px-4 py-3 text-center">Select</th>
+                      <th className="px-4 py-3 text-center">
+                        <label
+                          className={[
+                            "inline-flex items-center gap-2",
+                            !hasSlotItems || slotItemsBusy || isActionBusy
+                              ? "cursor-not-allowed opacity-60"
+                              : "",
+                          ].join(" ")}
+                        >
+                          <input
+                            ref={selectAllRef}
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={toggleSelectAll}
+                            disabled={
+                              !hasSlotItems || slotItemsBusy || isActionBusy
+                            }
+                            aria-label="Select all items"
+                            className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                          />
+                          <span className="text-[11px] font-semibold text-slate-500">
+                            All
+                          </span>
+                        </label>
+                      </th>
                     ) : null}
                     <th className="px-4 py-3">Product</th>
                     <th className="px-4 py-3 text-right">Qty</th>
@@ -689,6 +906,28 @@ export default function AdminSlotDetailsPage() {
           )}
         </div>
       </div>
+
+      <InventorySlotStockModal
+        open={stockModalOpen}
+        slot={slot}
+        search={stockSearch}
+        onSearchChange={handleStockSearchChange}
+        isDebouncing={isStockDebouncing}
+        searchLoading={stockSearchLoading}
+        searchError={stockSearchError}
+        searchRows={stockSearchRows}
+        selectedItems={stockSelected}
+        onToggleProduct={toggleStockProduct}
+        onRemoveSelected={handleRemoveSelected}
+        onQtyChange={handleStockQtyChange}
+        onClearSelection={handleClearSelection}
+        onSubmit={handleStockSubmit}
+        onClose={closeStockModal}
+        submitting={stockSubmitting}
+        submitError={stockSubmitError}
+        submitSuccess={stockSubmitSuccess}
+        submitFailures={stockSubmitFailures}
+      />
 
       <InventoryMoveModal
         open={moveModalOpen}

@@ -17,7 +17,7 @@ import {
   useLazyGetQuoteStockCheckByAdminQuery,
 } from "../../features/quotes/quotesApiSlice";
 import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
-import { useGetAdminUsersQuery } from "../../features/auth/usersApiSlice";
+import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import { useLazyGetUserPricesQuery } from "../../features/userPrices/userPricesApiSlice";
 import { useLazyGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
 
@@ -71,9 +71,12 @@ export default function AdminRequestDetailsPage() {
     isLoading: isUsersLoading,
     isError: isUsersError,
     error: usersError,
-  } = useGetAdminUsersQuery(undefined, { skip: !showOwnerEditor });
+  } = useGetUsersAdminQuery(
+    { limit: 100, sort: "name" },
+    { skip: !showOwnerEditor }
+  );
 
-  const users = usersResult?.data || [];
+  const users = usersResult?.data || usersResult?.items || [];
 
   const [
     updateQuoteOwnerByAdmin,
@@ -185,6 +188,7 @@ export default function AdminRequestDetailsPage() {
     };
   }, [users, userId, quote?.user]);
 
+  const originalOwnerId = getId(quote?.user);
   const quoteId = quote?.id || quote?._id;
   const backendStatus = quote?.status || "Processing";
   const showAvailability = backendStatus !== "Cancelled";
@@ -643,6 +647,7 @@ export default function AdminRequestDetailsPage() {
             userId={userId}
             setUserId={setUserId}
             selectedUser={selectedUser}
+            originalOwnerId={originalOwnerId}
             showOwnerEditor={showOwnerEditor}
             setShowOwnerEditor={setShowOwnerEditor}
             users={users}

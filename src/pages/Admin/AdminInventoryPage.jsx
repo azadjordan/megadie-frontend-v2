@@ -5,7 +5,7 @@ import { toast } from "react-toastify";
 import Pagination from "../../components/common/Pagination";
 import AdminInventoryTabs from "../../components/admin/AdminInventoryTabs";
 import InventoryLocateModal from "../../components/admin/InventoryLocateModal";
-import InventoryStockModal from "../../components/admin/InventoryStockModal";
+import InventoryProductStockModal from "../../components/admin/InventoryProductStockModal";
 import { useGetInventoryProductsQuery } from "../../features/inventory/inventoryApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import {
@@ -47,28 +47,25 @@ export default function AdminInventoryPage() {
   const [productPage, setProductPage] = useState(1);
   const [productLimit, setProductLimit] = useState(25);
   const [locateProduct, setLocateProduct] = useState(null);
-  const [addStockProduct, setAddStockProduct] = useState(null);
-  const [addStockMode, setAddStockMode] = useState("existing");
-  const [addExistingSlotId, setAddExistingSlotId] = useState("");
-  const [addExistingQty, setAddExistingQty] = useState("1");
-  const [addNewSlotId, setAddNewSlotId] = useState("");
-  const [addNewQty, setAddNewQty] = useState("");
-  const [addNewSlotStore, setAddNewSlotStore] = useState("AE1");
-  const [addNewSlotLabel, setAddNewSlotLabel] = useState("");
-  const [addNewSlotSelectedLabel, setAddNewSlotSelectedLabel] = useState("");
-  const [allSlots, setAllSlots] = useState([]);
-  const [allSlotsLoading, setAllSlotsLoading] = useState(false);
-  const [allSlotsError, setAllSlotsError] = useState("");
-  const [addStockError, setAddStockError] = useState("");
-  const [addStockSuccess, setAddStockSuccess] = useState("");
+  const [stockProduct, setStockProduct] = useState(null);
+  const [stockStore, setStockStore] = useState("all");
+  const [stockSearch, setStockSearch] = useState("");
+  const [stockSearchRows, setStockSearchRows] = useState([]);
+  const [stockSearchLoading, setStockSearchLoading] = useState(false);
+  const [stockSearchError, setStockSearchError] = useState("");
+  const [stockSelected, setStockSelected] = useState({});
+  const [stockExistingAdds, setStockExistingAdds] = useState({});
+  const [stockSubmitError, setStockSubmitError] = useState("");
+  const [stockSubmitSuccess, setStockSubmitSuccess] = useState("");
+  const [stockSubmitFailures, setStockSubmitFailures] = useState([]);
+  const [stockSubmitting, setStockSubmitting] = useState(false);
 
   const trimmedSearch = q.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const isDebouncing = trimmedSearch !== debouncedSearch;
-  const trimmedNewSlotSearch = addNewSlotLabel.trim();
-  const debouncedNewSlotSearch = useDebouncedValue(trimmedNewSlotSearch, 1000);
-  const isNewSlotDebouncing =
-    trimmedNewSlotSearch !== debouncedNewSlotSearch;
+  const trimmedStockSearch = stockSearch.trim();
+  const debouncedStockSearch = useDebouncedValue(trimmedStockSearch, 600);
+  const isStockDebouncing = trimmedStockSearch !== debouncedStockSearch;
 
   const {
     data: metaData,
@@ -108,8 +105,7 @@ export default function AdminInventoryPage() {
     },
   ] = useLazyGetSlotItemsByProductQuery();
   const [getSlots] = useLazyGetSlotsQuery();
-  const [adjustSlotItem, { isLoading: adjustingStock }] =
-    useAdjustSlotItemMutation();
+  const [adjustSlotItem] = useAdjustSlotItemMutation();
   const [deleteProduct, { isLoading: isDeleting }] =
     useDeleteProductMutation();
   const [deletingId, setDeletingId] = useState(null);
@@ -134,72 +130,22 @@ export default function AdminInventoryPage() {
     slotItemsError?.data?.message ||
     slotItemsError?.error ||
     "Unable to load slot locations.";
-  const hasSlotItems = slotItems.length > 0;
   const slotStoreOptions = SLOT_STORE_TABS;
-  const newSlotSearchRows = allSlots;
-  const newSlotSearchLoading = allSlotsLoading;
-  const hasNewSlotSearchError = !!allSlotsError;
-  const newSlotSearchErrorMessage = allSlotsError || "Unable to load slots.";
-
-  const availableNewSlots = useMemo(() => {
-    const existingIds = new Set(
-      slotItems.map((item) => String(item.slot?._id || item.slot))
-    );
-    return newSlotSearchRows.filter(
-      (slot) => !existingIds.has(String(slot._id || slot.id))
-    );
-  }, [newSlotSearchRows, slotItems]);
-
-  const availableNewSlotsByLabel = useMemo(() => {
-    const map = new Map();
-    availableNewSlots.forEach((slot) => {
-      if (!slot?.label) return;
-      map.set(String(slot.label).trim().toLowerCase(), slot);
-    });
-    return map;
-  }, [availableNewSlots]);
-
-  const availableNewSlotsById = useMemo(() => {
-    const map = new Map();
-    availableNewSlots.forEach((slot) => {
-      const slotId = slot?._id || slot?.id;
-      if (!slotId) return;
-      map.set(String(slotId), slot);
-    });
-    return map;
-  }, [availableNewSlots]);
-
-  const existingSlotLabelsById = useMemo(() => {
-    const map = new Map();
+  const existingSlotIds = useMemo(() => {
+    const ids = new Set();
     slotItems.forEach((item) => {
       const slotId = item.slot?._id || item.slot;
-      if (!slotId) return;
-      map.set(String(slotId), item.slot?.label || "Unknown slot");
+      if (slotId) ids.add(String(slotId));
     });
-    return map;
+    return ids;
   }, [slotItems]);
-
-  const selectedNewSlot = addNewSlotId
-    ? availableNewSlotsById.get(String(addNewSlotId))
-    : null;
-  const selectedNewSlotLabel = addNewSlotSelectedLabel
-    ? addNewSlotSelectedLabel
-    : selectedNewSlot?.label
-    ? String(selectedNewSlot.label)
-    : "";
-
-  const canSubmitExisting =
-    !adjustingStock &&
-    !slotItemsLoading &&
-    !slotItemsError &&
-    hasSlotItems &&
-    !!addExistingSlotId;
-  const newQtyValue = Number(addNewQty);
-  const canSubmitNew =
-    !adjustingStock &&
-    !!addNewSlotId &&
-    Number.isFinite(newQtyValue) &&
-    newQtyValue > 0;
+  const availableSlotSearchRows = useMemo(
+    () =>
+      (stockSearchRows || []).filter(
+        (slot) => !existingSlotIds.has(String(slot._id || slot.id))
+      ),
+    [stockSearchRows, existingSlotIds]
+  );
 
   const filteredRows = productRows;
   const sortedRows = productRows;
@@ -245,104 +191,36 @@ export default function AdminInventoryPage() {
     setProductLimit(25);
   };
 
-  const handleStockModeChange = (nextMode) => {
-    setAddStockMode(nextMode);
-    setAddStockError("");
-    setAddStockSuccess("");
-  };
-
-  const handleExistingSlotChange = (slotId) => {
-    setAddExistingSlotId(String(slotId));
-    setAddStockError("");
-    setAddStockSuccess("");
-  };
-
-  const handleExistingQtyChange = (value) => {
-    setAddExistingQty(value);
-    setAddStockError("");
-    setAddStockSuccess("");
-  };
-
-  const handleNewSlotStoreChange = (storeValue) => {
-    setAddNewSlotStore(storeValue);
-    setAddNewSlotLabel("");
-    setAddNewSlotId("");
-    setAddNewSlotSelectedLabel("");
-    setAddStockError("");
-    setAddStockSuccess("");
-  };
-
-  const handleNewSlotLabelChange = (value) => {
-    if (addNewSlotId || addNewSlotSelectedLabel) {
-      setAddNewSlotId("");
-      setAddNewSlotSelectedLabel("");
-    }
-    setAddNewSlotLabel(value);
-    setAddStockError("");
-    setAddStockSuccess("");
-
-    const normalized = String(value || "").trim().toLowerCase();
-    if (!normalized) return;
-    const match = availableNewSlotsByLabel.get(normalized);
-    if (!match) return;
-
-    setAddNewSlotId(String(match._id || match.id));
-    setAddNewSlotSelectedLabel(String(match.label || value).trim());
-    setAddNewSlotLabel("");
-  };
-
-  const handleClearNewSlotSelection = () => {
-    setAddNewSlotId("");
-    setAddNewSlotSelectedLabel("");
-    setAddNewSlotLabel("");
-    setAddStockError("");
-    setAddStockSuccess("");
-  };
-
-  const handleNewQtyChange = (value) => {
-    setAddNewQty(value);
-    setAddStockError("");
-    setAddStockSuccess("");
-  };
-
   useEffect(() => {
-    if (!addStockProduct) return;
-    if (addExistingSlotId) return;
-    if (!slotItems.length) return;
-    const firstSlotId = slotItems[0]?.slot?._id || slotItems[0]?.slot || "";
-    if (firstSlotId) setAddExistingSlotId(firstSlotId);
-  }, [addStockProduct, addExistingSlotId, slotItems]);
-
-  useEffect(() => {
-    if (!addStockProduct) return;
-    const query = debouncedNewSlotSearch.trim();
+    if (!stockProduct) return;
+    const query = debouncedStockSearch.trim();
     if (!query) {
-      setAllSlots([]);
-      setAllSlotsLoading(false);
-      setAllSlotsError("");
+      setStockSearchRows([]);
+      setStockSearchLoading(false);
+      setStockSearchError("");
       return;
     }
 
     let cancelled = false;
     const loadSlots = async () => {
-      setAllSlotsLoading(true);
-      setAllSlotsError("");
-      setAllSlots([]);
+      setStockSearchLoading(true);
+      setStockSearchError("");
+      setStockSearchRows([]);
       const params = { isActive: true, q: query, page: 1, limit: 50 };
-      if (addNewSlotStore !== "all") params.store = addNewSlotStore;
+      if (stockStore !== "all") params.store = stockStore;
 
       try {
         const batch = await getSlots(params).unwrap();
         const safeBatch = Array.isArray(batch?.rows) ? batch.rows : [];
-        if (!cancelled) setAllSlots(safeBatch);
+        if (!cancelled) setStockSearchRows(safeBatch);
       } catch (err) {
         if (!cancelled) {
-          setAllSlotsError(
+          setStockSearchError(
             err?.data?.message || err?.error || "Unable to load slots."
           );
         }
       } finally {
-        if (!cancelled) setAllSlotsLoading(false);
+        if (!cancelled) setStockSearchLoading(false);
       }
     };
 
@@ -350,7 +228,7 @@ export default function AdminInventoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [addStockProduct, addNewSlotStore, debouncedNewSlotSearch, getSlots]);
+  }, [stockProduct, stockStore, debouncedStockSearch, getSlots]);
 
   const openLocateModal = (row) => {
     setLocateProduct(row);
@@ -361,102 +239,213 @@ export default function AdminInventoryPage() {
     setLocateProduct(null);
   };
 
-  const openAddStockModal = (row) => {
-    setAddStockProduct(row);
-    setAddStockMode("existing");
-    setAddExistingQty("1");
-    setAddNewQty("");
-    setAddNewSlotStore("AE1");
-    setAddNewSlotLabel("");
-    setAddExistingSlotId("");
-    setAddNewSlotId("");
-    setAddNewSlotSelectedLabel("");
-    setAddStockError("");
-    setAddStockSuccess("");
+  const openStockModal = (row) => {
+    setStockProduct(row);
+    setStockStore("all");
+    setStockSearch("");
+    setStockSearchRows([]);
+    setStockSearchLoading(false);
+    setStockSearchError("");
+    setStockSelected({});
+    setStockExistingAdds({});
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
     getSlotItemsByProduct(row.id);
   };
 
-  const closeAddStockModal = () => {
-    setAddStockProduct(null);
-    setAddStockMode("existing");
-    setAllSlots([]);
-    setAllSlotsLoading(false);
-    setAllSlotsError("");
-    setAddStockError("");
-    setAddStockSuccess("");
-    setAddNewSlotSelectedLabel("");
+  const closeStockModal = () => {
+    setStockProduct(null);
+    setStockSearch("");
+    setStockSearchRows([]);
+    setStockSearchLoading(false);
+    setStockSearchError("");
+    setStockSelected({});
+    setStockExistingAdds({});
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
   };
 
-  const handleAddStockExisting = async () => {
-    if (!addStockProduct) return;
-    if (!addExistingSlotId) {
-      setAddStockError("Select an existing slot to add stock.");
-      setAddStockSuccess("");
-      return;
-    }
-    const qtyValue = Number(addExistingQty);
-    if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
-      setAddStockError("Qty must be a positive number.");
-      setAddStockSuccess("");
-      return;
-    }
-
-    try {
-      setAddStockError("");
-      setAddStockSuccess("");
-      await adjustSlotItem({
-        productId: addStockProduct.id,
-        slotId: addExistingSlotId,
-        deltaQty: qtyValue,
-      }).unwrap();
-      const label =
-        existingSlotLabelsById.get(String(addExistingSlotId)) || "slot";
-      setAddStockSuccess(`Added ${formatQty(qtyValue)} to ${label}.`);
-      setAddExistingQty("1");
-      getSlotItemsByProduct(addStockProduct.id);
-    } catch (err) {
-      setAddStockError(
-        err?.data?.message || err?.error || "Unable to add stock."
-      );
-      setAddStockSuccess("");
-    }
+  const handleStockStoreChange = (value) => {
+    setStockStore(value);
+    setStockSearchRows([]);
+    setStockSearchError("");
   };
 
-  const handleAddStockNew = async () => {
-    if (!addStockProduct) return;
-    if (!addNewSlotId) {
-      setAddStockError("Select a new slot to add stock.");
-      setAddStockSuccess("");
-      return;
-    }
-    const qtyValue = Number(addNewQty);
-    if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
-      setAddStockError("Qty must be a positive number.");
-      setAddStockSuccess("");
+  const handleStockSearchChange = (value) => {
+    setStockSearch(value);
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const toggleStockSlot = (slot) => {
+    const slotId = slot?._id || slot?.id;
+    if (!slotId) return;
+    const key = String(slotId);
+    setStockSelected((prev) => {
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = { slot, qty: "1" };
+      }
+      return next;
+    });
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const handleStockQtyChange = (slotId, value) => {
+    const key = String(slotId);
+    setStockSelected((prev) => {
+      if (!prev[key]) return prev;
+      return { ...prev, [key]: { ...prev[key], qty: value } };
+    });
+  };
+
+  const handleExistingQtyChange = (slotId, value) => {
+    const key = String(slotId);
+    setStockExistingAdds((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleRemoveSelectedSlot = (slotId) => {
+    const key = String(slotId);
+    setStockSelected((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const handleClearSelectedSlots = () => {
+    setStockSelected({});
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+  };
+
+  const handleClearExistingAdds = () => {
+    setStockExistingAdds({});
+  };
+
+  const handleStockSubmit = async () => {
+    if (!stockProduct) return;
+    const productId = stockProduct.id || stockProduct._id;
+    if (!productId) {
+      setStockSubmitError("Missing product id.");
       return;
     }
 
-    try {
-      setAddStockError("");
-      setAddStockSuccess("");
-      await adjustSlotItem({
-        productId: addStockProduct.id,
-        slotId: addNewSlotId,
-        deltaQty: qtyValue,
-      }).unwrap();
-      const label = selectedNewSlotLabel || "slot";
-      setAddStockSuccess(`Added ${formatQty(qtyValue)} to ${label}.`);
-      setAddNewQty("");
-      setAddNewSlotLabel("");
-      setAddNewSlotId("");
-      setAddNewSlotSelectedLabel("");
-      getSlotItemsByProduct(addStockProduct.id);
-    } catch (err) {
-      setAddStockError(
-        err?.data?.message || err?.error || "Unable to add stock."
-      );
-      setAddStockSuccess("");
+    const existingEntries = Object.entries(stockExistingAdds || {})
+      .map(([slotId, qty]) => ({ slotId, qty }))
+      .filter(({ qty }) => {
+        const qtyValue = Number(qty);
+        return Number.isFinite(qtyValue) && qtyValue > 0;
+      });
+    const newEntries = Object.entries(stockSelected || {}).map(
+      ([slotId, entry]) => ({ slotId, entry })
+    );
+
+    if (!existingEntries.length && !newEntries.length) {
+      setStockSubmitError("Select at least one slot.");
+      return;
     }
+
+    setStockSubmitting(true);
+    setStockSubmitError("");
+    setStockSubmitSuccess("");
+    setStockSubmitFailures([]);
+
+    const failures = [];
+    let successCount = 0;
+    const existingById = new Map();
+    slotItems.forEach((item) => {
+      const slotId = item.slot?._id || item.slot;
+      if (!slotId) return;
+      existingById.set(String(slotId), item);
+    });
+
+    for (const { slotId, qty } of existingEntries) {
+      const qtyValue = Number(qty);
+      try {
+        await adjustSlotItem({
+          productId,
+          slotId,
+          deltaQty: qtyValue,
+        }).unwrap();
+        successCount += 1;
+      } catch (err) {
+        const existingItem = existingById.get(String(slotId));
+        failures.push({
+          slotId,
+          label: existingItem?.slot?.label,
+          message: err?.data?.message || err?.error || "Unable to add stock.",
+        });
+      }
+    }
+
+    for (const { slotId, entry } of newEntries) {
+      const qtyValue = Number(entry.qty);
+      if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
+        failures.push({
+          slotId,
+          label: entry.slot?.label,
+          message: "Qty must be a positive number.",
+        });
+        continue;
+      }
+
+      try {
+        await adjustSlotItem({
+          productId,
+          slotId,
+          deltaQty: qtyValue,
+        }).unwrap();
+        successCount += 1;
+      } catch (err) {
+        failures.push({
+          slotId,
+          label: entry.slot?.label,
+          message: err?.data?.message || err?.error || "Unable to add stock.",
+        });
+      }
+    }
+
+    if (failures.length > 0) {
+      const failedIds = new Set(failures.map((failure) => failure.slotId));
+      setStockSelected((prev) => {
+        const next = {};
+        Object.entries(prev || {}).forEach(([id, value]) => {
+          if (failedIds.has(id)) next[id] = value;
+        });
+        return next;
+      });
+      setStockExistingAdds((prev) => {
+        const next = {};
+        Object.entries(prev || {}).forEach(([id, value]) => {
+          if (failedIds.has(id)) next[id] = value;
+        });
+        return next;
+      });
+      setStockSubmitFailures(failures);
+      setStockSubmitError(`Failed to add ${failures.length} slot(s).`);
+    } else {
+      setStockSelected({});
+      setStockExistingAdds({});
+      setStockSearch("");
+      setStockSearchRows([]);
+    }
+
+    if (successCount > 0) {
+      setStockSubmitSuccess(`Added to ${successCount} slot(s).`);
+      getSlotItemsByProduct(productId);
+    }
+
+    setStockSubmitting(false);
   };
 
   const friendlyApiError = (err) =>
@@ -794,7 +783,7 @@ export default function AdminInventoryPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => openAddStockModal(row)}
+                            onClick={() => openStockModal(row)}
                             className="inline-flex h-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
                           >
                             Stock
@@ -844,45 +833,36 @@ export default function AdminInventoryPage() {
         formatQty={formatQty}
       />
 
-      <InventoryStockModal
-        open={Boolean(addStockProduct)}
-        product={addStockProduct}
-        mode={addStockMode}
-        onModeChange={handleStockModeChange}
-        slotItems={slotItems}
-        slotItemsLoading={slotItemsLoading}
-        slotItemsError={slotItemsError}
-        slotItemsErrorMessage={slotItemsErrorMessage}
-        slotStoreOptions={slotStoreOptions}
-        addExistingSlotId={addExistingSlotId}
-        onExistingSlotChange={handleExistingSlotChange}
-        addExistingQty={addExistingQty}
+      <InventoryProductStockModal
+        open={Boolean(stockProduct)}
+        product={stockProduct}
+        storeOptions={slotStoreOptions}
+        storeValue={stockStore}
+        onStoreChange={handleStockStoreChange}
+        search={stockSearch}
+        onSearchChange={handleStockSearchChange}
+        isDebouncing={isStockDebouncing}
+        searchLoading={stockSearchLoading}
+        searchError={stockSearchError}
+        searchRows={availableSlotSearchRows}
+        existingSlots={slotItems}
+        existingSlotsLoading={slotItemsLoading}
+        existingSlotsError={slotItemsError}
+        existingSlotsErrorMessage={slotItemsErrorMessage}
+        existingAdditions={stockExistingAdds}
         onExistingQtyChange={handleExistingQtyChange}
-        canSubmitExisting={canSubmitExisting}
-        onAddExisting={handleAddStockExisting}
-        addNewSlotStore={addNewSlotStore}
-        onNewSlotStoreChange={handleNewSlotStoreChange}
-        addNewSlotLabel={addNewSlotLabel}
-        onNewSlotLabelChange={handleNewSlotLabelChange}
-        addNewSlotSelectedLabel={selectedNewSlotLabel}
-        onClearNewSlotSelection={handleClearNewSlotSelection}
-        addNewSlotId={addNewSlotId}
-        addNewQty={addNewQty}
-        onNewQtyChange={handleNewQtyChange}
-        canSubmitNew={canSubmitNew}
-        onAddNew={handleAddStockNew}
-        adjustingStock={adjustingStock}
-        addStockError={addStockError}
-        addStockSuccess={addStockSuccess}
-        trimmedNewSlotSearch={trimmedNewSlotSearch}
-        isNewSlotDebouncing={isNewSlotDebouncing}
-        newSlotSearchLoading={newSlotSearchLoading}
-        hasNewSlotSearchError={hasNewSlotSearchError}
-        newSlotSearchErrorMessage={newSlotSearchErrorMessage}
-        newSlotSearchRows={newSlotSearchRows}
-        availableNewSlots={availableNewSlots}
-        onClose={closeAddStockModal}
-        formatQty={formatQty}
+        onClearExisting={handleClearExistingAdds}
+        selectedSlots={stockSelected}
+        onToggleSlot={toggleStockSlot}
+        onRemoveSelected={handleRemoveSelectedSlot}
+        onNewQtyChange={handleStockQtyChange}
+        onClearSelected={handleClearSelectedSlots}
+        onSubmit={handleStockSubmit}
+        onClose={closeStockModal}
+        submitting={stockSubmitting}
+        submitError={stockSubmitError}
+        submitSuccess={stockSubmitSuccess}
+        submitFailures={stockSubmitFailures}
       />
     </div>
   );

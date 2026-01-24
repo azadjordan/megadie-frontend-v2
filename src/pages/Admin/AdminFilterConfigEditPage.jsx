@@ -42,24 +42,66 @@ const normalizeNumber = (raw, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
-const parseAllowedValues = (raw) =>
-  String(raw || "")
-    .split(/[\n,]/)
-    .map((value) => value.trim())
+const parseAllowedValueMeta = (raw) => {
+  const lines = String(raw || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
     .filter(Boolean);
+  const values = [];
+  const labels = {};
+  const explanations = {};
 
-const buildFieldRow = (field = {}) => ({
-  id: createLocalId(),
-  key: field.key || "",
-  label: field.label || "",
-  type: field.type || "enum",
-  ui: field.ui || "chips",
-  multi: typeof field.multi === "boolean" ? field.multi : true,
-  sort: Number.isFinite(Number(field.sort)) ? String(field.sort) : "0",
-  allowedValuesText: Array.isArray(field.allowedValues)
-    ? field.allowedValues.join(", ")
-    : "",
-});
+  lines.forEach((line) => {
+    const parts = line
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    if (parts.length === 0) return;
+    const value = parts[0];
+    if (!value) return;
+    if (!values.includes(value)) values.push(value);
+    if (parts.length > 1 && parts[1]) {
+      labels[value] = parts[1];
+    }
+    if (parts.length > 2 && parts[2]) {
+      explanations[value] = parts.slice(2).join(", ").trim();
+    }
+  });
+
+  return { values, labels, explanations };
+};
+
+const buildFieldRow = (field = {}) => {
+  const labelsMap =
+    field?.allowedValueLabels instanceof Map
+      ? Object.fromEntries(field.allowedValueLabels)
+      : field?.allowedValueLabels || {};
+  const explanationsMap =
+    field?.allowedValueExplanations instanceof Map
+      ? Object.fromEntries(field.allowedValueExplanations)
+      : field?.allowedValueExplanations || {};
+  return {
+    id: createLocalId(),
+    key: field.key || "",
+    label: field.label || "",
+    type: field.type || "enum",
+    ui: field.ui || "chips",
+    multi: typeof field.multi === "boolean" ? field.multi : true,
+    sort: Number.isFinite(Number(field.sort)) ? String(field.sort) : "0",
+    allowedValueMetaText: Array.isArray(field.allowedValues)
+      ? field.allowedValues
+          .map((value) => {
+            const label = labelsMap?.[value] || "";
+            const explanation = explanationsMap?.[value] || "";
+            if (!label && !explanation) return `${value}`;
+            if (label && explanation) return `${value}, ${label}, ${explanation}`;
+            return `${value}, ${label || ""}`.trim();
+          })
+          .filter(Boolean)
+          .join("\n")
+      : "",
+  };
+};
 
 const buildFormState = (config, productTypeFallback) => ({
   productType: config?.productType || productTypeFallback || "",
@@ -146,8 +188,8 @@ export default function AdminFilterConfigEditPage() {
           ? {
               ...field,
               type: value,
-              allowedValuesText:
-                value === "enum" ? field.allowedValuesText : "",
+              allowedValueMetaText:
+                value === "enum" ? field.allowedValueMetaText : "",
             }
           : field
       ),
@@ -257,16 +299,23 @@ export default function AdminFilterConfigEditPage() {
     setFormError(message);
     if (message) return;
 
-    const payloadFields = form.fields.map((field) => ({
-      key: String(field.key || "").trim(),
-      label: String(field.label || "").trim(),
-      type: field.type,
-      ui: field.ui || "chips",
-      multi: Boolean(field.multi),
-      sort: normalizeNumber(field.sort, 0),
-      allowedValues:
-        field.type === "enum" ? parseAllowedValues(field.allowedValuesText) : [],
-    }));
+    const payloadFields = form.fields.map((field) => {
+      const meta =
+        field.type === "enum"
+          ? parseAllowedValueMeta(field.allowedValueMetaText)
+          : { values: [], labels: {}, explanations: {} };
+      return {
+        key: String(field.key || "").trim(),
+        label: String(field.label || "").trim(),
+        type: field.type,
+        ui: field.ui || "chips",
+        multi: Boolean(field.multi),
+        sort: normalizeNumber(field.sort, 0),
+        allowedValues: meta.values,
+        allowedValueLabels: meta.labels,
+        allowedValueExplanations: meta.explanations,
+      };
+    });
 
     try {
       const res = await updateFilterConfig({
@@ -559,24 +608,25 @@ export default function AdminFilterConfigEditPage() {
                   <div className="mt-3 grid gap-3 md:grid-cols-12">
                     <div className="md:col-span-8">
                       <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Allowed values
+                        Values, labels, explanations
                       </label>
-                      <input
-                        value={field.allowedValuesText}
+                      <textarea
+                        rows={4}
+                        value={field.allowedValueMetaText}
                         onChange={(e) =>
                           updateFieldRow(
                             field.id,
-                            "allowedValuesText",
+                            "allowedValueMetaText",
                             e.target.value
                           )
                         }
                         disabled={!isEnum}
-                        placeholder="red, blue, green"
+                        placeholder={`1 inch, 1 inch, 25 mm\n1/2 inch, 1/2 inch, 12-13 mm`}
                         className={inputClass(false)}
                       />
                       <div className="mt-1 text-[11px] text-slate-400">
                         {isEnum
-                          ? "Comma or line separated values."
+                          ? 'One per line: value, label, explanation (label/explanation optional).'
                           : "Only used for enum fields."}
                       </div>
                     </div>

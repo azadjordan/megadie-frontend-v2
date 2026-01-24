@@ -53,7 +53,17 @@ export default function ShopFilters({
       {/* Fields */}
       {fields.map((field) => {
         const selected = selectedFilters[field.key] || []
-        const labelByValue = valueLabelMaps[field.key]
+        const externalLabels = valueLabelMaps[field.key] || {}
+        const configLabels =
+          field?.allowedValueLabels instanceof Map
+            ? Object.fromEntries(field.allowedValueLabels)
+            : field?.allowedValueLabels || {}
+        const configExplanations =
+          field?.allowedValueExplanations instanceof Map
+            ? Object.fromEntries(field.allowedValueExplanations)
+            : field?.allowedValueExplanations || {}
+        const labelByValue = { ...externalLabels, ...configLabels }
+        const explanationByValue = configExplanations
 
         switch (field.ui) {
           case 'search':
@@ -64,6 +74,8 @@ export default function ShopFilters({
                 selected={selected}
                 onToggle={onToggle}
                 disabled={disabled}
+                labelByValue={labelByValue}
+                explanationByValue={explanationByValue}
               />
             )
 
@@ -75,6 +87,8 @@ export default function ShopFilters({
                 selected={selected}
                 onToggle={onToggle}
                 disabled={disabled}
+                labelByValue={labelByValue}
+                explanationByValue={explanationByValue}
               />
             )
 
@@ -86,6 +100,8 @@ export default function ShopFilters({
                 selected={selected}
                 onToggle={onToggle}
                 disabled={disabled}
+                labelByValue={labelByValue}
+                explanationByValue={explanationByValue}
               />
             )
 
@@ -99,6 +115,7 @@ export default function ShopFilters({
                 onToggle={onToggle}
                 disabled={disabled}
                 labelByValue={labelByValue}
+                explanationByValue={explanationByValue}
               />
             )
         }

@@ -197,6 +197,7 @@ export default function AdminInventorySlotsPage() {
     }
   };
 
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -453,7 +454,6 @@ export default function AdminInventorySlotsPage() {
               <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Slot</th>
-                  <th className="px-4 py-3">Store</th>
                   <th className="px-4 py-3">Occupancy</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Updated</th>
@@ -491,11 +491,6 @@ export default function AdminInventorySlotsPage() {
                         </div>
                         <div className="text-xs text-slate-500">
                           Unit {unitLabel} / Pos {positionLabel}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {row.store || "-"}
                         </div>
                       </td>
                       <td className="px-4 py-3">

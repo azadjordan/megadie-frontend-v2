@@ -4,6 +4,8 @@ export default function CheckboxFilter({
   selected = [],
   onToggle,
   disabled = false,
+  labelByValue = null,
+  explanationByValue = null,
 }) {
   const values = field?.allowedValues ?? []
   const multi = field?.multi !== false
@@ -17,6 +19,11 @@ export default function CheckboxFilter({
       <div className="space-y-2">
         {values.map((v) => {
           const checked = selected.includes(v)
+          const label = (labelByValue && labelByValue[v]) || v
+          const explanation =
+            explanationByValue && explanationByValue[v]
+              ? explanationByValue[v]
+              : null
 
           return (
             <label
@@ -39,8 +46,17 @@ export default function CheckboxFilter({
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
                 ].join(' ')}
               />
-              <span className={checked ? 'text-violet-700' : 'text-slate-700'}>
-                {v}
+              <span className="flex flex-col leading-tight">
+                <span
+                  className={checked ? 'text-violet-700' : 'text-slate-700'}
+                >
+                  {label}
+                </span>
+                {explanation ? (
+                  <span className="text-[11px] text-slate-500">
+                    {explanation}
+                  </span>
+                ) : null}
               </span>
             </label>
           )

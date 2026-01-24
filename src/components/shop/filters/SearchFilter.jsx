@@ -6,6 +6,8 @@ export default function SearchFilter({
   selected = [],
   onToggle,
   disabled = false,
+  labelByValue = null,
+  explanationByValue = null,
 }) {
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
@@ -24,10 +26,17 @@ export default function SearchFilter({
     }
 
     const q = query.trim().toLowerCase()
-    if (q) list = list.filter((v) => v.toLowerCase().includes(q))
+    if (q) {
+      list = list.filter((v) => {
+        const label = labelByValue ? labelByValue[v] : ''
+        const explanation = explanationByValue ? explanationByValue[v] : ''
+        const haystack = `${v} ${label} ${explanation}`.toLowerCase()
+        return haystack.includes(q)
+      })
+    }
 
-    return list.slice(0, 50)
-  }, [values, query, selected])
+    return list
+  }, [values, query, selected, labelByValue, explanationByValue])
 
   if (!values.length) return null
 
@@ -76,23 +85,39 @@ export default function SearchFilter({
       {/* Selected chips */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selected.map((v) => (
-            <button
-              key={v}
-              type="button"
-              disabled={disabled}
-              onClick={() => onToggle(field.key, v, multi)}
-              className={[
-                'rounded-full px-3 py-1 text-xs ring-1 transition',
-                'bg-violet-50 text-violet-700 ring-violet-200 hover:bg-violet-100',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
-                disabled ? 'cursor-not-allowed opacity-60' : '',
-              ].join(' ')}
-              title="Remove"
-            >
-              {v}
-            </button>
-          ))}
+          {selected.map((v) => {
+            const label = (labelByValue && labelByValue[v]) || v
+            const explanation =
+              explanationByValue && explanationByValue[v]
+                ? explanationByValue[v]
+                : null
+            return (
+              <button
+                key={v}
+                type="button"
+                disabled={disabled}
+                onClick={() => onToggle(field.key, v, multi)}
+                className={[
+                  'group relative p-0 text-left text-xs transition',
+                  'text-violet-700',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
+                  disabled ? 'cursor-not-allowed opacity-60' : '',
+                ].join(' ')}
+                title="Remove"
+              >
+                <span className="inline-flex flex-col items-start">
+                  <span className="relative z-10 inline-flex items-center rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold leading-tight text-violet-700 ring-1 ring-violet-200 transition-all group-hover:bg-violet-100/70 group-hover:ring-violet-200/80">
+                    {label}
+                  </span>
+                  {explanation ? (
+                    <span className="relative z-0 -mt-0.5 ml-2 inline-flex items-center rounded-b-lg rounded-tr-lg border border-violet-200/80 bg-violet-50/90 px-2 py-0.5 text-[10px] leading-tight text-violet-600/80 opacity-90 shadow-sm transition-all group-hover:bg-violet-100/70">
+                      {explanation}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -104,23 +129,35 @@ export default function SearchFilter({
               No matching results
             </div>
           ) : (
-            filteredValues.map((v) => (
-              <button
-                key={v}
-                type="button"
-                disabled={disabled}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelect(v)}
-                className={[
-                  'block w-full px-3 py-2 text-left text-sm transition',
-                  disabled
-                    ? 'cursor-not-allowed opacity-60'
-                    : 'text-slate-700 hover:bg-violet-50',
-                ].join(' ')}
-              >
-                {v}
-              </button>
-            ))
+            filteredValues.map((v) => {
+              const label = (labelByValue && labelByValue[v]) || v
+              const explanation =
+                explanationByValue && explanationByValue[v]
+                  ? explanationByValue[v]
+                  : null
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  disabled={disabled}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelect(v)}
+                  className={[
+                    'block w-full px-3 py-2 text-left transition',
+                    disabled
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'text-slate-700 hover:bg-violet-50',
+                  ].join(' ')}
+                >
+                  <div className="text-sm">{label}</div>
+                  {explanation ? (
+                    <div className="text-[11px] text-slate-500">
+                      {explanation}
+                    </div>
+                  ) : null}
+                </button>
+              )
+            })
           )}
         </div>
       )}

@@ -183,7 +183,7 @@ export default function AdminPriceRulesPage() {
             type="text"
             value={newCode}
             onChange={(e) => setNewCode(normalizeRuleCode(e.target.value))}
-            placeholder="RIB|GRO|25MM|A+|100YD-ROLL"
+            placeholder="RIB|GRO|1INCH|A+|100YD-ROLL"
             className="min-w-[220px] rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             disabled={isBusy}
           />

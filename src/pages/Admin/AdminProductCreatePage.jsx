@@ -18,7 +18,11 @@ const STEPS = [
     label: "Attributes",
     description: "Fields that build SKU and name",
   },
-  { key: "extras", label: "Extras", description: "Tags, images, status" },
+  {
+    key: "extras",
+    label: "Extras",
+    description: "Tags, images, status, merchandising",
+  },
   { key: "review", label: "Review", description: "Confirm and create" },
 ];
 
@@ -38,6 +42,9 @@ const emptyForm = {
   description: "",
   isActive: true,
   isAvailable: true,
+  isFeatured: false,
+  featuredRank: "0",
+  sort: "",
   moq: "1",
   cbm: "0",
 };
@@ -173,6 +180,8 @@ export default function AdminProductCreatePage() {
     );
   }, [categories, form.categoryId]);
 
+  const sizeOptions = sizes;
+
   const preview = useMemo(() => {
     const resolvedType = selectedCategory?.productType || form.productType;
     const categoryLabel = selectedCategory?.label || selectedCategory?.key || "";
@@ -233,7 +242,6 @@ export default function AdminProductCreatePage() {
       ...prev,
       productType: value,
       categoryId: "",
-      catalogCode: value === "Ribbon" ? prev.catalogCode : "",
     }));
     setFieldErrors((prev) => ({
       ...prev,
@@ -264,13 +272,8 @@ export default function AdminProductCreatePage() {
     const errors = {};
     if (!form.size) errors.size = "Size is required.";
     if (!form.packingUnit) errors.packingUnit = "Packing unit is required.";
-    if (form.productType === "Ribbon" && form.catalogCode) {
-      if (!catalogCodes.includes(form.catalogCode)) {
-        errors.catalogCode = "Select a valid catalog code.";
-      }
-    }
-    if (form.productType !== "Ribbon" && form.catalogCode) {
-      errors.catalogCode = "Catalog code is only available for Ribbon.";
+    if (form.catalogCode && !catalogCodes.includes(form.catalogCode)) {
+      errors.catalogCode = "Select a valid catalog code.";
     }
     return errors;
   };
@@ -284,6 +287,18 @@ export default function AdminProductCreatePage() {
     const cbmValue = normalizeNumber(form.cbm);
     if (cbmValue !== null && cbmValue < 0) {
       errors.cbm = "CBM must be 0 or higher.";
+    }
+    const featuredRankRaw = String(form.featuredRank ?? "").trim();
+    const featuredRankValue = normalizeNumber(featuredRankRaw);
+    if (featuredRankRaw && featuredRankValue === null) {
+      errors.featuredRank = "Featured rank must be a number.";
+    } else if (featuredRankValue !== null && featuredRankValue < 0) {
+      errors.featuredRank = "Featured rank must be 0 or higher.";
+    }
+    const sortRaw = String(form.sort ?? "").trim();
+    const sortValue = normalizeNumber(sortRaw);
+    if (sortRaw && sortValue === null) {
+      errors.sort = "Sort must be a number.";
     }
     return errors;
   };
@@ -354,12 +369,17 @@ export default function AdminProductCreatePage() {
       description: form.description?.trim() || undefined,
       isActive: form.isActive,
       isAvailable: form.isAvailable,
+      isFeatured: form.isFeatured,
     };
 
     const moqValue = normalizeNumber(form.moq);
     if (moqValue !== null) payload.moq = moqValue;
     const cbmValue = normalizeNumber(form.cbm);
     if (cbmValue !== null) payload.cbm = cbmValue;
+    const featuredRankValue = normalizeNumber(form.featuredRank);
+    if (featuredRankValue !== null) payload.featuredRank = featuredRankValue;
+    const sortValue = normalizeNumber(form.sort);
+    if (sortValue !== null) payload.sort = sortValue;
 
     try {
       setSubmitError("");
@@ -570,7 +590,7 @@ export default function AdminProductCreatePage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">Select size</option>
-                  {sizes.map((size) => (
+                  {sizeOptions.map((size) => (
                     <option key={size} value={size}>
                       {size}
                     </option>
@@ -599,27 +619,18 @@ export default function AdminProductCreatePage() {
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   Catalog code
                 </label>
-                {form.productType === "Ribbon" ? (
-                  <select
-                    value={form.catalogCode}
-                    onChange={(e) => updateField("catalogCode", e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                  >
-                    <option value="">Select catalog code</option>
-                    {catalogCodes.map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    value=""
-                    disabled
-                    placeholder="Only for Ribbon"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
-                  />
-                )}
+                <select
+                  value={form.catalogCode}
+                  onChange={(e) => updateField("catalogCode", e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  <option value="">Select catalog code</option>
+                  {catalogCodes.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
                 {fieldErrors.catalogCode ? (
                   <div className="mt-1 text-xs text-rose-600">
                     {fieldErrors.catalogCode}
@@ -771,6 +782,60 @@ export default function AdminProductCreatePage() {
             </div>
 
             <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Merchandising
+              </div>
+              <div className="mt-2 grid gap-3 md:grid-cols-3">
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.isFeatured}
+                    onChange={(e) => updateField("isFeatured", e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                  />
+                  Featured
+                </label>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Featured rank
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.featuredRank}
+                    onChange={(e) =>
+                      updateField("featuredRank", e.target.value)
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  />
+                  {fieldErrors.featuredRank ? (
+                    <div className="mt-1 text-xs text-rose-600">
+                      {fieldErrors.featuredRank}
+                    </div>
+                  ) : null}
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    Sort order
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={form.sort}
+                    onChange={(e) => updateField("sort", e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  />
+                  {fieldErrors.sort ? (
+                    <div className="mt-1 text-xs text-rose-600">
+                      {fieldErrors.sort}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div>
               <label className="mb-2 block text-xs font-semibold text-slate-600">
                 Tags
               </label>
@@ -865,6 +930,9 @@ export default function AdminProductCreatePage() {
                   <div>CBM: {form.cbm || "-"}</div>
                   <div>Active: {form.isActive ? "Yes" : "No"}</div>
                   <div>Available: {form.isAvailable ? "Yes" : "No"}</div>
+                  <div>Featured: {form.isFeatured ? "Yes" : "No"}</div>
+                  <div>Featured rank: {form.featuredRank || "-"}</div>
+                  <div>Sort order: {form.sort || "-"}</div>
                   <div>Tags: {form.tags.length ? form.tags.join(", ") : "-"}</div>
                 </div>
               </div>
