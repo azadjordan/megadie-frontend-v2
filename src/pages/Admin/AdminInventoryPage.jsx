@@ -740,10 +740,24 @@ export default function AdminInventoryPage() {
                   return (
                     <tr key={row.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
-                          {row.name}
+                        <div className="flex items-center gap-3">
+                          {row.image ? (
+                            <img
+                              src={row.image}
+                              alt={row.name || "Product"}
+                              className="h-10 w-10 rounded-lg border border-slate-200 object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg border border-dashed border-slate-200 bg-slate-50" />
+                          )}
+                          <div>
+                            <div className="font-semibold text-slate-900">
+                              {row.name}
+                            </div>
+                            <div className="text-xs text-slate-500">{row.sku}</div>
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-500">{row.sku}</div>
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {formatQty(onHand)}

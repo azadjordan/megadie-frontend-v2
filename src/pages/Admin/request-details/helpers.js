@@ -61,21 +61,3 @@ export function getId(v) {
   if (typeof v === "string") return v;
   return String(v._id || v.id || "");
 }
-
-export function sumItems(items) {
-  return (items || []).reduce((sum, it) => {
-    const qty = parseNullableNumber(it.qtyStr);
-    const unit = parseNullableNumber(it.unitPriceStr);
-    const q = qty == null ? 0 : qty;
-    const u = unit == null ? 0 : unit;
-    const availableNow = Number(it?.availableNow);
-    const shortage = Number.isFinite(Number(it?.shortage))
-      ? Math.max(0, Number(it.shortage))
-      : Number.isFinite(availableNow)
-      ? Math.max(0, q - availableNow)
-      : 0;
-    const availabilityQty =
-      Number.isFinite(availableNow) && shortage > 0 ? Math.max(0, availableNow) : q;
-    return sum + availabilityQty * u;
-  }, 0);
-}

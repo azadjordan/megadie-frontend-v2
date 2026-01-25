@@ -41,6 +41,15 @@ export const productsApiSlice = apiSlice.injectEndpoints({
       transformResponse: (response) => response?.data ?? {},
     }),
 
+    // Admin preview (SKU + name)
+    previewProduct: builder.mutation({
+      query: (body) => ({
+        url: '/products/preview',
+        method: 'POST',
+        body,
+      }),
+    }),
+
     // Admin create product
     createProduct: builder.mutation({
       query: (body) => ({
@@ -82,6 +91,7 @@ export const {
   useGetProductsQuery,
   useGetProductByIdQuery,
   useGetProductMetaQuery,
+  usePreviewProductMutation,
   useCreateProductMutation,
   useUpdateProductMutation,
   useDeleteProductMutation,

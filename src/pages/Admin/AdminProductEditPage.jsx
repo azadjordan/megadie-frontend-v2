@@ -7,10 +7,12 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import {
   useGetProductByIdQuery,
   useGetProductMetaQuery,
+  usePreviewProductMutation,
   useUpdateProductMutation,
 } from "../../features/products/productsApiSlice";
 import { useGetCategoriesQuery } from "../../features/categories/categoriesApiSlice";
 import { useGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
+import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 const STEPS = [
   { key: "basics", label: "Basics", description: "Type, category, price rule" },
@@ -47,7 +49,7 @@ const emptyForm = {
   featuredRank: "0",
   sort: "",
   moq: "1",
-  cbm: "0",
+  cbm: "",
 };
 
 const parseLines = (value) =>
@@ -106,17 +108,19 @@ const buildNamePreview = ({
   size,
   color,
   finish,
-  variant,
+  packingUnit,
   grade,
 }) => {
+  const sizeLabel = size ? `(${size})` : "";
+  const gradeLabel = grade ? `[${grade}]` : "";
   const parts = [
     productType,
     categoryLabel,
-    size,
+    sizeLabel,
     color,
     finish,
-    variant,
-    grade,
+    packingUnit,
+    gradeLabel,
   ].filter(Boolean);
   return parts.join(" ");
 };
@@ -164,6 +168,8 @@ export default function AdminProductEditPage() {
 
   const [updateProduct, { isLoading: isSaving }] =
     useUpdateProductMutation();
+  const [previewProduct] = usePreviewProductMutation();
+  const [remotePreview, setRemotePreview] = useState(null);
 
   const step = STEPS[stepIndex];
   const productTypes = metaData?.productTypes ?? [];
@@ -226,7 +232,7 @@ export default function AdminProductEditPage() {
       featuredRank: String(product.featuredRank ?? "0"),
       sort: product.sort != null ? String(product.sort) : "",
       moq: String(product.moq ?? "1"),
-      cbm: String(product.cbm ?? "0"),
+      cbm: product.cbm != null ? String(product.cbm) : "",
     });
     setFieldErrors({});
     setHasInitialized(true);
@@ -242,6 +248,52 @@ export default function AdminProductEditPage() {
   }, [categories, form.categoryId]);
 
   const sizeOptions = sizes;
+
+  const previewPayload = useMemo(
+    () => ({
+      categoryId: form.categoryId,
+      productType: form.productType,
+      size: form.size,
+      color: form.color,
+      catalogCode: form.catalogCode,
+      variant: form.variant,
+      grade: form.grade,
+      finish: form.finish,
+      packingUnit: form.packingUnit,
+    }),
+    [
+      form.catalogCode,
+      form.categoryId,
+      form.color,
+      form.finish,
+      form.grade,
+      form.packingUnit,
+      form.productType,
+      form.size,
+      form.variant,
+    ]
+  );
+  const debouncedPreviewPayload = useDebouncedValue(previewPayload, 400);
+
+  useEffect(() => {
+    if (!debouncedPreviewPayload?.categoryId) {
+      setRemotePreview(null);
+      return;
+    }
+    let active = true;
+    const loadPreview = async () => {
+      try {
+        const res = await previewProduct(debouncedPreviewPayload).unwrap();
+        if (active) setRemotePreview(res?.data || res);
+      } catch {
+        if (active) setRemotePreview(null);
+      }
+    };
+    loadPreview();
+    return () => {
+      active = false;
+    };
+  }, [debouncedPreviewPayload, previewProduct]);
 
   const preview = useMemo(() => {
     const resolvedType = selectedCategory?.productType || form.productType;
@@ -263,9 +315,10 @@ export default function AdminProductEditPage() {
       size: form.size,
       color: form.color,
       finish: form.finish,
-      variant: form.variant,
+      packingUnit: form.packingUnit,
       grade: form.grade,
     });
+    const remote = remotePreview;
 
     const missing = [];
     if (!selectedCategory) missing.push("category");
@@ -276,8 +329,8 @@ export default function AdminProductEditPage() {
       : "SKU and name will update automatically on save.";
 
     return {
-      sku,
-      name,
+      sku: remote?.sku || sku,
+      name: remote?.name || name,
       note,
     };
   }, [
@@ -289,6 +342,7 @@ export default function AdminProductEditPage() {
     form.productType,
     form.size,
     form.variant,
+    remotePreview,
     selectedCategory,
     skuTokens,
   ]);
@@ -346,7 +400,9 @@ export default function AdminProductEditPage() {
       errors.moq = "MOQ must be 1 or higher.";
     }
     const cbmValue = normalizeNumber(form.cbm);
-    if (cbmValue !== null && cbmValue < 0) {
+    if (cbmValue === null) {
+      errors.cbm = "CBM is required.";
+    } else if (cbmValue < 0) {
       errors.cbm = "CBM must be 0 or higher.";
     }
     const featuredRankRaw = String(form.featuredRank ?? "").trim();
@@ -850,6 +906,7 @@ export default function AdminProductEditPage() {
                   value={form.cbm}
                   onChange={(e) => updateField("cbm", e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  required
                 />
                 {fieldErrors.cbm ? (
                   <div className="mt-1 text-xs text-rose-600">
