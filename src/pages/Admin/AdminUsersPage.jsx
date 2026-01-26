@@ -9,6 +9,24 @@ import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 
+function getApprovalBadgeClasses(approval) {
+  if (approval === "Approved") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  }
+  if (approval === "Rejected") {
+    return "bg-rose-50 text-rose-700 ring-rose-200";
+  }
+  return "bg-amber-50 text-amber-700 ring-amber-200";
+}
+
+function getUserRowMeta(user) {
+  const userId = user?._id || user?.id;
+  const roleLabel = user?.isAdmin ? "Admin" : "User";
+  const approval = user?.approvalStatus || "Approved";
+  const approvalClasses = getApprovalBadgeClasses(approval);
+  return { userId, roleLabel, approval, approvalClasses };
+}
+
 export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -218,67 +236,124 @@ export default function AdminUsersPage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
-          <div className="overflow-x-auto bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">User</th>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Approval</th>
-                  <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {rows.map((u) => {
-                  const userId = u._id || u.id;
-                  const roleLabel = u.isAdmin ? "Admin" : "User";
-                  const approval = u.approvalStatus || "Approved";
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {rows.map((u) => {
+              const row = getUserRowMeta(u);
+              return (
+                <div
+                  key={row.userId}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {u.name || row.userId}
+                      </div>
+                      <div className="text-xs text-slate-500">{u.email}</div>
+                    </div>
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+                        row.approvalClasses,
+                      ].join(" ")}
+                    >
+                      {row.approval}
+                    </span>
+                  </div>
 
-                  return (
-                    <tr key={userId} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
-                          {u.name || userId}
-                        </div>
-                        {u.phoneNumber ? (
-                          <div className="mt-0.5 text-xs text-slate-500">
-                            {u.phoneNumber}
+                  <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Phone
+                    </div>
+                    <div className="mt-1 text-xs text-slate-700">
+                      {u.phoneNumber || "—"}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs text-slate-600">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Role
+                    </span>
+                    <div className="mt-1 font-semibold text-slate-900">
+                      {row.roleLabel}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <Link
+                      to={`/admin/users/${row.userId}/edit`}
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+                      title="Edit user"
+                      aria-label="Edit user"
+                    >
+                      <FiSettings className="h-3.5 w-3.5" />
+                      Edit user
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
+            <div className="overflow-x-auto bg-white">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">User</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Approval</th>
+                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {rows.map((u) => {
+                    const row = getUserRowMeta(u);
+
+                    return (
+                      <tr key={row.userId} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">
+                            {u.name || row.userId}
                           </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{u.email}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={[
-                            "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
-                            approval === "Approved"
-                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                              : approval === "Rejected"
-                              ? "bg-rose-50 text-rose-700 ring-rose-200"
-                              : "bg-amber-50 text-amber-700 ring-amber-200",
-                          ].join(" ")}
-                        >
-                          {approval}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{roleLabel}</td>
-                      <td className="px-4 py-3 text-center">
-                        <Link
-                          to={`/admin/users/${userId}/edit`}
-                          className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
-                          title="Edit user"
-                          aria-label="Edit user"
-                        >
-                          <FiSettings className="h-3.5 w-3.5" />
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          {u.phoneNumber ? (
+                            <div className="mt-0.5 text-xs text-slate-500">
+                              {u.phoneNumber}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">{u.email}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={[
+                              "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+                              row.approvalClasses,
+                            ].join(" ")}
+                          >
+                            {row.approval}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">
+                          {row.roleLabel}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Link
+                            to={`/admin/users/${row.userId}/edit`}
+                            className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
+                            title="Edit user"
+                            aria-label="Edit user"
+                          >
+                            <FiSettings className="h-3.5 w-3.5" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

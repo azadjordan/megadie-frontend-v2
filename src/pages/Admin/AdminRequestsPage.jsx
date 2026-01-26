@@ -5,6 +5,7 @@ import {
   FiAlertTriangle,
   FiCopy,
   FiEdit2,
+  FiFileText,
   FiRefreshCw,
   FiSend,
   FiTrash2,
@@ -146,6 +147,72 @@ function getAvailabilityTotal(q) {
   const delivery = Math.max(0, Number(q?.deliveryCharge) || 0);
   const extra = Math.max(0, Number(q?.extraFee) || 0);
   return subtotal + delivery + extra;
+}
+
+function getRowMeta(q, state = {}) {
+  const { deletingId, pdfId, copyId, shareId } = state;
+  const hasOrder = Boolean(q.order);
+  const canPdf = q.status === "Quoted";
+  const canCopy = q.status === "Quoted";
+  const isManualInvoiced = Boolean(q.manualInvoiceId);
+  const canShare = q.status === "Quoted" && !hasOrder && !isManualInvoiced;
+  const isCancelled = q.status === "Cancelled";
+
+  const requestedItems = Array.isArray(q.requestedItems) ? q.requestedItems : [];
+  const itemsCount = requestedItems.length;
+  const unitsCount = requestedItems.reduce(
+    (sum, item) => sum + Math.max(0, Number(item?.qty) || 0),
+    0
+  );
+  const availabilityItems = requestedItems
+    .map((it) => normalizeAvailabilityStatus(it?.availabilityStatus))
+    .filter(Boolean);
+  const showAvailability = !isCancelled;
+  const hasAvailability = showAvailability && availabilityItems.length > 0;
+  const notAvailableCount = availabilityItems.filter(
+    (s) => s === "NOT_AVAILABLE"
+  ).length;
+  const availableCount = availabilityItems.filter(
+    (s) => s === "AVAILABLE"
+  ).length;
+  const totalAvailabilityCount = availabilityItems.length;
+  const availabilityStatus = !showAvailability
+    ? null
+    : !hasAvailability
+    ? "NOT_CHECKED"
+    : notAvailableCount === totalAvailabilityCount
+    ? "NOT_AVAILABLE"
+    : availableCount === totalAvailabilityCount
+    ? "AVAILABLE"
+    : "SHORTAGE";
+
+  const rowDeleting = deletingId === q._id;
+  const rowPdf = pdfId === q._id;
+  const rowCopy = copyId === q._id;
+  const rowShare = shareId === q._id;
+
+  const availabilityTotal = getAvailabilityTotal(q);
+  const displayTotal = Number.isFinite(availabilityTotal)
+    ? availabilityTotal
+    : q.totalPrice;
+
+  return {
+    hasOrder,
+    canPdf,
+    canCopy,
+    isManualInvoiced,
+    canShare,
+    isCancelled,
+    itemsCount,
+    unitsCount,
+    showAvailability,
+    availabilityStatus,
+    rowDeleting,
+    rowPdf,
+    rowCopy,
+    rowShare,
+    displayTotal,
+  };
 }
 
 function buildQuoteShareText(q) {
@@ -361,228 +428,339 @@ export default function AdminRequestsPage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
-          <div className="overflow-x-auto bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Quote</th>
-                  <th className="px-4 py-3">User</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 w-36">Availability</th>
-                  <th className="px-4 py-3">Order</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {rows.map((q) => {
+              const row = getRowMeta(q, { deletingId, pdfId, copyId, shareId });
 
-              <tbody className="divide-y divide-slate-200">
-                {rows.map((q) => {
-                  const hasOrder = Boolean(q.order);
-                  const canPdf = q.status === "Quoted";
-                  const canCopy = q.status === "Quoted";
-                  const isManualInvoiced = Boolean(q.manualInvoiceId);
-                  const canShare = q.status === "Quoted" && !hasOrder && !isManualInvoiced;
-                  const isCancelled = q.status === "Cancelled";
+              return (
+                <div
+                  key={q._id}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {q.quoteNumber || "—"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {formatDateTime(q.createdAt)}
+                      </div>
+                    </div>
+                    <StatusBadge status={q.status} />
+                  </div>
 
-                  const requestedItems = Array.isArray(q.requestedItems)
-                    ? q.requestedItems
-                    : [];
-                  const itemsCount = requestedItems.length;
-                  const unitsCount = requestedItems.reduce(
-                    (sum, item) => sum + Math.max(0, Number(item?.qty) || 0),
-                    0
-                  );
-                  const availabilityItems = requestedItems
-                    .map((it) => normalizeAvailabilityStatus(it?.availabilityStatus))
-                    .filter(Boolean);
-                  const showAvailability = !isCancelled;
-                  const hasAvailability = showAvailability && availabilityItems.length > 0;
-                  const notAvailableCount = availabilityItems.filter(
-                    (s) => s === "NOT_AVAILABLE"
-                  ).length;
-                  const shortageCount = availabilityItems.filter(
-                    (s) => s === "SHORTAGE"
-                  ).length;
-                  const availableCount = availabilityItems.filter(
-                    (s) => s === "AVAILABLE"
-                  ).length;
-                  const totalAvailabilityCount = availabilityItems.length;
-                  const availabilityStatus = !showAvailability
-                    ? null
-                    : !hasAvailability
-                    ? "NOT_CHECKED"
-                    : notAvailableCount === totalAvailabilityCount
-                    ? "NOT_AVAILABLE"
-                    : availableCount === totalAvailabilityCount
-                    ? "AVAILABLE"
-                    : "SHORTAGE";
+                  <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
+                    <div className="text-xs font-semibold text-slate-900">
+                      {q.user?.name || "—"}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {q.user?.email || "—"}
+                    </div>
+                  </div>
 
-                  const rowDeleting = deletingId === q._id;
-                  const rowPdf = pdfId === q._id;
-                  const rowCopy = copyId === q._id;
-                  const rowShare = shareId === q._id;
-
-                  return (
-                    <tr key={q._id} className="hover:bg-slate-50">
-                      {/* Quote: quoteNumber + createdAt */}
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
-                          {q.quoteNumber || "—"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {formatDateTime(q.createdAt)}
-                        </div>
-                      </td>
-
-                      {/* User */}
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
-                          {q.user?.name || "—"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {q.user?.email || "—"}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3">
-                        <StatusBadge status={q.status} />
-                      </td>
-
-                      {/* Availability */}
-                      <td className="px-4 py-3">
-                        {showAvailability ? (
-                          <AvailabilityBadge status={availabilityStatus} />
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Availability
+                      </div>
+                      <div className="mt-1">
+                        {row.showAvailability ? (
+                          <AvailabilityBadge status={row.availabilityStatus} />
                         ) : (
                           <span className="text-xs text-slate-400">-</span>
                         )}
-                      </td>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Order
+                      </div>
+                      <div className="mt-1 text-xs font-semibold text-slate-700">
+                        {row.hasOrder ? q.order?.orderNumber : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Items
+                      </div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {row.itemsCount} items · {row.unitsCount} units
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Total
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {money(row.displayTotal)}
+                      </div>
+                    </div>
+                  </div>
 
-                      {/* Order */}
-                      <td className="px-4 py-3">
-                        {hasOrder ? (
-                          <div className="text-xs font-semibold text-slate-700">
-                            {q.order?.orderNumber}
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                        !row.canShare || row.rowShare
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                      ].join(" ")}
+                      disabled={!row.canShare || row.rowShare}
+                      onClick={() => onShare(q)}
+                      title={
+                        row.canShare
+                          ? "Share with client"
+                          : row.isManualInvoiced
+                          ? "Manual invoice created — quote locked"
+                          : "Share is available for Quoted requests only"
+                      }
+                    >
+                      <FiSend className="h-3.5 w-3.5" />
+                      Share
+                    </button>
+                    <button
+                      type="button"
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                        !row.canCopy || row.rowCopy
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                      ].join(" ")}
+                      disabled={!row.canCopy || row.rowCopy}
+                      onClick={() => onCopy(q)}
+                      title={
+                        row.canCopy
+                          ? "Copy quote"
+                          : "Copy is available for Quoted requests only"
+                      }
+                    >
+                      <FiCopy className="h-3.5 w-3.5" />
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                        !row.canPdf || row.rowPdf || isPdfLoading
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                      ].join(" ")}
+                      disabled={!row.canPdf || row.rowPdf || isPdfLoading}
+                      onClick={() => onPdf(q)}
+                      title={
+                        row.canPdf
+                          ? "PDF"
+                          : "PDF is available for Quoted requests only"
+                      }
+                    >
+                      <FiFileText className="h-3.5 w-3.5" />
+                      {row.rowPdf ? "PDF.." : "PDF"}
+                    </button>
+                    <Link
+                      to={`/admin/requests/${q._id}`}
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+                      title="Quote"
+                    >
+                      <FiEdit2 className="h-3.5 w-3.5" />
+                      Quote
+                    </Link>
+                    <button
+                      type="button"
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset",
+                        !row.isCancelled || row.rowDeleting || isDeleting
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
+                      ].join(" ")}
+                      disabled={!row.isCancelled || row.rowDeleting || isDeleting}
+                      onClick={() => onDelete(q)}
+                      title="Delete"
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
+            <div className="overflow-x-auto bg-white">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Quote</th>
+                    <th className="px-4 py-3">User</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 w-36">Availability</th>
+                    <th className="px-4 py-3">Order</th>
+                    <th className="px-4 py-3 text-right">Total</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-200">
+                  {rows.map((q) => {
+                    const row = getRowMeta(q, {
+                      deletingId,
+                      pdfId,
+                      copyId,
+                      shareId,
+                    });
+
+                    return (
+                      <tr key={q._id} className="hover:bg-slate-50">
+                        {/* Quote: quoteNumber + createdAt */}
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">
+                            {q.quoteNumber || "—"}
                           </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">-</span>
-                        )}
-                      </td>
+                          <div className="text-xs text-slate-500">
+                            {formatDateTime(q.createdAt)}
+                          </div>
+                        </td>
 
-                      {/* Total */}
-                      <td className="px-4 py-3 text-right">
-                        {(() => {
-                          const availabilityTotal = getAvailabilityTotal(q);
-                          const displayTotal = Number.isFinite(availabilityTotal)
-                            ? availabilityTotal
-                            : q.totalPrice;
+                        {/* User */}
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">
+                            {q.user?.name || "—"}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {q.user?.email || "—"}
+                          </div>
+                        </td>
 
-                          return (
-                            <>
-                              <div className="font-semibold text-slate-900">
-                                {money(displayTotal)}
-                              </div>
-                              <div className="mt-0.5 text-[10px] text-slate-500">
-                                {itemsCount} items {unitsCount} units
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </td>
+                        {/* Status */}
+                        <td className="px-4 py-3">
+                          <StatusBadge status={q.status} />
+                        </td>
 
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            className={[
-                              "inline-flex items-center justify-center rounded-full px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
-                              !canShare || rowShare
-                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
-                            ].join(" ")}
-                            disabled={!canShare || rowShare}
-                            onClick={() => onShare(q)}
-                            title={
-                              canShare
-                                ? "Share with client"
-                                : isManualInvoiced
-                                ? "Manual invoice created — quote locked"
-                                : "Share is available for Quoted requests only"
-                            }
-                          >
-                            <FiSend className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            className={[
-                              "inline-flex items-center justify-center rounded-full px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
-                              !canCopy || rowCopy
-                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
-                            ].join(" ")}
-                            disabled={!canCopy || rowCopy}
-                            onClick={() => onCopy(q)}
-                            title={
-                              canCopy ? "Copy quote" : "Copy is available for Quoted requests only"
-                            }
-                          >
-                            <FiCopy className="h-3.5 w-3.5" />
-                          </button>
+                        {/* Availability */}
+                        <td className="px-4 py-3">
+                          {row.showAvailability ? (
+                            <AvailabilityBadge status={row.availabilityStatus} />
+                          ) : (
+                            <span className="text-xs text-slate-400">-</span>
+                          )}
+                        </td>
 
-                          <button
-                            type="button"
-                            className={[
-                              "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
-                              !canPdf || rowPdf || isPdfLoading
-                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
-                            ].join(" ")}
-                            disabled={!canPdf || rowPdf || isPdfLoading}
-                            onClick={() => onPdf(q)}
-                            title={
-                              canPdf ? "PDF" : "PDF is available for Quoted requests only"
-                            }
-                          >
-                            {rowPdf ? "PDF.." : "PDF"}
-                          </button>
+                        {/* Order */}
+                        <td className="px-4 py-3">
+                          {row.hasOrder ? (
+                            <div className="text-xs font-semibold text-slate-700">
+                              {q.order?.orderNumber}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">-</span>
+                          )}
+                        </td>
 
-                          <Link
-                            to={`/admin/requests/${q._id}`}
-                            className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
-                            title="Quote"
-                          >
-                            <FiEdit2 className="h-4 w-4" />
-                          </Link>
+                        {/* Total */}
+                        <td className="px-4 py-3 text-right">
+                          <div className="font-semibold text-slate-900">
+                            {money(row.displayTotal)}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-slate-500">
+                            {row.itemsCount} items {row.unitsCount} units
+                          </div>
+                        </td>
 
-                          <button
-                            type="button"
-                            className={[
-                              "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
-                              q.status !== "Cancelled" ||
-                              rowDeleting ||
-                              isDeleting
-                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                                : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
-                            ].join(" ")}
-                            disabled={
-                              q.status !== "Cancelled" ||
-                              rowDeleting ||
-                              isDeleting
-                            }
-                            onClick={() => onDelete(q)}
-                            title="Delete"
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {/* Actions */}
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              className={[
+                                "inline-flex items-center justify-center rounded-full px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                                !row.canShare || row.rowShare
+                                  ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                  : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                              ].join(" ")}
+                              disabled={!row.canShare || row.rowShare}
+                              onClick={() => onShare(q)}
+                              title={
+                                row.canShare
+                                  ? "Share with client"
+                                  : row.isManualInvoiced
+                                  ? "Manual invoice created — quote locked"
+                                  : "Share is available for Quoted requests only"
+                              }
+                            >
+                              <FiSend className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className={[
+                                "inline-flex items-center justify-center rounded-full px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                                !row.canCopy || row.rowCopy
+                                  ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                  : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                              ].join(" ")}
+                              disabled={!row.canCopy || row.rowCopy}
+                              onClick={() => onCopy(q)}
+                              title={
+                                row.canCopy
+                                  ? "Copy quote"
+                                  : "Copy is available for Quoted requests only"
+                              }
+                            >
+                              <FiCopy className="h-3.5 w-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              className={[
+                                "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                                !row.canPdf || row.rowPdf || isPdfLoading
+                                  ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                  : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                              ].join(" ")}
+                              disabled={!row.canPdf || row.rowPdf || isPdfLoading}
+                              onClick={() => onPdf(q)}
+                              title={
+                                row.canPdf
+                                  ? "PDF"
+                                  : "PDF is available for Quoted requests only"
+                              }
+                            >
+                              {row.rowPdf ? "PDF.." : "PDF"}
+                            </button>
+
+                            <Link
+                              to={`/admin/requests/${q._id}`}
+                              className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
+                              title="Quote"
+                            >
+                              <FiEdit2 className="h-4 w-4" />
+                            </Link>
+
+                            <button
+                              type="button"
+                              className={[
+                                "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
+                                !row.isCancelled || row.rowDeleting || isDeleting
+                                  ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                  : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
+                              ].join(" ")}
+                              disabled={
+                                !row.isCancelled || row.rowDeleting || isDeleting
+                              }
+                              onClick={() => onDelete(q)}
+                              title="Delete"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

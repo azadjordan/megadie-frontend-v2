@@ -57,6 +57,42 @@ const SLOT_SORT_OPTIONS = [
   { label: "Occupied CBM (low)", value: "occupiedCbm:asc" },
 ];
 
+const getSlotRowMeta = (row) => {
+  const slotId = row?._id || row?.id || row?.label;
+  const slotLabel = row?.label || "Unknown slot";
+  const unitLabel = row?.unit || "-";
+  const positionLabel = row?.position ?? "-";
+  const slotStatus = row?.isActive === false ? "Inactive" : "Active";
+  const capacityCbm = Number(row?.cbm) || 0;
+  const occupiedCbm =
+    typeof row?.occupiedCbm === "number" ? row.occupiedCbm : 0;
+  const fillPercent =
+    typeof row?.fillPercent === "number"
+      ? row.fillPercent
+      : capacityCbm > 0
+      ? (occupiedCbm / capacityCbm) * 100
+      : 0;
+  const safeFillPercent = Number.isFinite(fillPercent) ? fillPercent : 0;
+  const displayPercent = Math.max(0, safeFillPercent);
+  const barPercent = Math.min(100, displayPercent);
+  const isOverCapacity = displayPercent > 100;
+  const statusClass =
+    SLOT_STATUS_STYLES[slotStatus] || SLOT_STATUS_STYLES.Active;
+  return {
+    slotId,
+    slotLabel,
+    unitLabel,
+    positionLabel,
+    slotStatus,
+    capacityCbm,
+    occupiedCbm,
+    displayPercent,
+    barPercent,
+    isOverCapacity,
+    statusClass,
+  };
+};
+
 export default function AdminInventorySlotsPage() {
   const [q, setQ] = useState("");
   const [slotStore, setSlotStore] = useState("all");
@@ -448,116 +484,176 @@ export default function AdminInventorySlotsPage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
-          <div className="overflow-x-auto bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Slot</th>
-                  <th className="px-4 py-3">Occupancy</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Updated</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {sortedRows.map((row) => {
-                  const slotId = row._id || row.id || row.label;
-                  const slotLabel = row.label || "Unknown slot";
-                  const unitLabel = row.unit || "-";
-                  const positionLabel = row.position ?? "-";
-                  const slotStatus =
-                    row.isActive === false ? "Inactive" : "Active";
-                  const capacityCbm = Number(row.cbm) || 0;
-                  const occupiedCbm =
-                    typeof row.occupiedCbm === "number" ? row.occupiedCbm : 0;
-                  const fillPercent =
-                    typeof row.fillPercent === "number"
-                      ? row.fillPercent
-                      : capacityCbm > 0
-                      ? (occupiedCbm / capacityCbm) * 100
-                      : 0;
-                  const safeFillPercent = Number.isFinite(fillPercent)
-                    ? fillPercent
-                    : 0;
-                  const displayPercent = Math.max(0, safeFillPercent);
-                  const barPercent = Math.min(100, displayPercent);
-                  const isOverCapacity = displayPercent > 100;
-                  return (
-                    <tr key={slotId} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">
-                          {slotLabel}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          Unit {unitLabel} / Pos {positionLabel}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex w-40 flex-col gap-1">
-                          <div className="flex items-center justify-between text-[11px] text-slate-500">
-                            <span>
-                              {formatNumber(occupiedCbm)} /{" "}
-                              {formatNumber(capacityCbm)} CBM
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <span
-                                className={[
-                                  "font-semibold",
-                                  isOverCapacity
-                                    ? "text-rose-600"
-                                    : "text-slate-700",
-                                ].join(" ")}
-                              >
-                                {Math.round(displayPercent)}%
-                              </span>
-                              {isOverCapacity ? (
-                                <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">
-                                  Over
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100">
-                            <div
-                              className={[
-                                "h-2 rounded-full",
-                                isOverCapacity
-                                  ? "bg-rose-500"
-                                  : "bg-emerald-500",
-                              ].join(" ")}
-                              style={{ width: `${barPercent}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {sortedRows.map((row) => {
+              const meta = getSlotRowMeta(row);
+              return (
+                <div
+                  key={meta.slotId}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {meta.slotLabel}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Unit {meta.unitLabel} / Pos {meta.positionLabel}
+                      </div>
+                    </div>
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
+                        meta.statusClass,
+                      ].join(" ")}
+                    >
+                      {meta.slotStatus}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-1">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span>
+                        {formatNumber(meta.occupiedCbm)} /{" "}
+                        {formatNumber(meta.capacityCbm)} CBM
+                      </span>
+                      <div className="flex items-center gap-1">
                         <span
                           className={[
-                            "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
-                            SLOT_STATUS_STYLES[slotStatus] ||
-                              SLOT_STATUS_STYLES.Active,
+                            "font-semibold",
+                            meta.isOverCapacity
+                              ? "text-rose-600"
+                              : "text-slate-700",
                           ].join(" ")}
                         >
-                          {slotStatus}
+                          {Math.round(meta.displayPercent)}%
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-xs text-slate-500">
-                        {formatDate(row.updatedAt)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Link
-                          to={`/admin/inventory/slots/${slotId}`}
-                          className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                        >
-                          Contents
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {meta.isOverCapacity ? (
+                          <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">
+                            Over
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div
+                        className={[
+                          "h-2 rounded-full",
+                          meta.isOverCapacity ? "bg-rose-500" : "bg-emerald-500",
+                        ].join(" ")}
+                        style={{ width: `${meta.barPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs text-slate-500">
+                    Updated {formatDate(row.updatedAt)}
+                  </div>
+
+                  <div className="mt-4">
+                    <Link
+                      to={`/admin/inventory/slots/${meta.slotId}`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
+                    >
+                      Contents
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
+            <div className="overflow-x-auto bg-white">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Slot</th>
+                    <th className="px-4 py-3">Occupancy</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Updated</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {sortedRows.map((row) => {
+                    const meta = getSlotRowMeta(row);
+                    return (
+                      <tr key={meta.slotId} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-900">
+                            {meta.slotLabel}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            Unit {meta.unitLabel} / Pos {meta.positionLabel}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex w-40 flex-col gap-1">
+                            <div className="flex items-center justify-between text-[11px] text-slate-500">
+                              <span>
+                                {formatNumber(meta.occupiedCbm)} /{" "}
+                                {formatNumber(meta.capacityCbm)} CBM
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className={[
+                                    "font-semibold",
+                                    meta.isOverCapacity
+                                      ? "text-rose-600"
+                                      : "text-slate-700",
+                                  ].join(" ")}
+                                >
+                                  {Math.round(meta.displayPercent)}%
+                                </span>
+                                {meta.isOverCapacity ? (
+                                  <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">
+                                    Over
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="h-2 rounded-full bg-slate-100">
+                              <div
+                                className={[
+                                  "h-2 rounded-full",
+                                  meta.isOverCapacity
+                                    ? "bg-rose-500"
+                                    : "bg-emerald-500",
+                                ].join(" ")}
+                                style={{ width: `${meta.barPercent}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={[
+                              "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
+                              meta.statusClass,
+                            ].join(" ")}
+                          >
+                            {meta.slotStatus}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-xs text-slate-500">
+                          {formatDate(row.updatedAt)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            to={`/admin/inventory/slots/${meta.slotId}`}
+                            className="inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Contents
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

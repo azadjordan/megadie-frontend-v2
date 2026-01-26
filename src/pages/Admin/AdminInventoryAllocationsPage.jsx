@@ -66,6 +66,39 @@ const resolveCustomer = (order) => {
   return { name, email };
 };
 
+const getAllocationRowMeta = (row) => {
+  const status = normalizeStatus(row?.status);
+  const productName = row?.product?.name || "Unknown product";
+  const productSku = row?.product?.sku || "";
+  const slotLabel = row?.slot?.label || "Unknown slot";
+  const slotId = row?.slot?.id || row?.slot?._id || "";
+  const order = row?.order || {};
+  const orderId = order?.id || order?._id || "";
+  const orderNumber = order?.orderNumber || orderId || "-";
+  const orderStatusLabel = order?.status || "Processing";
+  const orderStatusClass =
+    ORDER_STATUS_STYLES[orderStatusLabel] || ORDER_STATUS_STYLES.Processing;
+  const { name: customerName, email: customerEmail } = resolveCustomer(order);
+  const reservedByName = row?.by?.name || row?.by?.email || "-";
+  const reservedByEmail = row?.by?.name && row?.by?.email ? row.by.email : "";
+  return {
+    status,
+    productName,
+    productSku,
+    slotLabel,
+    slotId,
+    order,
+    orderId,
+    orderNumber,
+    orderStatusLabel,
+    orderStatusClass,
+    customerName,
+    customerEmail,
+    reservedByName,
+    reservedByEmail,
+  };
+};
+
 export default function AdminInventoryAllocationsPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -313,141 +346,268 @@ export default function AdminInventoryAllocationsPage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
-          <div className="overflow-x-auto bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Qty</th>
-                  <th className="px-4 py-3 w-[220px]">Product</th>
-                  <th className="px-4 py-3">Slot</th>
-                  <th className="px-4 py-3">Order</th>
-                  <th className="px-4 py-3">Customer / Reserved by</th>
-                  <th className="px-4 py-3">Reserved at</th>
-                  <th className="px-4 py-3">Deducted at</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {allocations.map((row) => {
-                  const status = normalizeStatus(row?.status);
-                  const productName = row?.product?.name || "Unknown product";
-                  const productSku = row?.product?.sku || "";
-                  const slotLabel = row?.slot?.label || "Unknown slot";
-                  const slotId = row?.slot?.id || row?.slot?._id || "";
-                  const order = row?.order || {};
-                  const orderId = order?.id || order?._id || "";
-                  const orderNumber = order?.orderNumber || orderId || "-";
-                  const orderStatusLabel = order?.status || "Processing";
-                  const { name: customerName, email: customerEmail } =
-                    resolveCustomer(order);
-                  const reservedByName =
-                    row?.by?.name || row?.by?.email || "-";
-                  const reservedByEmail =
-                    row?.by?.name && row?.by?.email ? row.by.email : "";
-                  return (
-                    <tr key={row?.id || `${orderNumber}-${slotLabel}`}>
-                      <td className="px-4 py-3">
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {allocations.map((row) => {
+              const meta = getAllocationRowMeta(row);
+              return (
+                <div
+                  key={row?.id || `${meta.orderNumber}-${meta.slotLabel}`}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
+                        STATUS_STYLES[meta.status] || STATUS_STYLES.Reserved,
+                      ].join(" ")}
+                    >
+                      {meta.status}
+                    </span>
+                    <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                      {formatQty(row?.qty)}
+                    </div>
+                  </div>
+
+                  <div className="mt-2">
+                    <div
+                      className="text-sm font-semibold text-slate-900"
+                      title={meta.productName}
+                    >
+                      {meta.productName}
+                    </div>
+                    {meta.productSku ? (
+                      <div className="text-xs text-slate-500">
+                        SKU {meta.productSku}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Slot
+                      </div>
+                      <div className="mt-1 text-sm text-slate-900">
+                        {meta.slotId ? (
+                          <Link
+                            to={`/admin/inventory/slots/${meta.slotId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-slate-900 hover:underline"
+                          >
+                            {meta.slotLabel}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-slate-900">
+                            {meta.slotLabel}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Order
+                      </div>
+                      <div className="mt-1 text-sm text-slate-900">
+                        {meta.orderId ? (
+                          <Link
+                            to={`/admin/orders/${meta.orderId}?tab=stock`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-slate-900 hover:underline"
+                          >
+                            {meta.orderNumber}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-slate-900">
+                            {meta.orderNumber}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs">
                         <span
                           className={[
-                            "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
-                            STATUS_STYLES[status] || STATUS_STYLES.Reserved,
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                            meta.orderStatusClass,
                           ].join(" ")}
                         >
-                          {status}
+                          {meta.orderStatusLabel}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatQty(row?.qty)}
-                      </td>
-                      <td className="px-4 py-3 max-w-[220px]">
-                        <div
-                          className="truncate font-semibold text-slate-900"
-                          title={productName}
-                        >
-                          {productName}
-                        </div>
-                        {productSku ? (
-                          <div className="truncate text-xs text-slate-500">
-                            SKU {productSku}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        {slotId ? (
-                          <Link
-                            to={`/admin/inventory/slots/${slotId}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-slate-900 hover:underline"
-                          >
-                            {slotLabel}
-                          </Link>
-                        ) : (
-                          <span className="font-semibold text-slate-900">
-                            {slotLabel}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {orderId ? (
-                          <Link
-                            to={`/admin/orders/${orderId}?tab=stock`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-slate-900 hover:underline"
-                          >
-                            {orderNumber}
-                          </Link>
-                        ) : (
-                          <span className="font-semibold text-slate-900">
-                            {orderNumber}
-                          </span>
-                        )}
-                        <div className="mt-1 text-xs">
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Customer / Reserved by
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">
+                      {meta.customerName}
+                    </div>
+                    {meta.customerEmail ? (
+                      <div className="text-xs text-slate-500">
+                        {meta.customerEmail}
+                      </div>
+                    ) : null}
+                    <div className="mt-2 text-xs text-slate-500">
+                      Reserved by{" "}
+                      <span className="font-semibold text-slate-900">
+                        {meta.reservedByName}
+                      </span>
+                    </div>
+                    {meta.reservedByEmail ? (
+                      <div className="text-xs text-slate-500">
+                        {meta.reservedByEmail}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Reserved at
+                      </div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {formatDateTime(row?.createdAt)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Deducted at
+                      </div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {formatDateTime(row?.deductedAt)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
+            <div className="overflow-x-auto bg-white">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Qty</th>
+                    <th className="px-4 py-3 w-[220px]">Product</th>
+                    <th className="px-4 py-3">Slot</th>
+                    <th className="px-4 py-3">Order</th>
+                    <th className="px-4 py-3">Customer / Reserved by</th>
+                    <th className="px-4 py-3">Reserved at</th>
+                    <th className="px-4 py-3">Deducted at</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {allocations.map((row) => {
+                    const meta = getAllocationRowMeta(row);
+                    return (
+                      <tr key={row?.id || `${meta.orderNumber}-${meta.slotLabel}`}>
+                        <td className="px-4 py-3">
                           <span
                             className={[
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
-                              ORDER_STATUS_STYLES[orderStatusLabel] ||
-                                ORDER_STATUS_STYLES.Processing,
+                              "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
+                              STATUS_STYLES[meta.status] ||
+                                STATUS_STYLES.Reserved,
                             ].join(" ")}
                           >
-                            {orderStatusLabel}
+                            {meta.status}
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {customerName}
-                        </div>
-                        {customerEmail ? (
-                          <div className="text-xs text-slate-500">
-                            {customerEmail}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {formatQty(row?.qty)}
+                        </td>
+                        <td className="px-4 py-3 max-w-[220px]">
+                          <div
+                            className="truncate font-semibold text-slate-900"
+                            title={meta.productName}
+                          >
+                            {meta.productName}
                           </div>
-                        ) : null}
-                        <div className="mt-2 text-xs text-slate-500">
-                          Reserved by{" "}
-                          <span className="font-semibold text-slate-900">
-                            {reservedByName}
-                          </span>
-                        </div>
-                        {reservedByEmail ? (
-                          <div className="text-xs text-slate-500">
-                            {reservedByEmail}
+                          {meta.productSku ? (
+                            <div className="truncate text-xs text-slate-500">
+                              SKU {meta.productSku}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          {meta.slotId ? (
+                            <Link
+                              to={`/admin/inventory/slots/${meta.slotId}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-slate-900 hover:underline"
+                            >
+                              {meta.slotLabel}
+                            </Link>
+                          ) : (
+                            <span className="font-semibold text-slate-900">
+                              {meta.slotLabel}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {meta.orderId ? (
+                            <Link
+                              to={`/admin/orders/${meta.orderId}?tab=stock`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-slate-900 hover:underline"
+                            >
+                              {meta.orderNumber}
+                            </Link>
+                          ) : (
+                            <span className="font-semibold text-slate-900">
+                              {meta.orderNumber}
+                            </span>
+                          )}
+                          <div className="mt-1 text-xs">
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                                meta.orderStatusClass,
+                              ].join(" ")}
+                            >
+                              {meta.orderStatusLabel}
+                            </span>
                           </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        {formatDateTime(row?.createdAt)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        {formatDateTime(row?.deductedAt)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {meta.customerName}
+                          </div>
+                          {meta.customerEmail ? (
+                            <div className="text-xs text-slate-500">
+                              {meta.customerEmail}
+                            </div>
+                          ) : null}
+                          <div className="mt-2 text-xs text-slate-500">
+                            Reserved by{" "}
+                            <span className="font-semibold text-slate-900">
+                              {meta.reservedByName}
+                            </span>
+                          </div>
+                          {meta.reservedByEmail ? (
+                            <div className="text-xs text-slate-500">
+                              {meta.reservedByEmail}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {formatDateTime(row?.createdAt)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {formatDateTime(row?.deductedAt)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

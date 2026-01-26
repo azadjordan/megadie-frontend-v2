@@ -31,6 +31,32 @@ const getUsageTotals = (usage) => {
 const normalizeRuleCode = (value) =>
   String(value || "").toUpperCase().replace(/\s*\|\s*/g, "|");
 
+const getPriceRuleMeta = (rule, state = {}) => {
+  const { editId, editPriceStr, editProductType, productTypes } = state;
+  const isEditing = editId === rule?._id;
+  const editPrice = parsePrice(editPriceStr);
+  const usage = rule?.usage || {};
+  const usageTotal = getUsageTotals(usage);
+  const ruleProductType = rule?.productType || "";
+  const isLegacyProductType =
+    ruleProductType && !productTypes.includes(ruleProductType);
+  const displayProductType = ruleProductType
+    ? isLegacyProductType
+      ? `Legacy: ${ruleProductType}`
+      : ruleProductType
+    : "Unassigned";
+  return {
+    isEditing,
+    editPrice,
+    usage,
+    usageTotal,
+    ruleProductType,
+    isLegacyProductType,
+    displayProductType,
+    editProductType,
+  };
+};
+
 export default function AdminPriceRulesPage() {
   const [filterProductType, setFilterProductType] = useState("");
   const {
@@ -283,45 +309,51 @@ export default function AdminPriceRulesPage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
-          <div className="overflow-x-auto bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Rule code</th>
-                  <th className="px-4 py-3">Product type</th>
-                  <th className="px-4 py-3">Default price</th>
-                  <th className="px-4 py-3">Usage</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {rules.map((rule) => {
-                  const isEditing = editId === rule._id;
-                  const editPrice = parsePrice(editPriceStr);
-                  const usage = rule.usage || {};
-                  const usageTotal = getUsageTotals(usage);
-                  const ruleProductType = rule.productType || "";
-                  const isLegacyProductType =
-                    ruleProductType && !productTypes.includes(ruleProductType);
-
-                  return (
-                    <tr key={rule._id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-xs font-semibold text-slate-900">
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {rules.map((rule) => {
+              const row = getPriceRuleMeta(rule, {
+                editId,
+                editPriceStr,
+                editProductType,
+                productTypes,
+              });
+              return (
+                <div
+                  key={rule._id}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">
                         {rule.code}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        {isEditing ? (
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {row.displayProductType}
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Usage {row.usageTotal}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Product type
+                      </div>
+                      <div className="mt-1 text-xs text-slate-700">
+                        {row.isEditing ? (
                           <select
-                            value={editProductType}
+                            value={row.editProductType}
                             onChange={(e) => setEditProductType(e.target.value)}
-                            className="w-full min-w-[160px] rounded-xl bg-white px-2 py-1.5 text-xs text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                            className="w-full rounded-xl bg-white px-2 py-1.5 text-xs text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                           >
                             <option value="">Select product type</option>
-                            {editProductType &&
-                            !productTypes.includes(editProductType) ? (
-                              <option value={editProductType}>
-                                Legacy: {editProductType}
+                            {row.editProductType &&
+                            !productTypes.includes(row.editProductType) ? (
+                              <option value={row.editProductType}>
+                                Legacy: {row.editProductType}
                               </option>
                             ) : null}
                             {productTypes.map((type) => (
@@ -330,108 +362,258 @@ export default function AdminPriceRulesPage() {
                               </option>
                             ))}
                           </select>
-                        ) : ruleProductType ? (
-                          <span>
-                            {isLegacyProductType
-                              ? `Legacy: ${ruleProductType}`
-                              : ruleProductType}
-                          </span>
                         ) : (
-                          <span className="text-slate-400">Unassigned</span>
+                          <span className={row.ruleProductType ? "" : "text-slate-400"}>
+                            {row.ruleProductType ? row.displayProductType : "Unassigned"}
+                          </span>
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {isEditing ? (
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Default price
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {row.isEditing ? (
                           <input
                             type="number"
                             min="0"
                             step="0.01"
                             value={editPriceStr}
                             onChange={(e) => setEditPriceStr(e.target.value)}
-                            className="w-24 rounded-xl bg-white px-2 py-1.5 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                            className="w-full rounded-xl bg-white px-2 py-1.5 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                           />
                         ) : (
-                          <span className="tabular-nums text-slate-900">
+                          <span className="tabular-nums">
                             {Number(rule.defaultPrice).toFixed(2)}
                           </span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        <div>
-                          Products:{" "}
-                          <span className="font-semibold text-slate-900">
-                            {usage.products || 0}
-                          </span>
-                        </div>
-                        <div>
-                          User prices:{" "}
-                          <span className="font-semibold text-slate-900">
-                            {usage.userPrices || 0}
-                          </span>
-                        </div>
-                        <div>
-                          Quote items:{" "}
-                          <span className="font-semibold text-slate-900">
-                            {usage.quoteItems || 0}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {isEditing ? (
-                          <div className="inline-flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onSaveEdit(rule)}
-                              disabled={isBusy || editPrice == null || !editProductType}
-                              className={[
-                                "rounded-lg px-2.5 py-1 text-xs font-semibold",
-                                isBusy || editPrice == null || !editProductType
-                                  ? "cursor-not-allowed bg-slate-200 text-slate-400"
-                                  : "bg-slate-900 text-white hover:bg-slate-800",
-                              ].join(" ")}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div>
+                      Products:{" "}
+                      <span className="font-semibold text-slate-900">
+                        {row.usage.products || 0}
+                      </span>
+                    </div>
+                    <div>
+                      User prices:{" "}
+                      <span className="font-semibold text-slate-900">
+                        {row.usage.userPrices || 0}
+                      </span>
+                    </div>
+                    <div>
+                      Quote items:{" "}
+                      <span className="font-semibold text-slate-900">
+                        {row.usage.quoteItems || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {row.isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onSaveEdit(rule)}
+                          disabled={isBusy || row.editPrice == null || !row.editProductType}
+                          className={[
+                            "rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider",
+                            isBusy || row.editPrice == null || !row.editProductType
+                              ? "cursor-not-allowed bg-slate-200 text-slate-400"
+                              : "bg-slate-900 text-white hover:bg-slate-800",
+                          ].join(" ")}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onCancelEdit}
+                          disabled={isBusy}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onStartEdit(rule)}
+                          disabled={isBusy}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteRule(rule)}
+                          disabled={isBusy || row.usageTotal > 0}
+                          className={[
+                            "rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider",
+                            row.usageTotal > 0
+                              ? "cursor-not-allowed border-slate-200 text-slate-300"
+                              : "border-rose-200 text-rose-600 hover:bg-rose-50",
+                          ].join(" ")}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
+            <div className="overflow-x-auto bg-white">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Rule code</th>
+                    <th className="px-4 py-3">Product type</th>
+                    <th className="px-4 py-3">Default price</th>
+                    <th className="px-4 py-3">Usage</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {rules.map((rule) => {
+                    const row = getPriceRuleMeta(rule, {
+                      editId,
+                      editPriceStr,
+                      editProductType,
+                      productTypes,
+                    });
+
+                    return (
+                      <tr key={rule._id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-xs font-semibold text-slate-900">
+                          {rule.code}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {row.isEditing ? (
+                            <select
+                              value={row.editProductType}
+                              onChange={(e) => setEditProductType(e.target.value)}
+                              className="w-full min-w-[160px] rounded-xl bg-white px-2 py-1.5 text-xs text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                             >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              onClick={onCancelEdit}
-                              disabled={isBusy}
-                              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                            >
-                              Cancel
-                            </button>
+                              <option value="">Select product type</option>
+                              {row.editProductType &&
+                              !productTypes.includes(row.editProductType) ? (
+                                <option value={row.editProductType}>
+                                  Legacy: {row.editProductType}
+                                </option>
+                              ) : null}
+                              {productTypes.map((type) => (
+                                <option key={type} value={type}>
+                                  {type}
+                                </option>
+                              ))}
+                            </select>
+                          ) : row.ruleProductType ? (
+                            <span>{row.displayProductType}</span>
+                          ) : (
+                            <span className="text-slate-400">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {row.isEditing ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={editPriceStr}
+                              onChange={(e) => setEditPriceStr(e.target.value)}
+                              className="w-24 rounded-xl bg-white px-2 py-1.5 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                            />
+                          ) : (
+                            <span className="tabular-nums text-slate-900">
+                              {Number(rule.defaultPrice).toFixed(2)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          <div>
+                            Products:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {row.usage.products || 0}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="inline-flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onStartEdit(rule)}
-                              disabled={isBusy}
-                              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onDeleteRule(rule)}
-                              disabled={isBusy || usageTotal > 0}
-                              className={[
-                                "rounded-lg border px-2.5 py-1 text-xs font-semibold",
-                                usageTotal > 0
-                                  ? "cursor-not-allowed border-slate-200 text-slate-300"
-                                  : "border-rose-200 text-rose-600 hover:bg-rose-50",
-                              ].join(" ")}
-                            >
-                              Delete
-                            </button>
+                          <div>
+                            User prices:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {row.usage.userPrices || 0}
+                            </span>
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          <div>
+                            Quote items:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {row.usage.quoteItems || 0}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {row.isEditing ? (
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onSaveEdit(rule)}
+                                disabled={isBusy || row.editPrice == null || !row.editProductType}
+                                className={[
+                                  "rounded-lg px-2.5 py-1 text-xs font-semibold",
+                                  isBusy || row.editPrice == null || !row.editProductType
+                                    ? "cursor-not-allowed bg-slate-200 text-slate-400"
+                                    : "bg-slate-900 text-white hover:bg-slate-800",
+                                ].join(" ")}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={onCancelEdit}
+                                disabled={isBusy}
+                                className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onStartEdit(rule)}
+                                disabled={isBusy}
+                                className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDeleteRule(rule)}
+                                disabled={isBusy || row.usageTotal > 0}
+                                className={[
+                                  "rounded-lg border px-2.5 py-1 text-xs font-semibold",
+                                  row.usageTotal > 0
+                                    ? "cursor-not-allowed border-slate-200 text-slate-300"
+                                    : "border-rose-200 text-rose-600 hover:bg-rose-50",
+                                ].join(" ")}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

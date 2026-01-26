@@ -35,6 +35,26 @@ const formatFieldLabel = (field) => {
   return `${label} (${type})`;
 };
 
+const getFilterConfigRowMeta = (config, state = {}) => {
+  const { deletingType, isDeleting } = state;
+  const fields = Array.isArray(config?.fields) ? config.fields : [];
+  const fieldCount = fields.length;
+  const previewFields = fields.slice(0, 3);
+  const remaining = Math.max(fieldCount - previewFields.length, 0);
+  const isDeletingRow = isDeleting && deletingType === config?.productType;
+  const sortValue = Number.isFinite(Number(config?.sort))
+    ? Number(config.sort)
+    : 0;
+  return {
+    fields,
+    fieldCount,
+    previewFields,
+    remaining,
+    isDeletingRow,
+    sortValue,
+  };
+};
+
 const friendlyApiError = (err) =>
   err?.data?.message || err?.error || err?.message || "Something went wrong.";
 
@@ -213,112 +233,198 @@ export default function AdminFilterConfigsPage() {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-        <div className="grid grid-cols-12 gap-2 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
-          <div className="col-span-3">Product type</div>
-          <div className="col-span-1 text-right">Sort</div>
-          <div className="col-span-5">Fields</div>
-          <div className="col-span-2">Updated</div>
-          <div className="col-span-1 text-right">Actions</div>
+      {isBusy ? (
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <div className="text-sm text-slate-500">Loading filter configs...</div>
         </div>
-
-        {isBusy ? (
-          <div className="px-4 py-6 text-sm text-slate-500">
-            Loading filter configs...
-          </div>
-        ) : error ? (
-          <div className="px-4 py-4">
-            <ErrorMessage error={error} />
-          </div>
-        ) : configs.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-slate-500">
-            No filter configs found.
-          </div>
-        ) : (
-          configs.map((config) => {
-            const fields = Array.isArray(config?.fields) ? config.fields : [];
-            const fieldCount = fields.length;
-            const previewFields = fields.slice(0, 3);
-            const remaining = Math.max(fieldCount - previewFields.length, 0);
-            const isDeletingRow =
-              isDeleting && deletingType === config?.productType;
-
-            return (
-              <div
-                key={config._id || config.productType}
-                className="grid grid-cols-12 gap-2 border-t border-slate-200 px-4 py-2 text-sm text-slate-700"
-              >
-                <div className="col-span-3 font-semibold text-slate-900">
-                  {config?.productType || "-"}
-                </div>
-                <div className="col-span-1 text-right text-xs text-slate-600 tabular-nums">
-                  {Number.isFinite(Number(config?.sort))
-                    ? Number(config.sort)
-                    : 0}
-                </div>
-                <div className="col-span-5">
-                  {fieldCount ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                        {formatQty(fieldCount)} fields
-                      </span>
-                      <div className="flex flex-wrap gap-1">
-                        {previewFields.map((field) => (
-                          <span
-                            key={field.key || field.label}
-                            className="rounded-full bg-slate-900/5 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
-                          >
-                            {formatFieldLabel(field)}
-                          </span>
-                        ))}
-                        {remaining > 0 ? (
-                          <span className="text-[10px] text-slate-400">
-                            +{formatQty(remaining)} more
-                          </span>
-                        ) : null}
+      ) : error ? (
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <ErrorMessage error={error} />
+        </div>
+      ) : configs.length === 0 ? (
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <div className="text-sm text-slate-500">No filter configs found.</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {configs.map((config) => {
+              const row = getFilterConfigRowMeta(config, {
+                deletingType,
+                isDeleting,
+              });
+              return (
+                <div
+                  key={config._id || config.productType}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {config?.productType || "-"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Sort: {row.sortValue}
                       </div>
                     </div>
-                  ) : (
-                    <span className="text-xs text-slate-400">
-                      No fields yet.
-                    </span>
-                  )}
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Updated {formatDate(config?.updatedAt)}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    {row.fieldCount ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                          {formatQty(row.fieldCount)} fields
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {row.previewFields.map((field) => (
+                            <span
+                              key={field.key || field.label}
+                              className="rounded-full bg-slate-900/5 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                            >
+                              {formatFieldLabel(field)}
+                            </span>
+                          ))}
+                          {row.remaining > 0 ? (
+                            <span className="text-[10px] text-slate-400">
+                              +{formatQty(row.remaining)} more
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        No fields yet.
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Link
+                      to={`/admin/filter-configs/${encodeURIComponent(
+                        config?.productType || ""
+                      )}/edit`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
+                      title="Edit filter config"
+                      aria-label="Edit filter config"
+                    >
+                      <FiEdit2 className="h-3.5 w-3.5" />
+                      Edit
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(config)}
+                      disabled={row.isDeletingRow}
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 transition",
+                        row.isDeletingRow
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
+                      ].join(" ")}
+                      title="Delete filter config"
+                      aria-label="Delete filter config"
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="col-span-2 text-xs text-slate-600">
-                  {formatDate(config?.updatedAt)}
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 md:block">
+            <div className="grid grid-cols-12 gap-2 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
+              <div className="col-span-3">Product type</div>
+              <div className="col-span-1 text-right">Sort</div>
+              <div className="col-span-5">Fields</div>
+              <div className="col-span-2">Updated</div>
+              <div className="col-span-1 text-right">Actions</div>
+            </div>
+
+            {configs.map((config) => {
+              const row = getFilterConfigRowMeta(config, {
+                deletingType,
+                isDeleting,
+              });
+
+              return (
+                <div
+                  key={config._id || config.productType}
+                  className="grid grid-cols-12 gap-2 border-t border-slate-200 px-4 py-2 text-sm text-slate-700"
+                >
+                  <div className="col-span-3 font-semibold text-slate-900">
+                    {config?.productType || "-"}
+                  </div>
+                  <div className="col-span-1 text-right text-xs text-slate-600 tabular-nums">
+                    {row.sortValue}
+                  </div>
+                  <div className="col-span-5">
+                    {row.fieldCount ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                          {formatQty(row.fieldCount)} fields
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {row.previewFields.map((field) => (
+                            <span
+                              key={field.key || field.label}
+                              className="rounded-full bg-slate-900/5 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                            >
+                              {formatFieldLabel(field)}
+                            </span>
+                          ))}
+                          {row.remaining > 0 ? (
+                            <span className="text-[10px] text-slate-400">
+                              +{formatQty(row.remaining)} more
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        No fields yet.
+                      </span>
+                    )}
+                  </div>
+                  <div className="col-span-2 text-xs text-slate-600">
+                    {formatDate(config?.updatedAt)}
+                  </div>
+                  <div className="col-span-1 flex justify-end gap-2">
+                    <Link
+                      to={`/admin/filter-configs/${encodeURIComponent(
+                        config?.productType || ""
+                      )}/edit`}
+                      className="inline-flex items-center justify-center rounded-lg bg-white p-1.5 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+                      title="Edit filter config"
+                      aria-label="Edit filter config"
+                    >
+                      <FiEdit2 className="h-3.5 w-3.5" />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(config)}
+                      disabled={row.isDeletingRow}
+                      className={[
+                        "inline-flex items-center justify-center rounded-lg p-1.5 ring-1 transition",
+                        row.isDeletingRow
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
+                      ].join(" ")}
+                      title="Delete filter config"
+                      aria-label="Delete filter config"
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="col-span-1 flex justify-end gap-2">
-                  <Link
-                    to={`/admin/filter-configs/${encodeURIComponent(
-                      config?.productType || ""
-                    )}/edit`}
-                    className="inline-flex items-center justify-center rounded-lg bg-white p-1.5 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-                    title="Edit filter config"
-                    aria-label="Edit filter config"
-                  >
-                    <FiEdit2 className="h-3.5 w-3.5" />
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(config)}
-                    disabled={isDeletingRow}
-                    className={[
-                      "inline-flex items-center justify-center rounded-lg p-1.5 ring-1 transition",
-                      isDeletingRow
-                        ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                        : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
-                    ].join(" ")}
-                    title="Delete filter config"
-                    aria-label="Delete filter config"
-                  >
-                    <FiTrash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {!metaLoading && !metaError && missingTypes.length ? (
         <div className="text-xs text-slate-500">

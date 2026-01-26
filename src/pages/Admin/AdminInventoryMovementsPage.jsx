@@ -115,6 +115,36 @@ const renderSlotLink = (slot) => {
   );
 };
 
+const getMovementRowMeta = (row) => {
+  const type = row?.type || "";
+  const productName = row?.product?.name || "Unknown product";
+  const productSku = row?.product?.sku || "";
+  const slotLabel = row?.slot?.label || "-";
+  const fromSlot = row?.fromSlot;
+  const toSlot = row?.toSlot;
+  const order = row?.order || {};
+  const orderId = order?.id || order?._id || "";
+  const orderNumber = order?.orderNumber || orderId || "-";
+  const { name: actorName, email: actorEmail } = resolveActor(row?.actor);
+  const note = row?.note || "-";
+  const eventAt = row?.eventAt || row?.createdAt;
+  return {
+    type,
+    productName,
+    productSku,
+    slotLabel,
+    fromSlot,
+    toSlot,
+    order,
+    orderId,
+    orderNumber,
+    actorName,
+    actorEmail,
+    note,
+    eventAt,
+  };
+};
+
 export default function AdminInventoryMovementsPage() {
   const defaultRange = getDefaultDateRange();
   const [q, setQ] = useState("");
@@ -391,120 +421,232 @@ export default function AdminInventoryMovementsPage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
-          <div className="overflow-x-auto bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3 text-right">Qty</th>
-                  <th className="px-4 py-3 w-[220px]">Product</th>
-                  <th className="px-4 py-3">Slot</th>
-                  <th className="px-4 py-3">Order</th>
-                  <th className="px-4 py-3">Actor</th>
-                  <th className="px-4 py-3">When</th>
-                  <th className="px-4 py-3">Note</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {movements.map((row) => {
-                  const type = row?.type || "";
-                  const productName = row?.product?.name || "Unknown product";
-                  const productSku = row?.product?.sku || "";
-                  const slotLabel = row?.slot?.label || "-";
-                  const fromSlot = row?.fromSlot;
-                  const toSlot = row?.toSlot;
-                  const order = row?.order || {};
-                  const orderId = order?.id || order?._id || "";
-                  const orderNumber = order?.orderNumber || orderId || "-";
-                  const { name: actorName, email: actorEmail } = resolveActor(
-                    row?.actor
-                  );
-                  const note = row?.note || "-";
-                  const eventAt = row?.eventAt || row?.createdAt;
-                  return (
-                    <tr key={row?.id || `${type}-${orderNumber}-${productSku}`}>
-                      <td className="px-4 py-3">
-                        <span
-                          className={[
-                            "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
-                            TYPE_STYLES[type] || TYPE_STYLES.MOVE,
-                          ].join(" ")}
-                        >
-                          {resolveTypeLabel(type)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {formatQtyWithSign(type, row?.qty)}
-                      </td>
-                      <td className="px-4 py-3 max-w-[220px]">
-                        <div
-                          className="truncate font-semibold text-slate-900"
-                          title={productName}
-                        >
-                          {productName}
-                        </div>
-                        {productSku ? (
-                          <div className="truncate text-xs text-slate-500">
-                            SKU {productSku}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        {type === "MOVE" ? (
-                          <div className="text-sm text-slate-900">
-                            {renderSlotLink(fromSlot)}
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {movements.map((row) => {
+              const meta = getMovementRowMeta(row);
+              return (
+                <div
+                  key={row?.id || `${meta.type}-${meta.orderNumber}-${meta.productSku}`}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
+                        TYPE_STYLES[meta.type] || TYPE_STYLES.MOVE,
+                      ].join(" ")}
+                    >
+                      {resolveTypeLabel(meta.type)}
+                    </span>
+                    <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                      {formatQtyWithSign(meta.type, row?.qty)}
+                    </div>
+                  </div>
+
+                  <div className="mt-2">
+                    <div
+                      className="text-sm font-semibold text-slate-900"
+                      title={meta.productName}
+                    >
+                      {meta.productName}
+                    </div>
+                    {meta.productSku ? (
+                      <div className="text-xs text-slate-500">
+                        SKU {meta.productSku}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Slot
+                      </div>
+                      <div className="mt-1 text-sm text-slate-900">
+                        {meta.type === "MOVE" ? (
+                          <div>
+                            {renderSlotLink(meta.fromSlot)}
                             <span className="mx-2 text-xs text-slate-400">-&gt;</span>
-                            {renderSlotLink(toSlot)}
+                            {renderSlotLink(meta.toSlot)}
                           </div>
+                        ) : meta.slotLabel !== "-" ? (
+                          renderSlotLink(row?.slot)
                         ) : (
-                          <div className="text-sm text-slate-900">
-                            {slotLabel !== "-" ? renderSlotLink(row?.slot) : "-"}
-                          </div>
+                          "-"
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {orderId ? (
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Order
+                      </div>
+                      <div className="mt-1 text-sm text-slate-900">
+                        {meta.orderId ? (
                           <Link
-                            to={`/admin/orders/${orderId}?tab=stock`}
+                            to={`/admin/orders/${meta.orderId}?tab=stock`}
                             target="_blank"
                             rel="noreferrer"
                             className="font-semibold text-slate-900 hover:underline"
                           >
-                            {orderNumber}
+                            {meta.orderNumber}
                           </Link>
                         ) : (
                           <span className="font-semibold text-slate-900">
-                            {orderNumber}
+                            {meta.orderNumber}
                           </span>
                         )}
-                        {order?.status ? (
-                          <div className="mt-1 text-xs text-slate-500">
-                            {order.status}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {actorName}
+                      </div>
+                      {meta.order?.status ? (
+                        <div className="text-xs text-slate-500">
+                          {meta.order.status}
                         </div>
-                        {actorEmail ? (
-                          <div className="text-xs text-slate-500">
-                            {actorEmail}
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Actor
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {meta.actorName}
+                      </div>
+                      {meta.actorEmail ? (
+                        <div className="text-xs text-slate-500">
+                          {meta.actorEmail}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        When
+                      </div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {formatDateTime(meta.eventAt)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {meta.note && meta.note !== "-" ? (
+                    <div className="mt-3 text-xs text-slate-500">
+                      Note: {meta.note}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
+            <div className="overflow-x-auto bg-white">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3 text-right">Qty</th>
+                    <th className="px-4 py-3 w-[220px]">Product</th>
+                    <th className="px-4 py-3">Slot</th>
+                    <th className="px-4 py-3">Order</th>
+                    <th className="px-4 py-3">Actor</th>
+                    <th className="px-4 py-3">When</th>
+                    <th className="px-4 py-3">Note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {movements.map((row) => {
+                    const meta = getMovementRowMeta(row);
+                    return (
+                      <tr
+                        key={row?.id || `${meta.type}-${meta.orderNumber}-${meta.productSku}`}
+                      >
+                        <td className="px-4 py-3">
+                          <span
+                            className={[
+                              "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset",
+                              TYPE_STYLES[meta.type] || TYPE_STYLES.MOVE,
+                            ].join(" ")}
+                          >
+                            {resolveTypeLabel(meta.type)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {formatQtyWithSign(meta.type, row?.qty)}
+                        </td>
+                        <td className="px-4 py-3 max-w-[220px]">
+                          <div
+                            className="truncate font-semibold text-slate-900"
+                            title={meta.productName}
+                          >
+                            {meta.productName}
                           </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        {formatDateTime(eventAt)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        {note}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          {meta.productSku ? (
+                            <div className="truncate text-xs text-slate-500">
+                              SKU {meta.productSku}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          {meta.type === "MOVE" ? (
+                            <div className="text-sm text-slate-900">
+                              {renderSlotLink(meta.fromSlot)}
+                              <span className="mx-2 text-xs text-slate-400">
+                                -&gt;
+                              </span>
+                              {renderSlotLink(meta.toSlot)}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-900">
+                              {meta.slotLabel !== "-"
+                                ? renderSlotLink(row?.slot)
+                                : "-"}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {meta.orderId ? (
+                            <Link
+                              to={`/admin/orders/${meta.orderId}?tab=stock`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-slate-900 hover:underline"
+                            >
+                              {meta.orderNumber}
+                            </Link>
+                          ) : (
+                            <span className="font-semibold text-slate-900">
+                              {meta.orderNumber}
+                            </span>
+                          )}
+                          {meta.order?.status ? (
+                            <div className="mt-1 text-xs text-slate-500">
+                              {meta.order.status}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {meta.actorName}
+                          </div>
+                          {meta.actorEmail ? (
+                            <div className="text-xs text-slate-500">
+                              {meta.actorEmail}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {formatDateTime(meta.eventAt)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {meta.note}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

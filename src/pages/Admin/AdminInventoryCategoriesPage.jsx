@@ -30,6 +30,37 @@ const buildCategoryKey = (value) => {
   return dashed.replace(/^-+|-+$/g, "");
 };
 
+const getCategoryRowMeta = (category, state = {}) => {
+  const { isDeleting, deletingId } = state;
+  const statusLabel = category?.isActive === false ? "Inactive" : "Active";
+  const statusClass =
+    category?.isActive === false
+      ? "bg-slate-100 text-slate-600 ring-slate-200"
+      : "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  const usageCount =
+    typeof category?.usageCount === "number" ? category.usageCount : null;
+  const usageLabel = usageCount === null ? "--" : formatQty(usageCount);
+  const canDelete =
+    typeof category?.canDelete === "boolean"
+      ? category.canDelete
+      : usageCount === 0;
+  const categoryId = category?._id || category?.id;
+  const isDeletingRow =
+    Boolean(categoryId) &&
+    isDeleting &&
+    String(deletingId) === String(categoryId);
+  const deleteTitle = !canDelete ? "Category is in use." : "Delete category";
+  return {
+    statusLabel,
+    statusClass,
+    usageLabel,
+    canDelete,
+    categoryId,
+    isDeletingRow,
+    deleteTitle,
+  };
+};
+
 export default function AdminInventoryCategoriesPage() {
   const [q, setQ] = useState("");
   const [productType, setProductType] = useState("all");
@@ -367,100 +398,157 @@ export default function AdminInventoryCategoriesPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-        <div className="grid grid-cols-12 gap-2 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
-          <div className="col-span-4">Label</div>
-          <div className="col-span-2">Key</div>
-          <div className="col-span-2">Product type</div>
-          <div className="col-span-1 text-right">Products</div>
-          <div className="col-span-2 text-right">Status</div>
-          <div className="col-span-1 text-right">Actions</div>
+      {isBusy ? (
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <div className="text-sm text-slate-500">Loading categories...</div>
         </div>
+      ) : error ? (
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <ErrorMessage error={error} />
+        </div>
+      ) : categories.length === 0 ? (
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <div className="text-sm text-slate-500">No categories found.</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-3 md:hidden">
+            {categories.map((category) => {
+              const row = getCategoryRowMeta(category, {
+                isDeleting,
+                deletingId,
+              });
+              return (
+                <div
+                  key={category._id || category.id}
+                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {category?.label || category?.key || "-"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {category?.key || "-"}
+                      </div>
+                    </div>
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset",
+                        row.statusClass,
+                      ].join(" ")}
+                    >
+                      {row.statusLabel}
+                    </span>
+                  </div>
 
-        {isBusy ? (
-          <div className="px-4 py-6 text-sm text-slate-500">
-            Loading categories...
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Product type
+                      </div>
+                      <div className="mt-1 text-xs text-slate-700">
+                        {category?.productType || "-"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Products
+                      </div>
+                      <div className="mt-1 text-xs text-slate-700 tabular-nums">
+                        {row.usageLabel}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(category)}
+                      disabled={!row.canDelete || row.isDeletingRow}
+                      className={[
+                        "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 transition",
+                        !row.canDelete || row.isDeletingRow
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
+                      ].join(" ")}
+                      title={row.deleteTitle}
+                      aria-label={row.deleteTitle}
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ) : error ? (
-          <div className="px-4 py-4">
-            <ErrorMessage error={error} />
+
+          <div className="hidden overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 md:block">
+            <div className="grid grid-cols-12 gap-2 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
+              <div className="col-span-4">Label</div>
+              <div className="col-span-2">Key</div>
+              <div className="col-span-2">Product type</div>
+              <div className="col-span-1 text-right">Products</div>
+              <div className="col-span-2 text-right">Status</div>
+              <div className="col-span-1 text-right">Actions</div>
+            </div>
+
+            {categories.map((category) => {
+              const row = getCategoryRowMeta(category, {
+                isDeleting,
+                deletingId,
+              });
+              return (
+                <div
+                  key={category._id || category.id}
+                  className="grid grid-cols-12 gap-2 border-t border-slate-200 px-4 py-2 text-sm text-slate-700"
+                >
+                  <div className="col-span-4 font-semibold text-slate-900">
+                    {category?.label || category?.key || "-"}
+                  </div>
+                  <div className="col-span-2 truncate text-xs text-slate-500">
+                    {category?.key || "-"}
+                  </div>
+                  <div className="col-span-2 text-xs text-slate-600">
+                    {category?.productType || "-"}
+                  </div>
+                  <div className="col-span-1 text-right text-xs text-slate-600 tabular-nums">
+                    {row.usageLabel}
+                  </div>
+                  <div className="col-span-2 flex justify-end">
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset",
+                        row.statusClass,
+                      ].join(" ")}
+                    >
+                      {row.statusLabel}
+                    </span>
+                  </div>
+                  <div className="col-span-1 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(category)}
+                      disabled={!row.canDelete || row.isDeletingRow}
+                      className={[
+                        "inline-flex items-center justify-center rounded-lg p-1.5 ring-1 transition",
+                        !row.canDelete || row.isDeletingRow
+                          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                          : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
+                      ].join(" ")}
+                      title={row.deleteTitle}
+                      aria-label={row.deleteTitle}
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ) : categories.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-slate-500">
-            No categories found.
-          </div>
-        ) : (
-          categories.map((category) => {
-            const statusLabel = category?.isActive === false ? "Inactive" : "Active";
-            const statusClass =
-              category?.isActive === false
-                ? "bg-slate-100 text-slate-600 ring-slate-200"
-                : "bg-emerald-50 text-emerald-700 ring-emerald-200";
-            const usageCount =
-              typeof category?.usageCount === "number" ? category.usageCount : null;
-            const usageLabel =
-              usageCount === null ? "--" : formatQty(usageCount);
-            const canDelete =
-              typeof category?.canDelete === "boolean"
-                ? category.canDelete
-                : usageCount === 0;
-            const categoryId = category?._id || category?.id;
-            const isDeletingRow =
-              Boolean(categoryId) &&
-              isDeleting &&
-              String(deletingId) === String(categoryId);
-            const deleteTitle = !canDelete
-              ? "Category is in use."
-              : "Delete category";
-            return (
-              <div
-                key={category._id || category.id}
-                className="grid grid-cols-12 gap-2 border-t border-slate-200 px-4 py-2 text-sm text-slate-700"
-              >
-                <div className="col-span-4 font-semibold text-slate-900">
-                  {category?.label || category?.key || "-"}
-                </div>
-                <div className="col-span-2 truncate text-xs text-slate-500">
-                  {category?.key || "-"}
-                </div>
-                <div className="col-span-2 text-xs text-slate-600">
-                  {category?.productType || "-"}
-                </div>
-                <div className="col-span-1 text-right text-xs text-slate-600 tabular-nums">
-                  {usageLabel}
-                </div>
-                <div className="col-span-2 flex justify-end">
-                  <span
-                    className={[
-                      "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset",
-                      statusClass,
-                    ].join(" ")}
-                  >
-                    {statusLabel}
-                  </span>
-                </div>
-                <div className="col-span-1 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteCategory(category)}
-                    disabled={!canDelete || isDeletingRow}
-                    className={[
-                      "inline-flex items-center justify-center rounded-lg p-1.5 ring-1 transition",
-                      !canDelete || isDeletingRow
-                        ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                        : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
-                    ].join(" ")}
-                    title={deleteTitle}
-                    aria-label={deleteTitle}
-                  >
-                    <FiTrash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+        </div>
+      )}
 
       {isCreateOpen ? (
         <div
