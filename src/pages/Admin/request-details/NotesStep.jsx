@@ -83,7 +83,7 @@ export default function NotesStep({
           disabled={!canUpdateNotes || isBusy}
           title={quoteLocked ? lockReason : undefined}
           className={[
-            "rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition",
+            "rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition",
             canUpdateNotes && !isBusy
               ? "hover:bg-blue-500"
               : "cursor-not-allowed opacity-50",

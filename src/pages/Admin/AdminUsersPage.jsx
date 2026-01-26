@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiRefreshCw, FiSettings } from "react-icons/fi";
+import { FiRefreshCw, FiSettings, FiTrash2 } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
-import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
+import { useDeleteUserMutation, useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 
 function getApprovalBadgeClasses(approval) {
   if (approval === "Approved") {
@@ -19,12 +20,42 @@ function getApprovalBadgeClasses(approval) {
   return "bg-amber-50 text-amber-700 ring-amber-200";
 }
 
-function getUserRowMeta(user) {
+function getUserRowMeta(user, state = {}) {
   const userId = user?._id || user?.id;
   const roleLabel = user?.isAdmin ? "Admin" : "User";
   const approval = user?.approvalStatus || "Approved";
   const approvalClasses = getApprovalBadgeClasses(approval);
-  return { userId, roleLabel, approval, approvalClasses };
+  const linkCounts = user?.linkCounts || {};
+  const ordersCount = Number(linkCounts.orders) || 0;
+  const invoicesCount = Number(linkCounts.invoices) || 0;
+  const requestsCount = Number(linkCounts.requests) || 0;
+  const hasLinked =
+    ordersCount > 0 || invoicesCount > 0 || requestsCount > 0;
+  const canDelete =
+    user?.canDelete ??
+    (!user?.isAdmin && approval === "Rejected" && !hasLinked);
+  const rowDeleting = state.deletingId === userId;
+  let deleteReason = "Delete user";
+  if (user?.isAdmin) {
+    deleteReason = "Admin users cannot be deleted.";
+  } else if (approval !== "Rejected") {
+    deleteReason = "Only rejected users can be deleted.";
+  } else if (hasLinked) {
+    deleteReason = "User has linked orders, invoices, or requests.";
+  }
+  return {
+    userId,
+    roleLabel,
+    approval,
+    approvalClasses,
+    ordersCount,
+    invoicesCount,
+    requestsCount,
+    hasLinked,
+    canDelete: Boolean(canDelete),
+    deleteReason,
+    rowDeleting,
+  };
 }
 
 export default function AdminUsersPage() {
@@ -50,6 +81,8 @@ export default function AdminUsersPage() {
     sort,
     approvalStatus,
   });
+  const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
+  const [deletingId, setDeletingId] = useState(null);
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
@@ -68,6 +101,28 @@ export default function AdminUsersPage() {
     };
   }, [data]);
 
+  const onDeleteUser = async (user) => {
+    const userId = user?._id || user?.id;
+    if (!userId) return;
+    const name = user?.name || user?.email || userId;
+    // eslint-disable-next-line no-restricted-globals
+    const ok = confirm(`Delete user "${name}"?`);
+    if (!ok) return;
+    try {
+      setDeletingId(userId);
+      const res = await deleteUser(userId).unwrap();
+      toast.success(res?.message || "User deleted.");
+    } catch (err) {
+      const msg =
+        err?.data?.message ||
+        err?.error ||
+        err?.message ||
+        "Failed to delete user.";
+      toast.error(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -239,7 +294,7 @@ export default function AdminUsersPage() {
         <div className="space-y-3">
           <div className="space-y-3 md:hidden">
             {rows.map((u) => {
-              const row = getUserRowMeta(u);
+              const row = getUserRowMeta(u, { deletingId });
               return (
                 <div
                   key={row.userId}
@@ -281,15 +336,34 @@ export default function AdminUsersPage() {
                   </div>
 
                   <div className="mt-4">
-                    <Link
-                      to={`/admin/users/${row.userId}/edit`}
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
-                      title="Edit user"
-                      aria-label="Edit user"
-                    >
-                      <FiSettings className="h-3.5 w-3.5" />
-                      Edit user
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={`/admin/users/${row.userId}/edit`}
+                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+                        title="Edit user"
+                        aria-label="Edit user"
+                      >
+                        <FiSettings className="h-3.5 w-3.5" />
+                        Edit user
+                      </Link>
+                      {row.approval === "Rejected" ? (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteUser(u)}
+                          disabled={!row.canDelete || row.rowDeleting || isDeleting}
+                          title={row.deleteReason}
+                          className={[
+                            "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider",
+                            !row.canDelete || row.rowDeleting || isDeleting
+                              ? "cursor-not-allowed border-slate-200 text-slate-300"
+                              : "border-rose-200 text-rose-600 hover:bg-rose-50",
+                          ].join(" ")}
+                        >
+                          <FiTrash2 className="h-3.5 w-3.5" />
+                          {row.rowDeleting ? "Deleting..." : "Delete"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               );
@@ -310,7 +384,7 @@ export default function AdminUsersPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {rows.map((u) => {
-                    const row = getUserRowMeta(u);
+                    const row = getUserRowMeta(u, { deletingId });
 
                     return (
                       <tr key={row.userId} className="hover:bg-slate-50">
@@ -339,14 +413,33 @@ export default function AdminUsersPage() {
                           {row.roleLabel}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <Link
-                            to={`/admin/users/${row.userId}/edit`}
-                            className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
-                            title="Edit user"
-                            aria-label="Edit user"
-                          >
-                            <FiSettings className="h-3.5 w-3.5" />
-                          </Link>
+                          <div className="inline-flex items-center justify-center gap-2">
+                            <Link
+                              to={`/admin/users/${row.userId}/edit`}
+                              className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
+                              title="Edit user"
+                              aria-label="Edit user"
+                            >
+                              <FiSettings className="h-3.5 w-3.5" />
+                            </Link>
+                            {row.approval === "Rejected" ? (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteUser(u)}
+                                disabled={!row.canDelete || row.rowDeleting || isDeleting}
+                                title={row.deleteReason}
+                                className={[
+                                  "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
+                                  !row.canDelete || row.rowDeleting || isDeleting
+                                    ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                    : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
+                                ].join(" ")}
+                                aria-label="Delete user"
+                              >
+                                <FiTrash2 className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );

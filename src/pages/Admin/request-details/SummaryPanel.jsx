@@ -54,11 +54,16 @@ export default function SummaryPanel({
 
   return (
     <div className="relative">
-      <div className="absolute right-4 top-3">
+      <div className="absolute right-4 top-3 hidden md:block">
         <StatusBadge status={status} />
       </div>
-      <StepCard n={5} title="Summary" showNumber={false}>
-        <div className="-mx-4 -mb-4 -mt-4 divide-y divide-slate-200 text-sm">
+      <StepCard n={5} title="Quote Summary" showNumber={false}>
+        <div className="mb-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 md:hidden">
+          <span>Status</span>
+          <StatusBadge status={status} />
+        </div>
+
+        <div className="-mx-4 -mb-4 mt-0 divide-y divide-slate-200 text-sm md:-mt-4">
           {rows.map((row) => (
             <div
               key={row.label}

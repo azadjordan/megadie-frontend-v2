@@ -457,81 +457,162 @@ function SlotItemsPanel({
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/60">
           {showHistory ? (
             <div>
-              <div className="border-b border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">
+              <div className="hidden border-b border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 md:block">
                 Allocation history
               </div>
-              <div className="p-3">
-                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-4 py-2 text-center text-[11px] font-semibold text-slate-600">
-                    <div className="col-span-2">Slot</div>
-                    <div className="col-span-1">Qty</div>
-                    <div className="col-span-1">Status</div>
-                    <div className="col-span-2">Reserved by</div>
-                    <div className="col-span-2">Reserved at</div>
-                    <div className="col-span-2">Deducted by</div>
-                    <div className="col-span-2">Deducted at</div>
-                  </div>
-                  {(allocationSummaryList || []).map((row) => {
-                    const slotLabel = row?.slot?.label || "Unknown slot";
-                    const status = normalizeAllocationStatus(row?.status);
-                    const reservedBy = formatUserLabel(row?.by);
-                    const deductedBy = formatUserLabel(row?.deductedBy);
-                    return (
-                      <div
-                        key={row?.id || row?._id || `${slotLabel}-${row?.qty}`}
-                        className="grid grid-cols-12 gap-3 border-b border-slate-100 px-4 py-2 text-center text-xs text-slate-700 odd:bg-slate-100/60 last:border-b-0"
-                      >
-                        <div className="col-span-2 font-semibold text-slate-900">
-                          {slotLabel}
-                        </div>
-                        <div className="col-span-1 tabular-nums">
-                          {Number(row?.qty) || 0}
-                        </div>
-                        <div className="col-span-1 flex items-center justify-center">
-                          <span
-                            className={[
-                              "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset",
-                              ALLOCATION_STATUS_STYLES[status] ||
-                                ALLOCATION_STATUS_STYLES.Reserved,
-                            ].join(" ")}
+              <div className="p-3 space-y-3">
+                <div className="md:hidden">
+                  <details className="rounded-lg border border-slate-200 bg-white">
+                    <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-600">
+                      Allocation history
+                    </summary>
+                    <div className="border-t border-slate-200 p-3 space-y-3">
+                      {(allocationSummaryList || []).map((row) => {
+                        const slotLabel = row?.slot?.label || "Unknown slot";
+                        const status = normalizeAllocationStatus(row?.status);
+                        const reservedBy = formatUserLabel(row?.by);
+                        const deductedBy = formatUserLabel(row?.deductedBy);
+                        return (
+                          <div
+                            key={row?.id || row?._id || `${slotLabel}-${row?.qty}`}
+                            className="rounded-lg border border-slate-200 bg-white p-3"
                           >
-                            {status}
-                          </span>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="font-semibold text-slate-900">
-                            {reservedBy.name}
-                          </div>
-                          {reservedBy.email ? (
-                            <div className="text-[10px] text-slate-500">
-                              {reservedBy.email}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="text-sm font-semibold text-slate-900">
+                                {slotLabel}
+                              </div>
+                              <span
+                                className={[
+                                  "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset",
+                                  ALLOCATION_STATUS_STYLES[status] ||
+                                    ALLOCATION_STATUS_STYLES.Reserved,
+                                ].join(" ")}
+                              >
+                                {status}
+                              </span>
                             </div>
-                          ) : null}
-                        </div>
-                        <div className="col-span-2 text-[10px] text-slate-600">
-                          {formatDateTime(row?.createdAt)}
-                        </div>
-                        <div className="col-span-2">
-                          <div className="font-semibold text-slate-900">
-                            {deductedBy.name}
-                          </div>
-                          {deductedBy.email ? (
-                            <div className="text-[10px] text-slate-500">
-                              {deductedBy.email}
+                            <div className="mt-1 text-xs text-slate-500">
+                              Qty: <span className="tabular-nums">{Number(row?.qty) || 0}</span>
                             </div>
-                          ) : null}
+                            <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                  Reserved by
+                                </div>
+                                <div className="mt-1 font-semibold text-slate-900">
+                                  {reservedBy.name}
+                                </div>
+                                {reservedBy.email ? (
+                                  <div className="text-[10px] text-slate-500">
+                                    {reservedBy.email}
+                                  </div>
+                                ) : null}
+                                <div className="mt-1 text-[10px] text-slate-500">
+                                  {formatDateTime(row?.createdAt)}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                  Deducted by
+                                </div>
+                                <div className="mt-1 font-semibold text-slate-900">
+                                  {deductedBy.name}
+                                </div>
+                                {deductedBy.email ? (
+                                  <div className="text-[10px] text-slate-500">
+                                    {deductedBy.email}
+                                  </div>
+                                ) : null}
+                                <div className="mt-1 text-[10px] text-slate-500">
+                                  {formatDateTime(row?.deductedAt)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(allocationSummaryList || []).length === 0 ? (
+                        <div className="text-xs text-slate-500">
+                          No allocations found for this item.
                         </div>
-                        <div className="col-span-2 text-[10px] text-slate-600">
-                          {formatDateTime(row?.deductedAt)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {(allocationSummaryList || []).length === 0 ? (
-                    <div className="px-4 py-3 text-xs text-slate-500">
-                      No allocations found for this item.
+                      ) : null}
                     </div>
-                  ) : null}
+                  </details>
+                </div>
+
+                <div className="hidden md:block">
+                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-4 py-2 text-center text-[11px] font-semibold text-slate-600">
+                      <div className="col-span-2">Slot</div>
+                      <div className="col-span-1">Qty</div>
+                      <div className="col-span-1">Status</div>
+                      <div className="col-span-2">Reserved by</div>
+                      <div className="col-span-2">Reserved at</div>
+                      <div className="col-span-2">Deducted by</div>
+                      <div className="col-span-2">Deducted at</div>
+                    </div>
+                    {(allocationSummaryList || []).map((row) => {
+                      const slotLabel = row?.slot?.label || "Unknown slot";
+                      const status = normalizeAllocationStatus(row?.status);
+                      const reservedBy = formatUserLabel(row?.by);
+                      const deductedBy = formatUserLabel(row?.deductedBy);
+                      return (
+                        <div
+                          key={row?.id || row?._id || `${slotLabel}-${row?.qty}`}
+                          className="grid grid-cols-12 gap-3 border-b border-slate-100 px-4 py-2 text-center text-xs text-slate-700 odd:bg-slate-100/60 last:border-b-0"
+                        >
+                          <div className="col-span-2 font-semibold text-slate-900">
+                            {slotLabel}
+                          </div>
+                          <div className="col-span-1 tabular-nums">
+                            {Number(row?.qty) || 0}
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center">
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset",
+                                ALLOCATION_STATUS_STYLES[status] ||
+                                  ALLOCATION_STATUS_STYLES.Reserved,
+                              ].join(" ")}
+                            >
+                              {status}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <div className="font-semibold text-slate-900">
+                              {reservedBy.name}
+                            </div>
+                            {reservedBy.email ? (
+                              <div className="text-[10px] text-slate-500">
+                                {reservedBy.email}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="col-span-2 text-[10px] text-slate-600">
+                            {formatDateTime(row?.createdAt)}
+                          </div>
+                          <div className="col-span-2">
+                            <div className="font-semibold text-slate-900">
+                              {deductedBy.name}
+                            </div>
+                            {deductedBy.email ? (
+                              <div className="text-[10px] text-slate-500">
+                                {deductedBy.email}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="col-span-2 text-[10px] text-slate-600">
+                            {formatDateTime(row?.deductedAt)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(allocationSummaryList || []).length === 0 ? (
+                      <div className="px-4 py-3 text-xs text-slate-500">
+                        No allocations found for this item.
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -549,7 +630,7 @@ function SlotItemsPanel({
             </div>
           ) : (
             <div>
-              <div className="flex items-center justify-end gap-2 border-b border-slate-200 px-4 py-2">
+              <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-2 md:flex-row md:items-center md:justify-end">
                 <button
                   type="button"
                   onClick={handlePickAll}
@@ -594,19 +675,8 @@ function SlotItemsPanel({
                   {actionError}
                 </div>
               ) : null}
-              <div className="p-3">
-                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-4 py-2 text-center text-[11px] font-semibold text-slate-600">
-                    <div className="col-span-2">Slot</div>
-                    <div className="col-span-2 leading-tight">
-                      <div>On hand</div>
-                      <div className="text-[10px] text-slate-400">Available</div>
-                    </div>
-                    <div className="col-span-2">Reserved</div>
-                    <div className="col-span-2">Status</div>
-                    <div className="col-span-2">Reserve</div>
-                    <div className="col-span-2">Unreserve</div>
-                  </div>
+              <div className="p-3 space-y-3">
+                <div className="space-y-3 md:hidden">
                   {rows.map((row) => {
                     const slotId = resolveEntityId(row.slot);
                     const existing = allocationsBySlot?.get(slotId);
@@ -650,36 +720,42 @@ function SlotItemsPanel({
                     return (
                       <div
                         key={row._id}
-                        className="grid grid-cols-12 gap-3 border-b border-slate-100 px-4 py-2 text-center text-xs text-slate-700 odd:bg-slate-100/60 last:border-b-0"
+                        className="rounded-lg border border-slate-200 bg-white p-3"
                       >
-                        <div className="col-span-2 font-semibold text-slate-900">
-                          {row.slot?.label || "Unknown slot"}
-                        </div>
-                        <div className="col-span-2 space-y-0.5 text-center">
-                          <div className="tabular-nums">{onHandQty}</div>
-                          <div className="text-[10px] text-slate-500">
-                            Avail {availableForOrder}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {row.slot?.label || "Unknown slot"}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              On hand {onHandQty} • Avail {availableForOrder}
+                            </div>
+                          </div>
+                          <div>
+                            {allocationStatus === "-" ? (
+                              <span className="text-xs text-slate-400">-</span>
+                            ) : (
+                              <span
+                                className={[
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                                  ALLOCATION_STATUS_STYLES[allocationStatus] ||
+                                    ALLOCATION_STATUS_STYLES.Reserved,
+                                ].join(" ")}
+                              >
+                                {allocationStatus}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div className="col-span-2 tabular-nums">
-                          {existingQty}
+
+                        <div className="mt-2 text-xs text-slate-600">
+                          Reserved{" "}
+                          <span className="ml-1 font-semibold tabular-nums text-slate-900">
+                            {existingQty}
+                          </span>
                         </div>
-                        <div className="col-span-2 flex items-center justify-center">
-                          {allocationStatus === "-" ? (
-                            <span className="text-xs text-slate-400">-</span>
-                          ) : (
-                            <span
-                              className={[
-                                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
-                                ALLOCATION_STATUS_STYLES[allocationStatus] ||
-                                  ALLOCATION_STATUS_STYLES.Reserved,
-                              ].join(" ")}
-                            >
-                              {allocationStatus}
-                            </span>
-                          )}
-                        </div>
-                        <div className="col-span-2 flex items-center justify-center gap-2">
+
+                        <div className="mt-3 grid grid-cols-1 gap-2">
                           <input
                             type="number"
                             min="0"
@@ -694,7 +770,7 @@ function SlotItemsPanel({
                             placeholder="0"
                             disabled={isLocked}
                             className={[
-                              "w-[52px] rounded-md px-1 py-1 text-center text-xs ring-1 ring-slate-200",
+                              "w-full rounded-lg px-3 py-2 text-sm ring-1 ring-slate-200",
                               isLocked
                                 ? "cursor-not-allowed bg-slate-50 text-slate-400"
                                 : "bg-white text-slate-700",
@@ -713,7 +789,7 @@ function SlotItemsPanel({
                             disabled={reserveDisabled}
                             title={reserveTitle}
                             className={[
-                              "inline-flex min-w-[56px] items-center justify-center rounded border px-2.5 py-1.5 text-[11px] font-semibold transition",
+                              "inline-flex w-full items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold transition",
                               reserveDisabled
                                 ? "border-emerald-200 bg-emerald-100 text-emerald-300"
                                 : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
@@ -722,8 +798,6 @@ function SlotItemsPanel({
                           >
                             Reserve
                           </button>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-center text-center">
                           <button
                             type="button"
                             onClick={() =>
@@ -739,7 +813,7 @@ function SlotItemsPanel({
                                 : "Nothing to unreserve."
                             }
                             className={[
-                              "inline-flex min-w-[72px] items-center justify-center rounded border px-2.5 py-1.5 text-[11px] font-semibold transition",
+                              "inline-flex w-full items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold transition",
                               allocationId && !isLocked
                                 ? "border-rose-400 bg-white text-rose-700 hover:bg-rose-50"
                                 : "border-rose-200 bg-white text-rose-300",
@@ -752,17 +826,179 @@ function SlotItemsPanel({
                       </div>
                     );
                   })}
-                  {localError ? (
-                    <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-rose-600">
-                      {localError}
-                    </div>
-                  ) : combinedError ? (
-                    <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-rose-600">
-                      {combinedError?.data?.message ||
-                        "Failed to save reservation."}
-                    </div>
-                  ) : null}
                 </div>
+
+                <div className="hidden md:block">
+                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <div className="grid grid-cols-12 gap-3 border-b border-slate-200 px-4 py-2 text-center text-[11px] font-semibold text-slate-600">
+                      <div className="col-span-2">Slot</div>
+                      <div className="col-span-2 leading-tight">
+                        <div>On hand</div>
+                        <div className="text-[10px] text-slate-400">Available</div>
+                      </div>
+                      <div className="col-span-2">Reserved</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2">Reserve</div>
+                      <div className="col-span-2">Unreserve</div>
+                    </div>
+                    {rows.map((row) => {
+                      const slotId = resolveEntityId(row.slot);
+                      const existing = allocationsBySlot?.get(slotId);
+                      const existingQty = Number(existing?.qty) || 0;
+                      const allocationId = resolveEntityId(existing);
+                      const allocationStatus = allocationStatusBySlot.get(slotId) || "-";
+                      const onHandQty = Number(row.qty) || 0;
+                      const availableQty = Number(row.availableQty ?? row.qty) || 0;
+                      const availableForOrder = Math.max(0, availableQty - existingQty);
+                      const isOutOfStock = onHandQty <= 0;
+                      const draftValue = resolveDraftValue({
+                        slotId,
+                        existingQty,
+                      });
+                      const desiredQty =
+                        draftValue === "" ? NaN : Number(draftValue);
+                      const isFullyReserved = remainingQty === 0 && existingQty === 0;
+                      const isAlreadyReserved = existingQty > 0;
+                      const reserveDisabled =
+                        isDisabled ||
+                        isBusy ||
+                        isLocked ||
+                        isAlreadyReserved ||
+                        isFullyReserved ||
+                        isOutOfStock ||
+                        (availableForOrder <= 0 &&
+                          (existingQty === 0 ||
+                            (Number.isFinite(desiredQty) &&
+                              desiredQty >= existingQty)));
+                      const reserveTitle =
+                        isAlreadyReserved
+                          ? "Already reserved. Unreserve to change."
+                          : isFullyReserved
+                          ? "Order fully reserved. Reduce another slot first."
+                          : isOutOfStock
+                          ? "No stock in this slot."
+                          : availableForOrder <= 0
+                          ? "No available stock. Reduce qty to adjust."
+                          : "";
+
+                      return (
+                        <div
+                          key={row._id}
+                          className="grid grid-cols-12 gap-3 border-b border-slate-100 px-4 py-2 text-center text-xs text-slate-700 odd:bg-slate-100/60 last:border-b-0"
+                        >
+                          <div className="col-span-2 font-semibold text-slate-900">
+                            {row.slot?.label || "Unknown slot"}
+                          </div>
+                          <div className="col-span-2 space-y-0.5 text-center">
+                            <div className="tabular-nums">{onHandQty}</div>
+                            <div className="text-[10px] text-slate-500">
+                              Avail {availableForOrder}
+                            </div>
+                          </div>
+                          <div className="col-span-2 tabular-nums">
+                            {existingQty}
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            {allocationStatus === "-" ? (
+                              <span className="text-xs text-slate-400">-</span>
+                            ) : (
+                              <span
+                                className={[
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                                  ALLOCATION_STATUS_STYLES[allocationStatus] ||
+                                    ALLOCATION_STATUS_STYLES.Reserved,
+                                ].join(" ")}
+                              >
+                                {allocationStatus}
+                              </span>
+                            )}
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={draftValue}
+                              onChange={(e) =>
+                                setDrafts((prev) => ({
+                                  ...prev,
+                                  [slotId]: e.target.value,
+                                }))
+                              }
+                              placeholder="0"
+                              disabled={isLocked}
+                              className={[
+                                "w-[52px] rounded-md px-1 py-1 text-center text-xs ring-1 ring-slate-200",
+                                isLocked
+                                  ? "cursor-not-allowed bg-slate-50 text-slate-400"
+                                  : "bg-white text-slate-700",
+                              ].join(" ")}
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handlePick({
+                                  slotId,
+                                  availableQty,
+                                  existing,
+                                  draftValue,
+                                })
+                              }
+                              disabled={reserveDisabled}
+                              title={reserveTitle}
+                              className={[
+                                "inline-flex min-w-[56px] items-center justify-center rounded border px-2.5 py-1.5 text-[11px] font-semibold transition",
+                                reserveDisabled
+                                  ? "border-emerald-200 bg-emerald-100 text-emerald-300"
+                                  : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
+                                "disabled:cursor-not-allowed",
+                              ].join(" ")}
+                            >
+                              Reserve
+                            </button>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center text-center">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUnpick({
+                                  slotId,
+                                  existing,
+                                })
+                              }
+                              disabled={isDisabled || isBusy || isLocked || !allocationId}
+                              title={
+                                allocationId
+                                  ? "Remove this reservation (removes full reservation)."
+                                  : "Nothing to unreserve."
+                              }
+                              className={[
+                                "inline-flex min-w-[72px] items-center justify-center rounded border px-2.5 py-1.5 text-[11px] font-semibold transition",
+                                allocationId && !isLocked
+                                  ? "border-rose-400 bg-white text-rose-700 hover:bg-rose-50"
+                                  : "border-rose-200 bg-white text-rose-300",
+                                "disabled:cursor-not-allowed",
+                              ].join(" ")}
+                            >
+                              Unreserve
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {localError ? (
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-rose-600">
+                    {localError}
+                  </div>
+                ) : combinedError ? (
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-rose-600">
+                    {combinedError?.data?.message ||
+                      "Failed to save reservation."}
+                  </div>
+                ) : null}
               </div>
             </div>
           )}
@@ -880,7 +1116,7 @@ function AllocationItemCard({
             lockMessage={allocationLockMessage}
             onAvailabilityChange={showAvailability ? setAvailability : undefined}
             buttonPlacement="corner"
-            buttonWrapperClassName="absolute right-4 top-4"
+            buttonWrapperClassName="md:absolute md:right-4 md:top-4"
           />
         </div>
       ) : null}
@@ -1025,7 +1261,7 @@ export default function AdminOrderAllocation({
 
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <span className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
               Ordered{" "}
               <span className="ml-1 font-semibold text-amber-900 tabular-nums">
@@ -1118,74 +1354,156 @@ export default function AdminOrderAllocation({
         </div>
       </div>
 
-      {showPricing ? (
-        <div className="grid grid-cols-12 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
-          <div className="col-span-6">Product</div>
-          <div className="col-span-2 text-right">Qty</div>
-          <div className="col-span-2 text-right">Unit</div>
-          <div className="col-span-2 text-right">Total</div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-12 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
-          <div className="col-span-9">Product</div>
-          <div className="col-span-3 text-right">Qty</div>
-        </div>
-      )}
+      <div className="md:hidden">
+        {rows.length === 0 ? (
+          <div className="px-4 py-4 text-sm text-slate-600">
+            No items in this order.
+          </div>
+        ) : (
+          <div className="space-y-3 px-4 py-3">
+            {rows.map((it, idx) => {
+              const name =
+                it?.product?.name ||
+                it?.productName ||
+                (typeof it?.product === "string" ? it.product : "") ||
+                "Untitled product";
+              const sku = it?.sku || it?.product?.sku || "";
+              const productId = resolveProductId(it?.product);
+              const qty = Number(it?.qty) || 0;
+              const unit = Number(it?.unitPrice) || 0;
+              const totalLine = showPricing ? lineTotal(it) : 0;
 
-      {rows.length === 0 ? (
-        <div className="px-4 py-4 text-sm text-slate-600">
-          No items in this order.
-        </div>
-      ) : (
-        rows.map((it, idx) => {
-          const name =
-            it?.product?.name ||
-            it?.productName ||
-            (typeof it?.product === "string" ? it.product : "") ||
-            "Untitled product";
-          const sku = it?.sku || it?.product?.sku || "";
-          const productId = resolveProductId(it?.product);
-          const qty = Number(it?.qty) || 0;
-          const unit = Number(it?.unitPrice) || 0;
-          const totalLine = showPricing ? lineTotal(it) : 0;
-
-          return (
-            <div
-              key={`${orderId || "order"}-${idx}`}
-              className="border-t border-slate-200"
-            >
-              <div className="grid grid-cols-12 items-center px-4 py-3 text-sm text-slate-800">
-                <div className={showPricing ? "col-span-6 min-w-0" : "col-span-9 min-w-0"}>
-                  <div className="truncate font-semibold text-slate-900">
-                    {name}
+              return (
+                <div
+                  key={`${orderId || "order"}-${idx}`}
+                  className="rounded-xl border border-slate-200 bg-white p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {name}
+                    </div>
+                    {sku ? (
+                      <div className="text-xs text-slate-500">SKU: {sku}</div>
+                    ) : null}
                   </div>
-                  {sku ? (
-                    <div className="text-xs text-slate-500">SKU: {sku}</div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className={showPricing ? "" : "col-span-2"}>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Qty
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
+                        {qty}
+                      </div>
+                    </div>
+                    {showPricing ? (
+                      <div className="text-right">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Unit
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
+                          {money(unit)}
+                        </div>
+                      </div>
+                    ) : null}
+                    {showPricing ? (
+                      <div className="col-span-2 text-right">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Total
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
+                          {money(totalLine)}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {showSlots ? (
+                    <div className="mt-3">
+                      <SlotItemsPanel productId={productId} />
+                    </div>
                   ) : null}
                 </div>
-                <div className={showPricing ? "col-span-2 text-right tabular-nums" : "col-span-3 text-right tabular-nums"}>
-                  {qty}
-                </div>
-                {showPricing ? (
-                  <div className="col-span-2 text-right tabular-nums">
-                    {money(unit)}
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:block">
+        {showPricing ? (
+          <div className="grid grid-cols-12 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
+            <div className="col-span-6">Product</div>
+            <div className="col-span-2 text-right">Qty</div>
+            <div className="col-span-2 text-right">Unit</div>
+            <div className="col-span-2 text-right">Total</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-12 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
+            <div className="col-span-9">Product</div>
+            <div className="col-span-3 text-right">Qty</div>
+          </div>
+        )}
+
+        {rows.length === 0 ? (
+          <div className="px-4 py-4 text-sm text-slate-600">
+            No items in this order.
+          </div>
+        ) : (
+          rows.map((it, idx) => {
+            const name =
+              it?.product?.name ||
+              it?.productName ||
+              (typeof it?.product === "string" ? it.product : "") ||
+              "Untitled product";
+            const sku = it?.sku || it?.product?.sku || "";
+            const productId = resolveProductId(it?.product);
+            const qty = Number(it?.qty) || 0;
+            const unit = Number(it?.unitPrice) || 0;
+            const totalLine = showPricing ? lineTotal(it) : 0;
+
+            return (
+              <div
+                key={`${orderId || "order"}-${idx}`}
+                className="border-t border-slate-200"
+              >
+                <div className="grid grid-cols-12 items-center px-4 py-3 text-sm text-slate-800">
+                  <div
+                    className={showPricing ? "col-span-6 min-w-0" : "col-span-9 min-w-0"}
+                  >
+                    <div className="truncate font-semibold text-slate-900">
+                      {name}
+                    </div>
+                    {sku ? (
+                      <div className="text-xs text-slate-500">SKU: {sku}</div>
+                    ) : null}
                   </div>
-                ) : null}
-                {showPricing ? (
-                  <div className="col-span-2 text-right tabular-nums font-semibold text-slate-900">
-                    {money(totalLine)}
+                  <div
+                    className={showPricing ? "col-span-2 text-right tabular-nums" : "col-span-3 text-right tabular-nums"}
+                  >
+                    {qty}
+                  </div>
+                  {showPricing ? (
+                    <div className="col-span-2 text-right tabular-nums">
+                      {money(unit)}
+                    </div>
+                  ) : null}
+                  {showPricing ? (
+                    <div className="col-span-2 text-right tabular-nums font-semibold text-slate-900">
+                      {money(totalLine)}
+                    </div>
+                  ) : null}
+                </div>
+                {showSlots ? (
+                  <div className="px-4 pb-3">
+                    <SlotItemsPanel productId={productId} />
                   </div>
                 ) : null}
               </div>
-              {showSlots ? (
-                <div className="px-4 pb-3">
-                  <SlotItemsPanel productId={productId} />
-                </div>
-              ) : null}
-            </div>
-          );
-        })
-      )}
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

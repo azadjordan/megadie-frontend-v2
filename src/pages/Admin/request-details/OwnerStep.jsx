@@ -44,7 +44,7 @@ export default function OwnerStep({
           disabled={quoteLocked}
           title={quoteLocked ? lockReason : undefined}
           className={[
-            "rounded-xl px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition",
+            "rounded-xl px-3 py-2.5 text-xs font-semibold ring-1 ring-inset transition",
             quoteLocked
               ? "cursor-not-allowed bg-slate-100 text-slate-400 ring-slate-200"
               : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
@@ -111,7 +111,7 @@ export default function OwnerStep({
           disabled={!canUpdateOwner || isBusy}
           title={quoteLocked ? lockReason : undefined}
           className={[
-            "rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition",
+            "rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition",
             canUpdateOwner && !isBusy
               ? "hover:bg-blue-500"
               : "cursor-not-allowed opacity-50",
