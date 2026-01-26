@@ -143,6 +143,14 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
         { type: "Order", id: arg?.orderId },
       ],
     }),
+    createManualInvoice: builder.mutation({
+      query: (body) => ({
+        url: "/invoices/manual",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: () => [{ type: "Invoice", id: "LIST" }],
+    }),
   }),
 });
 
@@ -157,4 +165,5 @@ export const {
   useUpdateInvoiceByAdminMutation,
   useDeleteInvoiceByAdminMutation,
   useCreateInvoiceFromOrderMutation,
+  useCreateManualInvoiceMutation,
 } = invoicesApiSlice;

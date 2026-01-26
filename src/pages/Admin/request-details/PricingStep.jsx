@@ -11,6 +11,7 @@ export default function PricingStep({
   extraFeeStr,
   setExtraFeeStr,
   quoteLocked,
+  lockReason,
   showAvailability,
   onAssignUserPrices,
   canUpdatePricing,
@@ -38,6 +39,7 @@ export default function PricingStep({
           type="button"
           onClick={onAssignUserPrices}
           disabled={quoteLocked || isBusy}
+          title={quoteLocked ? lockReason : undefined}
           className={[
             "rounded-xl border px-4 py-2 text-xs font-semibold transition",
             quoteLocked || isBusy
@@ -107,6 +109,7 @@ export default function PricingStep({
                       step="0.01"
                       value={it.unitPriceStr}
                       disabled={quoteLocked || !it.productId}
+                      title={quoteLocked ? lockReason : undefined}
                       onChange={(e) => onUnitPriceChange(idx, e.target.value)}
                       className={[
                         "w-24 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
@@ -136,6 +139,7 @@ export default function PricingStep({
           <select
             value={deliveryChargeStr}
             disabled={quoteLocked}
+            title={quoteLocked ? lockReason : undefined}
             onChange={(e) => setDeliveryChargeStr(e.target.value)}
             className={[
               "w-32 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
@@ -160,6 +164,7 @@ export default function PricingStep({
             step="0.01"
             value={extraFeeStr}
             disabled={quoteLocked}
+            title={quoteLocked ? lockReason : undefined}
             onChange={(e) => setExtraFeeStr(e.target.value)}
             className={[
               "w-32 rounded-xl bg-white px-2 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
@@ -181,6 +186,7 @@ export default function PricingStep({
           type="button"
           onClick={onUpdatePricing}
           disabled={!canUpdatePricing || isBusy}
+          title={quoteLocked ? lockReason : undefined}
           className={[
             "rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition",
             canUpdatePricing && !isBusy

@@ -37,6 +37,7 @@ export const apiSlice = createApi({
     'Slot',
     'OrderAllocation',
     'InventoryProduct',
+    'InventoryMovement',
   ],
   endpoints: () => ({}),
 })

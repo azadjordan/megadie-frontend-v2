@@ -24,6 +24,7 @@ export default function QuantitiesStep({
   editDraft,
   adjustDraftQty,
   quoteLocked,
+  lockReason,
   showUpdateError,
   updateError,
 }) {
@@ -75,6 +76,7 @@ export default function QuantitiesStep({
               type="button"
               onClick={onCheckStock}
               disabled={!canCheckStock || isCheckingStock}
+              title={quoteLocked ? lockReason : undefined}
               className={[
                 "inline-flex min-w-[160px] items-center justify-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold transition",
                 !canCheckStock || isCheckingStock
@@ -96,6 +98,7 @@ export default function QuantitiesStep({
               type="button"
               onClick={onToggleEditQty}
               disabled={!canUpdateQty || isUpdatingQty || isCheckingStock}
+              title={quoteLocked ? lockReason : undefined}
               className={[
                 "inline-flex min-w-[120px] items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
                 !canUpdateQty || isUpdatingQty || isCheckingStock
@@ -125,7 +128,7 @@ export default function QuantitiesStep({
         <table className="min-w-full table-fixed text-left text-sm">
           <thead className="text-xs font-semibold text-slate-500">
             <tr className="border-b border-slate-200">
-              <th className="w-[30%] py-2 pr-3">SKU</th>
+              <th className="w-[30%] py-2 pr-3">Item</th>
               <th className={`${isEditingQty ? "w-[45%]" : "w-[70%]"} py-2 pr-3`}>
                 Qty
               </th>
@@ -208,6 +211,9 @@ export default function QuantitiesStep({
                   <td className="py-3 pr-3">
                     <div className="text-xs font-semibold text-slate-900">
                       {it.sku || "-"}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {it.name || "Unnamed item"}
                     </div>
                   </td>
 
@@ -308,15 +314,16 @@ export default function QuantitiesStep({
 
       {canUpdateQty ? (
         <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={onUpdateQty}
-            disabled={updateQtyDisabled}
-            className={[
-              "inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition",
-              updateQtyDisabled
-                ? "cursor-not-allowed opacity-50"
-                : "hover:bg-blue-500",
+        <button
+          type="button"
+          onClick={onUpdateQty}
+          disabled={updateQtyDisabled}
+          title={quoteLocked ? lockReason : undefined}
+          className={[
+            "inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition",
+            updateQtyDisabled
+              ? "cursor-not-allowed opacity-50"
+              : "hover:bg-blue-500",
             ].join(" ")}
           >
             {isUpdatingQty ? "Updating..." : "Update Quantity"}

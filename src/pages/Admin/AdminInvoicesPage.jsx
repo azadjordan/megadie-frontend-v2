@@ -1,17 +1,18 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiSettings, FiRefreshCw } from "react-icons/fi";
+import { FiSettings, FiRefreshCw, FiPlus } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
+import CreateManualInvoiceModal from "../../components/admin/CreateManualInvoiceModal";
 
 import {
   useGetInvoicesAdminQuery,
-  useGetInvoicesAdminSummaryQuery,
   useLazyGetInvoicePdfQuery,
+  useCreateManualInvoiceMutation,
 } from "../../features/invoices/invoicesApiSlice";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 
@@ -42,6 +43,15 @@ function formatDate(iso) {
   } catch {
     return iso;
   }
+}
+
+function getDefaultDueDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 35);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function moneyMinorRounded(amountMinor, currency = "AED", factor = 100) {
@@ -76,18 +86,6 @@ function numberMinorRounded(amountMinor, factor = 100) {
   } catch {
     return String(Math.round(major));
   }
-}
-
-function formatCount(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "0";
-  return new Intl.NumberFormat().format(n);
-}
-
-function renderSummaryValue(isLoading, isError, value) {
-  if (isLoading) return "...";
-  if (isError) return "--";
-  return value;
 }
 
 function balanceDueMinor(inv) {
@@ -146,6 +144,18 @@ export default function AdminInvoicesPage() {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [sort, setSort] = useState("newest");
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualError, setManualError] = useState("");
+  const [manualForm, setManualForm] = useState({
+    userId: "",
+    dueDate: getDefaultDueDate(),
+    currency: "AED",
+    minorUnitFactor: 100,
+    adminNote: "",
+  });
+  const [manualItems, setManualItems] = useState([
+    { id: "item-1", description: "", qty: "1", unitPrice: "" },
+  ]);
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -155,8 +165,6 @@ export default function AdminInvoicesPage() {
   const effectivePaymentStatus = overdueOnly ? "all" : paymentStatusFilter;
 
   const selectedUserId = selectedUser?._id || selectedUser?.id;
-  const summaryEnabled = Boolean(selectedUserId);
-
   const {
     data,
     isLoading,
@@ -185,43 +193,15 @@ export default function AdminInvoicesPage() {
     sort: "name",
   });
 
-  const {
-    data: summaryData,
-    isLoading: summaryLoading,
-    isError: summaryError,
-  } = useGetInvoicesAdminSummaryQuery(
-    summaryEnabled ? { user: selectedUserId } : undefined,
-    { skip: !summaryEnabled }
-  );
-
   const [getInvoicePdf, { isFetching: isPdfLoading }] =
     useLazyGetInvoicePdfQuery();
+  const [createManualInvoice, { isLoading: isCreatingManual, error: manualCreateError }] =
+    useCreateManualInvoiceMutation();
 
   const [pdfId, setPdfId] = useState(null);
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
-  const summaryCurrency = summaryData?.currency || "AED";
-  const summaryFactor = summaryData?.minorUnitFactor || 100;
-  const unpaidSummary = summaryData?.unpaidTotalMinor ?? 0;
-  const overdueSummary = summaryData?.overdueTotalMinor ?? 0;
-  const unpaidCount = summaryData?.unpaidCount ?? 0;
-  const overdueCount = summaryData?.overdueCount ?? 0;
-  const unpaidHint = !summaryEnabled
-    ? "Select a user to load summary"
-    : summaryLoading
-    ? "Loading..."
-    : summaryError
-    ? "Unavailable"
-    : `${formatCount(unpaidCount)} invoice${unpaidCount === 1 ? "" : "s"}`;
-  const overdueHint = !summaryEnabled
-    ? "Select a user to load summary"
-    : summaryLoading
-    ? "Loading..."
-    : summaryError
-    ? "Unavailable"
-    : `${formatCount(overdueCount)} overdue`;
-
   const users = useMemo(
     () => usersData?.data || usersData?.items || [],
     [usersData]
@@ -277,56 +257,172 @@ export default function AdminInvoicesPage() {
     }
   }
 
+  const resetManualForm = () => {
+    setManualForm({
+      userId: "",
+      dueDate: getDefaultDueDate(),
+      currency: "AED",
+      minorUnitFactor: 100,
+      adminNote: "",
+    });
+    setManualItems([{ id: "item-1", description: "", qty: "1", unitPrice: "" }]);
+    setManualError("");
+  };
+
+  const openManualModal = () => {
+    resetManualForm();
+    setShowManualModal(true);
+  };
+
+  const closeManualModal = () => {
+    setShowManualModal(false);
+    setManualError("");
+  };
+
+  const updateManualField = (field, value) => {
+    setManualForm((prev) => ({ ...prev, [field]: value }));
+    setManualError("");
+  };
+
+  const updateManualItem = (id, field, value) => {
+    setManualItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+    setManualError("");
+  };
+
+  const addManualItem = () => {
+    setManualItems((prev) => [
+      ...prev,
+      {
+        id: `item-${prev.length + 1}-${Date.now()}`,
+        description: "",
+        qty: "1",
+        unitPrice: "",
+      },
+    ]);
+    setManualError("");
+  };
+
+  const removeManualItem = (id) => {
+    setManualItems((prev) => {
+      if (prev.length <= 1) {
+        const seed = prev[0] || { id: "item-1" };
+        return [
+          { ...seed, description: "", qty: "1", unitPrice: "" },
+        ];
+      }
+      return prev.filter((item) => item.id !== id);
+    });
+    setManualError("");
+  };
+
+  const submitManualInvoice = async () => {
+    const userId = manualForm.userId;
+    if (!userId) {
+      setManualError("Select a client.");
+      return;
+    }
+
+    if (!manualForm.dueDate) {
+      setManualError("Due date is required.");
+      return;
+    }
+
+    const factor = Number(manualForm.minorUnitFactor) || 100;
+    if (!Number.isInteger(factor) || factor <= 0) {
+      setManualError("Minor unit factor must be a positive integer.");
+      return;
+    }
+
+    if (!manualItems.length) {
+      setManualError("Add at least one line item.");
+      return;
+    }
+
+    const invoiceItems = [];
+    for (let i = 0; i < manualItems.length; i += 1) {
+      const item = manualItems[i];
+      const description = String(item.description || "").trim();
+      const qty = Number(item.qty);
+      const unitPriceRaw = String(item.unitPrice ?? "").trim();
+
+      if (!description) {
+        setManualError(`Item ${i + 1}: description is required.`);
+        return;
+      }
+      if (!Number.isFinite(qty) || !Number.isInteger(qty) || qty <= 0) {
+        setManualError(`Item ${i + 1}: qty must be a positive integer.`);
+        return;
+      }
+      if (!unitPriceRaw) {
+        setManualError(`Item ${i + 1}: unit price is required.`);
+        return;
+      }
+      const unitPrice = Number(unitPriceRaw);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        setManualError(`Item ${i + 1}: unit price must be 0 or higher.`);
+        return;
+      }
+
+      const unitPriceMinor = Math.round(unitPrice * factor);
+      invoiceItems.push({
+        description,
+        qty,
+        unitPriceMinor,
+      });
+    }
+
+    try {
+      await createManualInvoice({
+        userId,
+        dueDate: manualForm.dueDate,
+        currency: manualForm.currency?.trim() || undefined,
+        minorUnitFactor: factor,
+        adminNote: manualForm.adminNote?.trim() || undefined,
+        invoiceItems,
+      }).unwrap();
+
+      toast.success("Manual invoice created.");
+      closeManualModal();
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <CreateManualInvoiceModal
+        open={showManualModal}
+        users={userOptions}
+        form={manualForm}
+        items={manualItems}
+        onClose={closeManualModal}
+        onSubmit={submitManualInvoice}
+        onFieldChange={updateManualField}
+        onItemChange={updateManualItem}
+        onAddItem={addManualItem}
+        onRemoveItem={removeManualItem}
+        isSaving={isCreatingManual}
+        error={manualCreateError}
+        formError={manualError}
+      />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Invoices</div>
           <div className="text-sm text-slate-500">
             Monitor invoice status, payments, and balances.
           </div>
         </div>
-
-        <div className="grid w-full gap-3 sm:grid-cols-2 lg:w-auto lg:min-w-[320px] xl:min-w-[360px]">
-          <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Unpaid balance
-            </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900 tabular-nums">
-              {summaryEnabled
-                ? renderSummaryValue(
-                    summaryLoading,
-                    summaryError,
-                    moneyMinorRounded(
-                      unpaidSummary,
-                      summaryCurrency,
-                      summaryFactor
-                    )
-                  )
-                : "--"}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">{unpaidHint}</div>
-          </div>
-
-          <div className="rounded-xl bg-rose-50/70 p-3 ring-1 ring-rose-100">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">
-              Overdue balance
-            </div>
-            <div className="mt-2 text-lg font-semibold text-rose-800 tabular-nums">
-              {summaryEnabled
-                ? renderSummaryValue(
-                    summaryLoading,
-                    summaryError,
-                    moneyMinorRounded(
-                      overdueSummary,
-                      summaryCurrency,
-                      summaryFactor
-                    )
-                  )
-                : "--"}
-            </div>
-            <div className="mt-1 text-xs text-rose-700">{overdueHint}</div>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={openManualModal}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+          >
+            <FiPlus className="h-4 w-4" />
+            Create manual invoice
+          </button>
         </div>
       </div>
 
@@ -500,7 +596,7 @@ export default function AdminInvoicesPage() {
             No invoices found
           </div>
           <div className="mt-1 text-sm text-slate-500">
-            Invoices appear once they are created for an order.
+            Invoices appear once they are created for an order or manually.
           </div>
         </div>
       ) : (
@@ -524,6 +620,7 @@ export default function AdminInvoicesPage() {
                   const overdue = isOverdue(inv);
                   const balance = balanceDueMinor(inv);
                   const rowPdf = pdfId === inv._id;
+                  const sourceLabel = inv.source === "Manual" ? "Manual" : "Order";
 
                   return (
                     <tr key={inv._id} className="hover:bg-slate-50">
@@ -545,6 +642,11 @@ export default function AdminInvoicesPage() {
                         </div>
                         <div className="mt-0.5 font-semibold text-slate-900">
                           {inv.invoiceNumber || inv._id}
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                            {sourceLabel}
+                          </span>
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">
                           <span className="font-semibold text-slate-500">Due:</span>{" "}

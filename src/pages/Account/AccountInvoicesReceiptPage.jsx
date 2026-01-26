@@ -230,7 +230,7 @@ export default function AccountInvoicesReceiptPage() {
           <p className="mt-2 text-sm text-slate-600">
             {unpaidOnly
               ? "Everything looks fully paid right now."
-              : "Invoices appear once an admin generates one for your order."}
+              : "Invoices appear once an admin generates one for your order or service."}
           </p>
           <div className="mt-4">
             <Link
@@ -258,6 +258,11 @@ export default function AccountInvoicesReceiptPage() {
               const orderItems = Array.isArray(inv.order?.orderItems)
                 ? inv.order.orderItems
                 : [];
+              const manualItems = Array.isArray(inv.invoiceItems)
+                ? inv.invoiceItems
+                : [];
+              const usesManualItems = orderItems.length === 0 && manualItems.length > 0;
+              const itemRows = usesManualItems ? manualItems : orderItems;
 
               return (
                 <div
@@ -307,14 +312,17 @@ export default function AccountInvoicesReceiptPage() {
                       <span>Items</span>
                       <span>Qty</span>
                     </div>
-                    {orderItems.length ? (
+                    {itemRows.length ? (
                       <div className="mt-2 space-y-1">
-                        {orderItems.map((item, idx) => {
-                          const name =
-                            item?.product?.name ||
-                            item?.productName ||
-                            item?.sku ||
-                            (typeof item?.product === "string" ? item.product : "Item");
+                        {itemRows.map((item, idx) => {
+                          const name = usesManualItems
+                            ? item?.description || "Item"
+                            : item?.product?.name ||
+                              item?.productName ||
+                              item?.sku ||
+                              (typeof item?.product === "string"
+                                ? item.product
+                                : "Item");
                           const qty = Number(item?.qty) || 0;
                           const rowTone =
                             idx % 2 === 0 ? "bg-slate-100/80" : "bg-transparent";

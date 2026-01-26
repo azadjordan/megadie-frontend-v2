@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -7,6 +7,7 @@ import Pagination from "../../components/common/Pagination";
 import AccountRequestCard from "./account-requests/AccountRequestCard";
 
 import {
+  useGetQuoteByIdQuery,
   useGetMyQuotesQuery,
   useCancelQuoteMutation,
   useConfirmQuoteMutation,
@@ -18,12 +19,21 @@ export default function AccountRequestsPage() {
   const [page, setPage] = useState(1);
   const [filterStatus, setFilterStatus] = useState("all");
   const limit = 3;
+  const [searchParams] = useSearchParams();
 
   const { data, isLoading, isError, error, refetch } = useGetMyQuotesQuery({
     page,
     limit,
     status: filterStatus === "all" ? undefined : "Quoted",
   });
+  const deepLinkIdRaw = searchParams.get("quote");
+  const deepLinkId = deepLinkIdRaw ? String(deepLinkIdRaw) : "";
+  const {
+    data: deepLinkResult,
+    isLoading: isDeepLinkLoading,
+    isError: isDeepLinkError,
+    error: deepLinkError,
+  } = useGetQuoteByIdQuery(deepLinkId, { skip: !deepLinkId });
 
   const [cancelQuote, { isLoading: isCancelling }] = useCancelQuoteMutation();
   const [confirmQuote, { isLoading: isConfirming }] = useConfirmQuoteMutation();
@@ -42,9 +52,18 @@ export default function AccountRequestsPage() {
   const maxHitTimers = useRef({});
 
   const quotes = useMemo(() => data?.data || [], [data]);
+  const deepLinkQuote = deepLinkResult?.data;
+  const displayQuotes = useMemo(() => {
+    if (!deepLinkQuote) return quotes;
+    const exists = quotes.some(
+      (q) => String(q?._id || q?.id) === String(deepLinkQuote?._id || deepLinkQuote?.id)
+    );
+    return exists ? quotes : [deepLinkQuote, ...quotes];
+  }, [quotes, deepLinkQuote]);
   const pagination = data?.pagination;
   const showPagination = Boolean(pagination) && quotes.length > 0;
-  const showControls = quotes.length > 0;
+  const showControls = displayQuotes.length > 0;
+  const autoOpenRef = useRef(false);
   useEffect(() => {
     setOpen({});
     setEditingQuoteId(null);
@@ -54,6 +73,15 @@ export default function AccountRequestsPage() {
     setCancelPrompt(null);
     setCancelPromptError("");
   }, [page, filterStatus]);
+  useEffect(() => {
+    autoOpenRef.current = false;
+  }, [deepLinkId]);
+
+  useEffect(() => {
+    if (!deepLinkQuote?._id || autoOpenRef.current) return;
+    setOpen((prev) => ({ ...prev, [deepLinkQuote._id]: true }));
+    autoOpenRef.current = true;
+  }, [deepLinkQuote?._id]);
 
   const toggle = (id) =>
     setOpen((prev) => {
@@ -215,7 +243,7 @@ export default function AccountRequestsPage() {
 
   const onCancel = (id) => {
     if (!id) return;
-    const target = quotes.find((quote) => quote?._id === id);
+    const target = displayQuotes.find((quote) => quote?._id === id);
     const requestedItems = Array.isArray(target?.requestedItems)
       ? target.requestedItems
       : [];
@@ -353,7 +381,7 @@ export default function AccountRequestsPage() {
         </div>
       ) : null}
 
-      {quotes.length === 0 ? (
+      {displayQuotes.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           <div className="text-sm font-semibold text-slate-900">
             No requests yet
@@ -373,8 +401,17 @@ export default function AccountRequestsPage() {
         </div>
       ) : (
         <>
+          {deepLinkId && (isDeepLinkLoading || isDeepLinkError) ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+              {isDeepLinkLoading ? (
+                "Loading shared quote..."
+              ) : (
+                <ErrorMessage error={deepLinkError} />
+              )}
+            </div>
+          ) : null}
           <div className="space-y-4">
-            {quotes.map((quote) => (
+            {displayQuotes.map((quote) => (
               <AccountRequestCard
                 key={quote._id}
                 quote={quote}

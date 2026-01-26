@@ -1,10 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
+import { copyTextToClipboard } from "../../utils/clipboard";
+import { buildClientShareMessage } from "../../utils/quoteShare";
+import CreateManualInvoiceModal from "../../components/admin/CreateManualInvoiceModal";
 
 import {
   useGetQuoteByIdQuery,
@@ -20,6 +23,7 @@ import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApi
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import { useLazyGetUserPricesQuery } from "../../features/userPrices/userPricesApiSlice";
 import { useLazyGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
+import { useCreateManualInvoiceMutation } from "../../features/invoices/invoicesApiSlice";
 
 import OwnerStep from "./request-details/OwnerStep";
 import QuantitiesStep from "./request-details/QuantitiesStep";
@@ -38,6 +42,7 @@ import {
 
 const DELIVERY_CHARGE_OPTIONS = [0, 10, 12, 15, 20, 25, 30, 35, 40, 50];
 const DEFAULT_DELIVERY_CHARGE = 15;
+const DEFAULT_MANUAL_CURRENCY = "AED";
 
 const buildDeliveryOptions = (currentValue) => {
   const options = [...DELIVERY_CHARGE_OPTIONS];
@@ -47,6 +52,15 @@ const buildDeliveryOptions = (currentValue) => {
   }
   return options.sort((a, b) => a - b);
 };
+
+function getDefaultDueDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 35);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function AdminRequestDetailsPage() {
   const { id } = useParams();
@@ -116,6 +130,22 @@ export default function AdminRequestDetailsPage() {
   ] = useLazyGetQuoteStockCheckByAdminQuery();
   const [createOrderFromQuote, { isLoading: isCreatingOrder }] =
     useCreateOrderFromQuoteMutation();
+  const [createManualInvoice, { isLoading: isCreatingManual, error: manualCreateError }] =
+    useCreateManualInvoiceMutation();
+  const [isSharing, setIsSharing] = useState(false);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualError, setManualError] = useState("");
+  const [manualForm, setManualForm] = useState({
+    userId: "",
+    dueDate: getDefaultDueDate(),
+    currency: DEFAULT_MANUAL_CURRENCY,
+    minorUnitFactor: 100,
+    adminNote: "",
+    quoteId: "",
+  });
+  const [manualItems, setManualItems] = useState([
+    { id: "item-1", description: "", qty: "1", unitPrice: "" },
+  ]);
 
 
   // Step 1
@@ -151,7 +181,7 @@ export default function AdminRequestDetailsPage() {
         return {
           productId: getId(it.product),
           sku: product?.sku || "",
-          name: product?.name || "",
+          name: product?.name || it?.productName || "",
           priceRule: product?.priceRule || it?.priceRule || "",
           requestedQty: Math.max(0, Number(it.qty) || 0),
           qtyStr: toInputValue(it.qty),
@@ -182,11 +212,18 @@ export default function AdminRequestDetailsPage() {
     const fallbackUser = quote?.user;
     if (!fallbackUser) return null;
     return {
+      _id: getId(fallbackUser),
       name: fallbackUser?.name || "",
       email: fallbackUser?.email || "",
       phoneNumber: fallbackUser?.phoneNumber || "",
     };
   }, [users, userId, quote?.user]);
+
+  const manualUserOptions = useMemo(() => {
+    if (selectedUser) return [selectedUser];
+    if (quote?.user) return [quote.user];
+    return [];
+  }, [selectedUser, quote?.user]);
 
   const originalOwnerId = getId(quote?.user);
   const quoteId = quote?.id || quote?._id;
@@ -194,7 +231,14 @@ export default function AdminRequestDetailsPage() {
   const showAvailability = backendStatus !== "Cancelled";
   // keep for business logic: lock if already converted to order
   const orderCreated = Boolean(quote?.order);
-  const quoteLocked = orderCreated;
+  const manualInvoiceId = quote?.manualInvoiceId;
+  const manualInvoiceLocked = Boolean(manualInvoiceId);
+  const quoteLocked = orderCreated || manualInvoiceLocked;
+  const quoteLockReason = manualInvoiceLocked
+    ? "Manual invoice created — quote locked."
+    : orderCreated
+    ? "Order created — quote locked."
+    : "";
 
   const stockCheckItems = Array.isArray(stockCheckData?.items)
     ? stockCheckData.items
@@ -596,6 +640,25 @@ export default function AdminRequestDetailsPage() {
     isCreatingOrder ||
     quoteLocked ||
     backendStatus !== "Confirmed";
+  const canShareWithClient =
+    backendStatus === "Quoted" && !orderCreated && !manualInvoiceLocked;
+  const shareDisabled = !canShareWithClient || isSharing;
+  const canCreateManualInvoice =
+    (backendStatus === "Processing" || backendStatus === "Quoted") &&
+    !orderCreated &&
+    !manualInvoiceLocked &&
+    backendStatus !== "Cancelled";
+  const manualInvoiceDisabled =
+    !canCreateManualInvoice || isBusy || isCreatingManual;
+  const manualInvoiceDisabledReason = manualInvoiceLocked
+    ? "Manual invoice created — quote locked."
+    : orderCreated
+    ? "Order already exists for this quote."
+    : backendStatus === "Cancelled"
+    ? "Cancelled quotes cannot be invoiced."
+    : backendStatus === "Confirmed"
+    ? "Confirmed quotes should be invoiced from orders."
+    : "";
 
   const onConvertToOrder = async () => {
     if (!canConvertToOrder) return;
@@ -655,6 +718,7 @@ export default function AdminRequestDetailsPage() {
             isUsersError={isUsersError}
             usersError={usersError}
             quoteLocked={quoteLocked}
+            lockReason={quoteLockReason}
             canUpdateOwner={canUpdateOwner}
             onUpdateOwner={onUpdateOwner}
             isBusy={isBusy}
@@ -683,6 +747,7 @@ export default function AdminRequestDetailsPage() {
             editDraft={editDraft}
             adjustDraftQty={adjustDraftQty}
             quoteLocked={quoteLocked}
+            lockReason={quoteLockReason}
             showUpdateError={showUpdateQtyError}
             updateError={updateQuantitiesError}
           />
@@ -698,6 +763,7 @@ export default function AdminRequestDetailsPage() {
             extraFeeStr={extraFeeStr}
             setExtraFeeStr={setExtraFeeStr}
             quoteLocked={quoteLocked}
+            lockReason={quoteLockReason}
             showAvailability={showAvailability}
             onAssignUserPrices={onAssignUserPrices}
             canUpdatePricing={canUpdatePricing}
@@ -717,6 +783,7 @@ export default function AdminRequestDetailsPage() {
             adminToClientNote={adminToClientNote}
             setAdminToClientNote={setAdminToClientNote}
             quoteLocked={quoteLocked}
+            lockReason={quoteLockReason}
             canUpdateNotes={canUpdateNotes}
             onUpdateNotes={onUpdateNotes}
             isBusy={isBusy}
@@ -729,6 +796,7 @@ export default function AdminRequestDetailsPage() {
         return (
           <StatusStep
             quoteLocked={quoteLocked}
+            lockReason={quoteLockReason}
             showAvailability={showAvailability}
             canSetQuoted={hasAnyAvailability}
             canSetConfirmed={!hasAvailabilityShortage}
@@ -742,6 +810,180 @@ export default function AdminRequestDetailsPage() {
         );
       default:
         return null;
+    }
+  };
+
+  const onShareWithClient = async () => {
+    if (!canShareWithClient || !quote) return;
+    try {
+      setIsSharing(true);
+      const text = buildClientShareMessage(quote);
+      await copyTextToClipboard(text);
+      toast.success("Client message copied.");
+    } catch (err) {
+      toast.error(resolveToastError(err, "Failed to copy client message."));
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const buildManualItemsFromQuote = (targetQuote) => {
+    const requestedItems = Array.isArray(targetQuote?.requestedItems)
+      ? targetQuote.requestedItems
+      : [];
+    const mapped = requestedItems
+      .map((item, idx) => {
+        const qty = Math.max(0, Number(item?.qty) || 0);
+        if (qty <= 0) return null;
+        const productId = item?.product?._id || item?.product || idx;
+        const description =
+          item?.productName || item?.product?.name || "Item";
+        return {
+          id: `quote-${productId}-${idx}`,
+          description,
+          qty: String(qty),
+          unitPrice: "",
+        };
+      })
+      .filter(Boolean);
+
+    if (mapped.length === 0) {
+      return [{ id: "item-1", description: "", qty: "1", unitPrice: "" }];
+    }
+
+    return mapped;
+  };
+
+  const openManualFromQuote = () => {
+    if (!quote) return;
+    const quoteUserId = getId(quote.user);
+    const quoteNumber = quote?.quoteNumber || quote?._id || "";
+    setManualForm({
+      userId: quoteUserId || "",
+      dueDate: getDefaultDueDate(),
+      currency: DEFAULT_MANUAL_CURRENCY,
+      minorUnitFactor: 100,
+      adminNote: quoteNumber ? `Manual invoice from quote ${quoteNumber}` : "",
+      quoteId: quote?._id || quote?.id || "",
+    });
+    setManualItems(buildManualItemsFromQuote(quote));
+    setManualError("");
+    setShowManualModal(true);
+  };
+
+  const closeManualModal = () => {
+    setShowManualModal(false);
+    setManualError("");
+  };
+
+  const updateManualField = (field, value) => {
+    setManualForm((prev) => ({ ...prev, [field]: value }));
+    setManualError("");
+  };
+
+  const updateManualItem = (id, field, value) => {
+    setManualItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+    setManualError("");
+  };
+
+  const addManualItem = () => {
+    setManualItems((prev) => [
+      ...prev,
+      {
+        id: `item-${prev.length + 1}-${Date.now()}`,
+        description: "",
+        qty: "1",
+        unitPrice: "",
+      },
+    ]);
+    setManualError("");
+  };
+
+  const removeManualItem = (id) => {
+    setManualItems((prev) => {
+      if (prev.length <= 1) {
+        const seed = prev[0] || { id: "item-1" };
+        return [{ ...seed, description: "", qty: "1", unitPrice: "" }];
+      }
+      return prev.filter((item) => item.id !== id);
+    });
+    setManualError("");
+  };
+
+  const submitManualInvoice = async () => {
+    const userId = manualForm.userId;
+    if (!userId) {
+      setManualError("Select a client.");
+      return;
+    }
+
+    if (!manualForm.dueDate) {
+      setManualError("Due date is required.");
+      return;
+    }
+
+    const factor = Number(manualForm.minorUnitFactor) || 100;
+    if (!Number.isInteger(factor) || factor <= 0) {
+      setManualError("Minor unit factor must be a positive integer.");
+      return;
+    }
+
+    if (!manualItems.length) {
+      setManualError("Add at least one line item.");
+      return;
+    }
+
+    const invoiceItems = [];
+    for (let i = 0; i < manualItems.length; i += 1) {
+      const item = manualItems[i];
+      const description = String(item.description || "").trim();
+      const qty = Number(item.qty);
+      const unitPriceRaw = String(item.unitPrice ?? "").trim();
+
+      if (!description) {
+        setManualError(`Item ${i + 1}: description is required.`);
+        return;
+      }
+      if (!Number.isFinite(qty) || !Number.isInteger(qty) || qty <= 0) {
+        setManualError(`Item ${i + 1}: qty must be a positive integer.`);
+        return;
+      }
+      if (!unitPriceRaw) {
+        setManualError(`Item ${i + 1}: unit price is required.`);
+        return;
+      }
+      const unitPrice = Number(unitPriceRaw);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        setManualError(`Item ${i + 1}: unit price must be 0 or higher.`);
+        return;
+      }
+
+      const unitPriceMinor = Math.round(unitPrice * factor);
+      invoiceItems.push({
+        description,
+        qty,
+        unitPriceMinor,
+      });
+    }
+
+    try {
+      await createManualInvoice({
+        userId,
+        dueDate: manualForm.dueDate,
+        currency: manualForm.currency?.trim() || undefined,
+        minorUnitFactor: factor,
+        adminNote: manualForm.adminNote?.trim() || undefined,
+        quoteId: manualForm.quoteId || undefined,
+        invoiceItems,
+      }).unwrap();
+
+      toast.success("Manual invoice created.");
+      closeManualModal();
+      await refetchQuote();
+    } catch (err) {
+      toast.error(resolveToastError(err, "Failed to create manual invoice."));
     }
   };
 
@@ -825,6 +1067,22 @@ export default function AdminRequestDetailsPage() {
 
   return (
     <div className="space-y-4">
+      <CreateManualInvoiceModal
+        open={showManualModal}
+        users={manualUserOptions}
+        form={manualForm}
+        items={manualItems}
+        onClose={closeManualModal}
+        onSubmit={submitManualInvoice}
+        onFieldChange={updateManualField}
+        onItemChange={updateManualItem}
+        onAddItem={addManualItem}
+        onRemoveItem={removeManualItem}
+        isSaving={isCreatingManual}
+        error={manualCreateError}
+        formError={manualError}
+        disableUserSelect
+      />
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <button
           type="button"
@@ -859,7 +1117,26 @@ export default function AdminRequestDetailsPage() {
           {formatDateTime(quote.updatedAt)}
         </div>
 
-        {quoteLocked ? (
+        {manualInvoiceLocked ? (
+          <div className="mt-3 rounded-xl bg-violet-50 p-3 ring-1 ring-violet-200">
+            <div className="text-xs font-semibold text-violet-900">
+              Manual invoice created
+            </div>
+            <div className="mt-1 text-xs text-violet-900/80">
+              Quote is locked to prevent further changes.
+            </div>
+            {manualInvoiceId ? (
+              <div className="mt-2">
+                <Link
+                  to={`/admin/invoices/${manualInvoiceId}/edit`}
+                  className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-50"
+                >
+                  View invoice
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        ) : quoteLocked ? (
           <div className="mt-3 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
             <div className="text-xs font-semibold text-amber-900">Locked</div>
             <div className="mt-1 text-xs text-amber-900/80">
@@ -937,6 +1214,14 @@ export default function AdminRequestDetailsPage() {
             onConvertToOrder={onConvertToOrder}
             isCreatingOrder={isCreatingOrder}
             convertDisabled={convertDisabled}
+            showShareWithClient={canShareWithClient}
+            onShareWithClient={onShareWithClient}
+            shareDisabled={shareDisabled}
+            showManualInvoice
+            onCreateManualInvoice={openManualFromQuote}
+            manualInvoiceDisabled={manualInvoiceDisabled}
+            manualInvoiceDisabledReason={manualInvoiceDisabledReason}
+            lockReason={quoteLockReason}
           />
         </aside>
       </div>

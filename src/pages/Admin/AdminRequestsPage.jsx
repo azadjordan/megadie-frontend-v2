@@ -6,6 +6,7 @@ import {
   FiCopy,
   FiEdit2,
   FiRefreshCw,
+  FiSend,
   FiTrash2,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
@@ -13,6 +14,8 @@ import { toast } from "react-toastify";
 import Pagination from "../../components/common/Pagination";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
+import { copyTextToClipboard } from "../../utils/clipboard";
+import { buildClientShareMessage } from "../../utils/quoteShare";
 
 import {
   useDeleteQuoteByAdminMutation,
@@ -184,30 +187,6 @@ function buildQuoteShareText(q) {
   return lines.join("\n");
 }
 
-async function copyTextToClipboard(text) {
-  if (navigator?.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.top = "0";
-  textarea.style.left = "0";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  const ok = document.execCommand("copy");
-  textarea.remove();
-
-  if (!ok) {
-    throw new Error("Copy failed.");
-  }
-}
-
 export default function AdminRequestsPage() {
   const [page, setPage] = useState(1);
 
@@ -223,6 +202,7 @@ export default function AdminRequestsPage() {
   const [deletingId, setDeletingId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [copyId, setCopyId] = useState(null);
+  const [shareId, setShareId] = useState(null);
 
   const rows = data?.data || [];
   const total = data?.total ?? rows.length;
@@ -298,6 +278,20 @@ export default function AdminRequestsPage() {
       toast.error("Failed to copy quote.");
     } finally {
       setCopyId(null);
+    }
+  }
+
+  async function onShare(q) {
+    try {
+      if (q.status !== "Quoted" || q.order) return;
+      setShareId(q._id);
+      const text = buildClientShareMessage(q);
+      await copyTextToClipboard(text);
+      toast.success("Client message copied.");
+    } catch (e) {
+      toast.error("Failed to copy client message.");
+    } finally {
+      setShareId(null);
     }
   }
 
@@ -387,6 +381,8 @@ export default function AdminRequestsPage() {
                   const hasOrder = Boolean(q.order);
                   const canPdf = q.status === "Quoted";
                   const canCopy = q.status === "Quoted";
+                  const isManualInvoiced = Boolean(q.manualInvoiceId);
+                  const canShare = q.status === "Quoted" && !hasOrder && !isManualInvoiced;
                   const isCancelled = q.status === "Cancelled";
 
                   const requestedItems = Array.isArray(q.requestedItems)
@@ -425,6 +421,7 @@ export default function AdminRequestsPage() {
                   const rowDeleting = deletingId === q._id;
                   const rowPdf = pdfId === q._id;
                   const rowCopy = copyId === q._id;
+                  const rowShare = shareId === q._id;
 
                   return (
                     <tr key={q._id} className="hover:bg-slate-50">
@@ -496,7 +493,27 @@ export default function AdminRequestsPage() {
 
                       {/* Actions */}
                       <td className="px-4 py-3 text-right">
-                        <div className="grid grid-cols-2 gap-2 justify-end">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            className={[
+                              "inline-flex items-center justify-center rounded-full px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+                              !canShare || rowShare
+                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+                            ].join(" ")}
+                            disabled={!canShare || rowShare}
+                            onClick={() => onShare(q)}
+                            title={
+                              canShare
+                                ? "Share with client"
+                                : isManualInvoiced
+                                ? "Manual invoice created — quote locked"
+                                : "Share is available for Quoted requests only"
+                            }
+                          >
+                            <FiSend className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             type="button"
                             className={[

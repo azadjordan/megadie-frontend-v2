@@ -81,7 +81,8 @@ export default function AccountRequestCard({
   const isQuoted = status === "Quoted";
   const isConfirmed = status === "Confirmed";
   const isCancelled = status === "Cancelled";
-  const isLocked = Boolean(quote?.order);
+  const manualInvoiceLocked = Boolean(quote?.manualInvoiceId);
+  const isLocked = Boolean(quote?.order) || manualInvoiceLocked;
   const isQtyEditLocked = Boolean(quote?.clientQtyEditLocked);
 
   const requestedItems = Array.isArray(quote.requestedItems)

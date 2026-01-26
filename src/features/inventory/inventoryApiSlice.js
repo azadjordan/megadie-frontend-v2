@@ -44,6 +44,26 @@ export const inventoryApiSlice = apiSlice.injectEndpoints({
             ]
           : [{ type: "OrderAllocation", id: "LIST" }],
     }),
+    getInventoryMovements: builder.query({
+      query: (params) => ({
+        url: "/inventory/movements",
+        params,
+      }),
+      transformResponse: (response) => ({
+        rows: response?.data ?? [],
+        pagination: response?.pagination ?? null,
+      }),
+      providesTags: (result) =>
+        result?.rows
+          ? [
+              ...result.rows.map((row) => ({
+                type: "InventoryMovement",
+                id: row.id,
+              })),
+              { type: "InventoryMovement", id: "LIST" },
+            ]
+          : [{ type: "InventoryMovement", id: "LIST" }],
+    }),
   }),
 });
 
@@ -51,4 +71,5 @@ export const {
   useGetInventoryProductsQuery,
   useLazyGetInventoryProductsQuery,
   useGetInventoryAllocationsQuery,
+  useGetInventoryMovementsQuery,
 } = inventoryApiSlice;

@@ -15,6 +15,14 @@ export default function SummaryPanel({
   onConvertToOrder,
   isCreatingOrder,
   convertDisabled,
+  showShareWithClient,
+  onShareWithClient,
+  shareDisabled,
+  showManualInvoice,
+  onCreateManualInvoice,
+  manualInvoiceDisabled,
+  manualInvoiceDisabledReason,
+  lockReason,
 }) {
   const rows = [
     {
@@ -74,21 +82,62 @@ export default function SummaryPanel({
           ))}
         </div>
 
-        {showConvertToOrder ? (
-          <div className="mt-4 border-t border-slate-200 pt-4">
-            <button
-              type="button"
-              onClick={onConvertToOrder}
-              disabled={convertDisabled}
-              className={[
-                "w-full rounded-xl px-5 py-3 text-sm font-semibold text-white transition",
-                !convertDisabled
-                  ? "bg-slate-900 hover:bg-slate-800"
-                  : "cursor-default bg-slate-300",
-              ].join(" ")}
-            >
-              {isCreatingOrder ? "Converting..." : "Convert to Order"}
-            </button>
+        {showConvertToOrder || showShareWithClient || showManualInvoice ? (
+          <div className="mt-4 border-t border-slate-200 pt-4 space-y-2">
+            {showConvertToOrder ? (
+              <button
+                type="button"
+                onClick={onConvertToOrder}
+                disabled={convertDisabled}
+                title={convertDisabled && lockReason ? lockReason : undefined}
+                className={[
+                  "w-full rounded-xl px-5 py-3 text-sm font-semibold text-white transition",
+                  !convertDisabled
+                    ? "bg-slate-900 hover:bg-slate-800"
+                    : "cursor-default bg-slate-300",
+                ].join(" ")}
+              >
+                {isCreatingOrder ? "Converting..." : "Convert to Order"}
+              </button>
+            ) : null}
+
+            {showShareWithClient ? (
+              <button
+                type="button"
+                onClick={onShareWithClient}
+                disabled={shareDisabled}
+                title={shareDisabled && lockReason ? lockReason : undefined}
+                className={[
+                  "w-full rounded-xl px-5 py-3 text-sm font-semibold transition",
+                  !shareDisabled
+                    ? "bg-violet-600 text-white hover:bg-violet-500"
+                    : "cursor-default bg-slate-200 text-slate-500",
+                ].join(" ")}
+              >
+                Share with Client
+              </button>
+            ) : null}
+
+            {showManualInvoice ? (
+              <button
+                type="button"
+                onClick={onCreateManualInvoice}
+                disabled={manualInvoiceDisabled}
+                title={
+                  manualInvoiceDisabled
+                    ? manualInvoiceDisabledReason || lockReason
+                    : undefined
+                }
+                className={[
+                  "w-full rounded-xl px-5 py-3 text-sm font-semibold transition",
+                  !manualInvoiceDisabled
+                    ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                    : "cursor-default bg-slate-200 text-slate-500",
+                ].join(" ")}
+              >
+                Create Manual Invoice
+              </button>
+            ) : null}
           </div>
         ) : null}
       </StepCard>

@@ -1,7 +1,7 @@
 import StepCard from "./StepCard";
 import ErrorMessage from "../../../components/common/ErrorMessage";
 
-function StatusChoiceButton({ disabled, tone, onClick, children, selected }) {
+function StatusChoiceButton({ disabled, tone, onClick, children, selected, title }) {
   const tones = {
     slate: {
       idle: "bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100",
@@ -38,6 +38,7 @@ function StatusChoiceButton({ disabled, tone, onClick, children, selected }) {
       disabled={disabled}
       onClick={onClick}
       aria-pressed={selected}
+      title={title}
       className={[
         "w-full rounded-xl px-4 py-3 text-sm font-semibold ring-1 ring-inset transition sm:py-3.5",
         appliedTone,
@@ -74,6 +75,7 @@ function StatusChoiceButton({ disabled, tone, onClick, children, selected }) {
 
 export default function StatusStep({
   quoteLocked,
+  lockReason,
   showAvailability,
   canSetQuoted,
   canSetConfirmed,
@@ -103,6 +105,7 @@ export default function StatusStep({
             disabled={
               quoteLocked || isBusy || currentStatus === "Processing"
             }
+            title={quoteLocked ? lockReason : undefined}
             tone="slate"
             selected={currentStatus === "Processing"}
             onClick={() => handleSelect("Processing")}
@@ -117,6 +120,7 @@ export default function StatusStep({
               !canSetQuoted ||
               currentStatus === "Quoted"
             }
+            title={quoteLocked ? lockReason : undefined}
             tone="violet"
             selected={currentStatus === "Quoted"}
             onClick={() => handleSelect("Quoted")}
@@ -131,6 +135,7 @@ export default function StatusStep({
               !canSetConfirmed ||
               currentStatus === "Confirmed"
             }
+            title={quoteLocked ? lockReason : undefined}
             tone="emerald"
             selected={currentStatus === "Confirmed"}
             onClick={() => handleSelect("Confirmed")}
@@ -142,6 +147,7 @@ export default function StatusStep({
             disabled={
               quoteLocked || isBusy || currentStatus === "Cancelled"
             }
+            title={quoteLocked ? lockReason : undefined}
             tone="rose"
             selected={currentStatus === "Cancelled"}
             onClick={() => handleSelect("Cancelled")}

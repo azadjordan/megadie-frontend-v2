@@ -4,6 +4,7 @@ const TABS = [
   { to: "/admin/inventory/slots", label: "By Slot" },
   { to: "/admin/inventory/products", label: "By Product" },
   { to: "/admin/inventory/allocations", label: "Allocation Ledger" },
+  { to: "/admin/inventory/movements", label: "Movements" },
 ];
 
 export default function AdminInventoryTabs() {

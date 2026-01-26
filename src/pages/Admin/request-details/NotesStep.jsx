@@ -8,6 +8,7 @@ export default function NotesStep({
   adminToClientNote,
   setAdminToClientNote,
   quoteLocked,
+  lockReason,
   canUpdateNotes,
   onUpdateNotes,
   isBusy,
@@ -39,6 +40,7 @@ export default function NotesStep({
           <textarea
             value={adminToAdminNote}
             disabled={quoteLocked}
+            title={quoteLocked ? lockReason : undefined}
             onChange={(e) => setAdminToAdminNote(e.target.value)}
             rows={3}
             placeholder="Internal notes for your team..."
@@ -56,6 +58,7 @@ export default function NotesStep({
           <textarea
             value={adminToClientNote}
             disabled={quoteLocked}
+            title={quoteLocked ? lockReason : undefined}
             onChange={(e) => setAdminToClientNote(e.target.value)}
             rows={3}
             placeholder="Message to the client..."
@@ -78,6 +81,7 @@ export default function NotesStep({
           type="button"
           onClick={onUpdateNotes}
           disabled={!canUpdateNotes || isBusy}
+          title={quoteLocked ? lockReason : undefined}
           className={[
             "rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition",
             canUpdateNotes && !isBusy

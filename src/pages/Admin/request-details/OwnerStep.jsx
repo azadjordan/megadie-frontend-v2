@@ -14,6 +14,7 @@ export default function OwnerStep({
   isUsersError,
   usersError,
   quoteLocked,
+  lockReason,
   canUpdateOwner,
   onUpdateOwner,
   isBusy,
@@ -41,6 +42,7 @@ export default function OwnerStep({
             setShowOwnerEditor(true);
           }}
           disabled={quoteLocked}
+          title={quoteLocked ? lockReason : undefined}
           className={[
             "rounded-xl px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition",
             quoteLocked
@@ -78,6 +80,7 @@ export default function OwnerStep({
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 disabled={quoteLocked}
+                title={quoteLocked ? lockReason : undefined}
                 className={[
                   "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20",
                   quoteLocked ? "cursor-not-allowed bg-slate-50 text-slate-400" : "",
@@ -106,6 +109,7 @@ export default function OwnerStep({
           type="button"
           onClick={onUpdateOwner}
           disabled={!canUpdateOwner || isBusy}
+          title={quoteLocked ? lockReason : undefined}
           className={[
             "rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition",
             canUpdateOwner && !isBusy

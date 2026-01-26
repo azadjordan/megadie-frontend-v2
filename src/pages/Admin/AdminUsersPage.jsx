@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FiFileText, FiRefreshCw, FiSettings } from "react-icons/fi";
-import { toast } from "react-toastify";
+import { FiRefreshCw, FiSettings } from "react-icons/fi";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -9,13 +8,6 @@ import Pagination from "../../components/common/Pagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
-import { useLazyGetStatementOfAccountPdfQuery } from "../../features/invoices/invoicesApiSlice";
-
-function friendlyApiError(err) {
-  const msg =
-    err?.data?.message || err?.error || err?.message || "Something went wrong.";
-  return String(msg);
-}
 
 export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
@@ -23,11 +15,6 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState("all");
   const [approvalStatus, setApprovalStatus] = useState("all");
   const [sort, setSort] = useState("newest");
-  const [soaUserId, setSoaUserId] = useState(null);
-
-  const [getStatementOfAccountPdf, { isFetching: isSoaLoading }] =
-    useLazyGetStatementOfAccountPdfQuery();
-
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const isDebouncing = trimmedSearch !== debouncedSearch;
@@ -63,38 +50,6 @@ export default function AdminUsersPage() {
     };
   }, [data]);
 
-  const handleSoa = async (user) => {
-    const userId = user?._id || user?.id;
-    if (!userId) return;
-    try {
-      setSoaUserId(userId);
-      const blob = await getStatementOfAccountPdf(userId).unwrap();
-      const safeName = String(user?.name || userId)
-        .trim()
-        .replace(/[^A-Za-z0-9_-]+/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-+|-+$/g, "");
-      const dateTag = new Date().toISOString().slice(0, 10);
-      const fileName = `soa-${safeName || userId}-${dateTag}.pdf`;
-      const url = window.URL.createObjectURL(blob);
-      const newTab = window.open(url, "_blank", "noopener,noreferrer");
-
-      if (!newTab) {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-      }
-
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-    } catch (err) {
-      toast.error(friendlyApiError(err));
-    } finally {
-      setSoaUserId(null);
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -310,32 +265,14 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-700">{roleLabel}</td>
                       <td className="px-4 py-3 text-center">
-                        <div className="inline-flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleSoa(u)}
-                            disabled={isSoaLoading && soaUserId === userId}
-                            className={[
-                              "inline-flex items-center justify-center rounded-xl px-2.5 py-2 text-xs font-semibold uppercase tracking-wider ring-1 ring-inset transition",
-                              isSoaLoading && soaUserId === userId
-                                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
-                                : "bg-violet-600 text-white ring-violet-600 hover:bg-violet-500",
-                            ].join(" ")}
-                            title="Generate SOA"
-                            aria-label="Generate SOA"
-                          >
-                            SOA
-                          </button>
-
-                          <Link
-                            to={`/admin/users/${userId}/edit`}
-                            className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
-                            title="Edit user"
-                            aria-label="Edit user"
-                          >
-                            <FiSettings className="h-3.5 w-3.5" />
-                          </Link>
-                        </div>
+                        <Link
+                          to={`/admin/users/${userId}/edit`}
+                          className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
+                          title="Edit user"
+                          aria-label="Edit user"
+                        >
+                          <FiSettings className="h-3.5 w-3.5" />
+                        </Link>
                       </td>
                     </tr>
                   );

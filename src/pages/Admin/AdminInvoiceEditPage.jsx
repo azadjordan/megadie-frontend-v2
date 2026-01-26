@@ -225,6 +225,12 @@ export default function AdminInvoiceEditPage() {
     };
   }, [invoice]);
 
+  const source = invoice?.source || "Order";
+  const isManual = source === "Manual" || !invoice?.order;
+  const manualItems = Array.isArray(invoice?.invoiceItems)
+    ? invoice.invoiceItems
+    : [];
+
   const overdue = isOverdue(invoice);
   const canAddPayment =
     invoice?.status !== "Cancelled" && invoice?.paymentStatus !== "Paid";
@@ -269,6 +275,9 @@ export default function AdminInvoiceEditPage() {
     try {
       const res = await deleteInvoiceByAdmin(invoice._id || invoice.id).unwrap();
       toast.success(res?.message || detail);
+      if (res?.quoteUnlinked) {
+        toast.info("Related quote unlocked and can be edited now.");
+      }
       navigate("/admin/invoices");
     } catch (err) {
       toast.error(friendlyApiError(err));
@@ -560,6 +569,64 @@ export default function AdminInvoiceEditPage() {
             ) : null}
           </div>
 
+          {isManual ? (
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <div className="text-sm font-semibold text-slate-900">
+                  Manual items
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  These items are stored directly on the invoice.
+                </div>
+              </div>
+              {manualItems.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-slate-600">
+                  No manual items recorded.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-12 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
+                    <div className="col-span-7">Description</div>
+                    <div className="col-span-2 text-right">Qty</div>
+                    <div className="col-span-3 text-right">Line total</div>
+                  </div>
+                  {manualItems.map((item, idx) => (
+                    <div
+                      key={`${invoice._id}-manual-${idx}`}
+                      className="grid grid-cols-12 items-start px-4 py-3 text-sm text-slate-800 border-t border-slate-200"
+                    >
+                      <div className="col-span-7">
+                        <div className="font-semibold text-slate-900">
+                          {item.description || "Item"}
+                        </div>
+                        {typeof item.unitPriceMinor === "number" ? (
+                          <div className="text-xs text-slate-500">
+                            Unit price:{" "}
+                            {moneyMinor(
+                              item.unitPriceMinor,
+                              meta?.currency,
+                              meta?.factor
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="col-span-2 text-right tabular-nums">
+                        {Number(item.qty) || 0}
+                      </div>
+                      <div className="col-span-3 text-right tabular-nums font-semibold text-slate-900">
+                        {moneyMinor(
+                          item.lineTotalMinor ?? 0,
+                          meta?.currency,
+                          meta?.factor
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : null}
+
           <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden">
             <div className="border-b border-slate-200 px-4 py-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -659,13 +726,23 @@ export default function AdminInvoiceEditPage() {
           </div>
 
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-            <div className="text-xs font-semibold text-slate-600">Order</div>
-            <div className="mt-1 text-sm font-semibold text-slate-900">
-              {invoice.order?.orderNumber || invoice.order || ""}
+            <div className="text-xs font-semibold text-slate-600">
+              {isManual ? "Source" : "Order"}
             </div>
-            <div className="text-xs text-slate-500">
-              Status: {invoice.order?.status || "Unknown"}
-            </div>
+            {isManual ? (
+              <div className="mt-1 text-sm font-semibold text-slate-900">
+                Manual invoice
+              </div>
+            ) : (
+              <>
+                <div className="mt-1 text-sm font-semibold text-slate-900">
+                  {invoice.order?.orderNumber || invoice.order || ""}
+                </div>
+                <div className="text-xs text-slate-500">
+                  Status: {invoice.order?.status || "Unknown"}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
