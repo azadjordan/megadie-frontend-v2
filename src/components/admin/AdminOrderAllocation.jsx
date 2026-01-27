@@ -290,6 +290,11 @@ function SlotItemsPanel({
       return;
     }
 
+    const confirmed = window.confirm(
+      "Reserve all remaining qty across available slots?"
+    );
+    if (!confirmed) return;
+
     setIsBulkPicking(true);
     const touchedSlots = [];
     let remainingToFill = remainingQty;
