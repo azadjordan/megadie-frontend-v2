@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import StepCard from "../request-details/StepCard";
 import { StatusBadge, StockBadge } from "./Badges";
-import ErrorMessage from "../../../components/common/ErrorMessage";
 
 export default function SummaryPanel({
   orderNumber,
@@ -18,41 +17,12 @@ export default function SummaryPanel({
   total,
   status,
   formatMoney,
-  canCreateInvoice,
-  canShip,
-  canDeliver,
-  canFinalize,
-  createInvoiceReason = "",
-  shippingReason = "",
-  deliverReason = "",
-  finalizeTooltip = "",
-  onCreateInvoice,
-  onShip,
-  onFinalize,
-  onDeliver,
-  onDelete,
-  isCreatingInvoice,
-  isUpdatingStatus,
-  isFinalizing,
-  isDelivering,
-  isDeleting,
-  shippingError,
-  finalizeError,
-  canDelete,
-  deleteReason = "",
   isStockFinalized = false,
 }) {
   const money =
     typeof formatMoney === "function" ? formatMoney : (value) => String(value ?? 0);
 
   const clientLabel = customerName || "-";
-  const createInvoiceTooltip = !canCreateInvoice ? createInvoiceReason : "";
-  const shippingTooltip = !canShip ? shippingReason : "";
-  const deliverTooltip = !canDeliver ? deliverReason : "";
-  const finalizeTitle =
-    !canFinalize && finalizeTooltip ? finalizeTooltip : "";
-  const deleteTooltip = !canDelete ? deleteReason : "";
-
   const rows = [
     {
       label: "Client",
@@ -117,7 +87,7 @@ export default function SummaryPanel({
         <StatusBadge status={status} />
         <StockBadge isFinalized={isStockFinalized} />
       </div>
-      <StepCard title="Summary" showNumber={false}>
+      <StepCard title="Order Summary" showNumber={false}>
         <div className="-mx-4 -mt-4 divide-y divide-slate-200 text-sm">
           {rows.map((row) => (
             <div
@@ -146,91 +116,6 @@ export default function SummaryPanel({
           ))}
         </div>
 
-        <div className="mt-4 space-y-2">
-          <button
-            type="button"
-            onClick={onCreateInvoice}
-            disabled={!canCreateInvoice || isCreatingInvoice}
-            title={createInvoiceTooltip || undefined}
-            className={[
-              "w-full rounded-xl px-3 py-2 text-xs font-semibold text-white",
-              !canCreateInvoice || isCreatingInvoice
-                ? "cursor-not-allowed bg-slate-300"
-                : "bg-slate-900 hover:bg-slate-800",
-            ].join(" ")}
-          >
-            {isCreatingInvoice ? "Creating..." : "Create Invoice"}
-          </button>
-
-          <button
-            type="button"
-            onClick={onShip}
-            disabled={!canShip || isUpdatingStatus}
-            title={shippingTooltip || undefined}
-            className={[
-              "w-full rounded-xl px-3 py-2 text-xs font-semibold text-white",
-              !canShip || isUpdatingStatus
-                ? "cursor-not-allowed bg-blue-200 text-blue-600"
-                : "bg-blue-600 hover:bg-blue-700",
-            ].join(" ")}
-          >
-            {isUpdatingStatus ? "Updating..." : "Mark Shipping"}
-          </button>
-          {shippingError ? (
-            <div className="text-[11px] text-rose-600">{shippingError}</div>
-          ) : null}
-
-          <div title={finalizeTitle || undefined} className="w-full">
-            <button
-              type="button"
-              onClick={onFinalize}
-              disabled={!canFinalize || isFinalizing}
-              className={[
-                "w-full rounded-xl px-3 py-2 text-xs font-semibold text-white",
-                !canFinalize || isFinalizing
-                  ? "cursor-not-allowed bg-slate-300"
-                  : "bg-slate-900 hover:bg-slate-800",
-              ].join(" ")}
-            >
-              {isFinalizing ? "Finalizing..." : "Finalize Stock"}
-            </button>
-          </div>
-          {finalizeError ? (
-            <div className="mt-1">
-              <ErrorMessage error={finalizeError} />
-            </div>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={onDeliver}
-            disabled={!canDeliver || isDelivering}
-            title={deliverTooltip || undefined}
-            className={[
-              "w-full rounded-xl px-3 py-2 text-xs font-semibold text-white",
-              !canDeliver || isDelivering
-                ? "cursor-not-allowed bg-emerald-300"
-                : "bg-emerald-600 hover:bg-emerald-700",
-            ].join(" ")}
-          >
-            {isDelivering ? "Delivering..." : "Mark Delivered"}
-          </button>
-
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={!canDelete || isDeleting}
-            title={deleteTooltip || undefined}
-            className={[
-              "w-full rounded-xl px-3 py-2 text-xs font-semibold text-white",
-              !canDelete || isDeleting
-                ? "cursor-not-allowed bg-rose-200 text-rose-50"
-                : "bg-rose-600 hover:bg-rose-700",
-            ].join(" ")}
-          >
-            {isDeleting ? "Deleting..." : "Delete Order"}
-          </button>
-        </div>
       </StepCard>
     </div>
   );

@@ -95,8 +95,8 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-[calc(100vh-var(--app-header-h,64px))] bg-slate-50">
-      <div className="mx-auto w-[90%] max-w-screen-2xl px-4 py-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_1fr]">
+      <div className="mx-auto w-full max-w-[1800px] px-0 py-4 md:px-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
           {/* Desktop sidebar */}
           <aside className="hidden md:block">
             <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">

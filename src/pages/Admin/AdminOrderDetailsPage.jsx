@@ -395,9 +395,13 @@ export default function AdminOrderDetailsPage() {
   const [shippingError, setShippingError] = useState("");
   const [deliverFormError, setDeliverFormError] = useState("");
   const [saved, setSaved] = useState(false);
+  const resolveTab = (value) =>
+    ["general", "invoice", "stock", "finalize"].includes(value)
+      ? value
+      : "general";
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(location.search);
-    return params.get("tab") === "stock" ? "stock" : "general";
+    return resolveTab(params.get("tab"));
   });
   const [createTarget, setCreateTarget] = useState(null);
   const [isDeliverModalOpen, setIsDeliverModalOpen] = useState(false);
@@ -411,8 +415,7 @@ export default function AdminOrderDetailsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const nextTab = params.get("tab") === "stock" ? "stock" : "general";
-    setActiveTab(nextTab);
+    setActiveTab(resolveTab(params.get("tab")));
   }, [id, location.search]);
 
   const [updateOrderByAdmin, { isLoading: isSaving, error: saveError }] =
@@ -658,14 +661,41 @@ export default function AdminOrderDetailsPage() {
     }
   };
 
+  const invoiceShipLockReason =
+    !canCreateInvoice && createInvoiceReason
+      ? createInvoiceReason
+      : !canShip && shippingLockReason
+      ? shippingLockReason
+      : "";
+  const finalizeStepLockReason =
+    !canFinalize && finalizeTooltip
+      ? finalizeTooltip
+      : !canDeliver && deliverLockReason
+      ? deliverLockReason
+      : "";
+
   const tabs = [
     { id: "general", label: "General", number: 1 },
     {
+      id: "invoice",
+      label: "Invoice & Ship",
+      number: 2,
+      locked: !canCreateInvoice && !canShip,
+      lockReason: invoiceShipLockReason,
+    },
+    {
       id: "stock",
       label: "Allocate Stock",
-      number: 2,
+      number: 3,
       locked: !canAllocate,
       lockReason: allocationLockReason,
+    },
+    {
+      id: "finalize",
+      label: "Finalize",
+      number: 4,
+      locked: !canFinalize && !canDeliver,
+      lockReason: finalizeStepLockReason,
     },
   ];
 
@@ -677,7 +707,7 @@ export default function AdminOrderDetailsPage() {
             <StepCard
               n={1}
               title="General"
-              subtitle="Edit notes and charges. Workflow actions are in the summary panel."
+              subtitle="Edit notes and charges."
             >
               {editNotice ? (
                 <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
@@ -829,6 +859,29 @@ export default function AdminOrderDetailsPage() {
                   <ErrorMessage error={saveError} />
                 </div>
               ) : null}
+
+              <div className="mt-6 border-t border-slate-200 pt-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Danger zone
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  Delete is available only for cancelled orders without stock finalized.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeleteOrder}
+                  disabled={!canDeleteOrder || isDeleting}
+                  title={deleteReason || undefined}
+                  className={[
+                    "mt-3 inline-flex items-center rounded-xl px-4 py-2 text-xs font-semibold text-white",
+                    !canDeleteOrder || isDeleting
+                      ? "cursor-not-allowed bg-rose-200 text-rose-50"
+                      : "bg-rose-600 hover:bg-rose-700",
+                  ].join(" ")}
+                >
+                  {isDeleting ? "Deleting..." : "Delete Order"}
+                </button>
+              </div>
             </StepCard>
 
             <AdminOrderAllocation
@@ -841,6 +894,52 @@ export default function AdminOrderDetailsPage() {
             />
 
           </div>
+        );
+      case "invoice":
+        return (
+          <StepCard
+            n={2}
+            title="Invoice & Ship"
+            subtitle="Create the invoice and move the order to Shipping."
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openCreateModal}
+                disabled={!canCreateInvoice || isCreating}
+                title={createInvoiceReason || undefined}
+                className={[
+                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
+                  !canCreateInvoice || isCreating
+                    ? "cursor-not-allowed bg-slate-300"
+                    : "bg-slate-900 hover:bg-slate-800",
+                ].join(" ")}
+              >
+                {isCreating ? "Creating..." : "Create Invoice"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShip}
+                disabled={!canShip || isUpdatingStatus}
+                title={shippingLockReason || undefined}
+                className={[
+                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
+                  !canShip || isUpdatingStatus
+                    ? "cursor-not-allowed bg-blue-200 text-blue-600"
+                    : "bg-blue-600 hover:bg-blue-700",
+                ].join(" ")}
+              >
+                {isUpdatingStatus ? "Updating..." : "Mark Shipping"}
+              </button>
+            </div>
+
+            {shippingError ? (
+              <div className="mt-3 text-[11px] text-rose-600">
+                {shippingError}
+              </div>
+            ) : null}
+          </StepCard>
         );
       case "stock":
         return (
@@ -855,6 +954,52 @@ export default function AdminOrderDetailsPage() {
             allocationLockReason={allocationLockReason}
             mode="stock"
           />
+        );
+      case "finalize":
+        return (
+          <StepCard
+            n={4}
+            title="Finalize"
+            subtitle="Finalize stock allocations and mark the order delivered."
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleFinalize}
+                disabled={!canFinalize || isFinalizing}
+                title={finalizeTooltip || undefined}
+                className={[
+                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
+                  !canFinalize || isFinalizing
+                    ? "cursor-not-allowed bg-slate-300"
+                    : "bg-slate-900 hover:bg-slate-800",
+                ].join(" ")}
+              >
+                {isFinalizing ? "Finalizing..." : "Finalize Stock"}
+              </button>
+
+              <button
+                type="button"
+                onClick={openDeliverModal}
+                disabled={!canDeliver || isDelivering}
+                title={deliverLockReason || undefined}
+                className={[
+                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
+                  !canDeliver || isDelivering
+                    ? "cursor-not-allowed bg-emerald-300"
+                    : "bg-emerald-600 hover:bg-emerald-700",
+                ].join(" ")}
+              >
+                {isDelivering ? "Delivering..." : "Mark Delivered"}
+              </button>
+            </div>
+
+            {finalizeError ? (
+              <div className="mt-3">
+                <ErrorMessage error={finalizeError} />
+              </div>
+            ) : null}
+          </StepCard>
         );
       default:
         return null;
@@ -890,8 +1035,75 @@ export default function AdminOrderDetailsPage() {
     );
   }
 
+  const tabsNode = (
+    <div className="hidden rounded-2xl bg-white p-3 ring-1 ring-slate-200 md:block">
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const isLocked = Boolean(tab.locked);
+          const numberClass = isActive
+            ? isLocked
+              ? "bg-amber-100 text-amber-700"
+              : "bg-white/20 text-white"
+            : isLocked
+            ? "bg-slate-100 text-slate-400"
+            : "bg-slate-100 text-slate-700";
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-pressed={isActive}
+              title={isLocked ? tab.lockReason : undefined}
+              className={[
+                "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                isActive
+                  ? isLocked
+                    ? "border-amber-300 bg-amber-50 text-amber-800"
+                    : "border-slate-900 bg-slate-900 text-white shadow-sm"
+                  : isLocked
+                  ? "border-slate-200 bg-slate-50 text-slate-400"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "grid h-5 w-5 place-items-center rounded-md text-[11px] font-semibold",
+                  numberClass,
+                ].join(" ")}
+              >
+                {tab.number}
+              </span>
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const summaryPanel = (
+    <OrderSummaryPanel
+      orderNumber={order.orderNumber || orderId}
+      invoiceId={invoiceId}
+      invoiceNumber={invoiceNumber}
+      quoteId={quoteId}
+      quoteNumber={quoteNumber}
+      customerName={user?.name || ""}
+      itemsCount={itemsCount}
+      totalQty={totalQty}
+      itemsTotal={itemsTotal}
+      deliveryCharge={delivery}
+      extraFee={extra}
+      total={total}
+      status={orderStatus}
+      formatMoney={money}
+      isStockFinalized={isStockFinalized}
+    />
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24 md:pb-0">
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <button
           type="button"
@@ -958,96 +1170,50 @@ export default function AdminOrderDetailsPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
         <div className="space-y-4">
-          <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-            <div className="flex flex-wrap gap-2">
-              {tabs.map((tab) => {
-                const isActive = activeTab === tab.id;
-                const isLocked = Boolean(tab.locked);
-                const numberClass = isActive
-                  ? isLocked
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-white/20 text-white"
-                  : isLocked
-                  ? "bg-slate-100 text-slate-400"
-                  : "bg-slate-100 text-slate-700";
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    aria-pressed={isActive}
-                    title={isLocked ? tab.lockReason : undefined}
-                    className={[
-                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                      isActive
-                        ? isLocked
-                          ? "border-amber-300 bg-amber-50 text-amber-800"
-                          : "border-slate-900 bg-slate-900 text-white shadow-sm"
-                        : isLocked
-                        ? "border-slate-200 bg-slate-50 text-slate-400"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-                    ].join(" ")}
-                  >
-                    <span
-                      className={[
-                        "grid h-5 w-5 place-items-center rounded-md text-[11px] font-semibold",
-                        numberClass,
-                      ].join(" ")}
-                    >
-                      {tab.number}
-                    </span>
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
+          {tabsNode}
           {renderActiveTab()}
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <OrderSummaryPanel
-            orderNumber={order.orderNumber || orderId}
-            invoiceId={invoiceId}
-            invoiceNumber={invoiceNumber}
-            quoteId={quoteId}
-            quoteNumber={quoteNumber}
-            customerName={user?.name || ""}
-            itemsCount={itemsCount}
-            totalQty={totalQty}
-            itemsTotal={itemsTotal}
-            deliveryCharge={delivery}
-            extraFee={extra}
-            total={total}
-            status={orderStatus}
-            formatMoney={money}
-            canCreateInvoice={canCreateInvoice}
-            canShip={canShip}
-            canDeliver={canDeliver}
-            canFinalize={canFinalize}
-            canDelete={canDeleteOrder}
-            createInvoiceReason={createInvoiceReason}
-            shippingReason={shippingLockReason}
-            deliverReason={deliverLockReason}
-            deleteReason={deleteReason}
-            isStockFinalized={isStockFinalized}
-            onCreateInvoice={openCreateModal}
-            onShip={handleShip}
-            onFinalize={handleFinalize}
-            onDeliver={openDeliverModal}
-            onDelete={handleDeleteOrder}
-            isCreatingInvoice={isCreating}
-            isUpdatingStatus={isUpdatingStatus}
-            isFinalizing={isFinalizing}
-            isDelivering={isDelivering}
-            isDeleting={isDeleting}
-            shippingError={shippingError}
-            finalizeTooltip={finalizeTooltip}
-            finalizeError={finalizeError}
-          />
+          {summaryPanel}
         </aside>
       </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur md:hidden">
+        <div className="grid grid-cols-4 gap-2">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const numberClass = isActive
+              ? "bg-white/20 text-white"
+              : "bg-slate-100 text-slate-700";
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                aria-pressed={isActive}
+                title={tab.locked ? tab.lockReason : undefined}
+                className={[
+                  "flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[10px] font-semibold transition",
+                  isActive
+                    ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "grid h-5 w-5 place-items-center rounded-md text-[10px] font-semibold",
+                    numberClass,
+                  ].join(" ")}
+                >
+                  {tab.number}
+                </span>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       <CreateInvoiceModal
         open={Boolean(createTarget)}
