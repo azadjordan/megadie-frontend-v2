@@ -699,7 +699,7 @@ export default function AdminRequestDetailsPage() {
     { id: "quantities", label: "Quantities", number: 2 },
     { id: "pricing", label: "Pricing", number: 3 },
     { id: "notes", label: "Notes", number: 4 },
-    { id: "final", label: "Final Decision", number: 5 },
+    { id: "final", label: "Decision", number: 5 },
   ];
 
   const renderActiveTab = () => {
