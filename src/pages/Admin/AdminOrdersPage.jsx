@@ -240,72 +240,72 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="space-y-3 md:hidden">
-            {rows.map((o) => {
-              const row = getOrderRowMeta(o);
-              return (
-                <div
-                  key={o._id}
-                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900">
-                        {row.orderNumber}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Created: {formatDateTime(o.createdAt)}
-                      </div>
-                    </div>
-                    <StatusBadge status={o.status} size="compact" />
-                  </div>
-
-                  <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
-                    <div className="text-xs font-semibold text-slate-900">
-                      {o.user?.name || "-"}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {o.user?.email || ""}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Stock
-                      </div>
-                      <div className="mt-1">
-                        <StockBadge finalized={row.isFinalized} size="compact" />
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Total
-                      </div>
-                      <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {formatMoney(o.totalPrice)}
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        {row.itemCountLabel}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <Link
-                      to={`/admin/orders/${o._id}`}
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
-                      aria-label="Open order"
-                      title="Open order"
-                    >
-                      <FiSettings className="h-3.5 w-3.5" />
-                      Open order
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+<div className="grid grid-cols-2 gap-3 md:hidden">
+  {rows.map((o) => {
+    const row = getOrderRowMeta(o);
+    return (
+      <div
+        key={o._id}
+        className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-900">
+              {row.orderNumber}
+            </div>
+            <div className="text-[10px] text-slate-500">
+              {formatDateTime(o.createdAt)}
+            </div>
           </div>
+          <StatusBadge status={o.status} size="compact" />
+        </div>
+
+        <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5">
+          <div className="truncate text-[11px] font-semibold text-slate-900">
+            {o.user?.name || "-"}
+          </div>
+          <div className="truncate text-[10px] text-slate-500">
+            {o.user?.email || ""}
+          </div>
+        </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
+          <div>
+            <div className="uppercase font-semibold tracking-wide text-slate-400">
+              Stock
+            </div>
+            <StockBadge finalized={row.isFinalized} size="compact" />
+          </div>
+
+          <div className="text-right">
+            <div className="uppercase font-semibold tracking-wide text-slate-400">
+              Total
+            </div>
+            <div className="font-semibold text-slate-900">
+              {formatMoney(o.totalPrice)}
+            </div>
+            <div className="text-[10px] text-slate-500">
+              {row.itemCountLabel}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <Link
+            to={`/admin/orders/${o._id}`}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+            aria-label="Open order"
+            title="Open order"
+          >
+            <FiSettings className="h-3.5 w-3.5" />
+            Open
+          </Link>
+        </div>
+      </div>
+    );
+  })}
+</div>
+
 
           <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
             <div className="overflow-x-auto bg-white">

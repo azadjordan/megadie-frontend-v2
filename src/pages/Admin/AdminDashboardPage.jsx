@@ -26,8 +26,8 @@ const getRowsFromData = (data) =>
   Array.isArray(data?.data)
     ? data.data
     : Array.isArray(data?.items)
-    ? data.items
-    : [];
+      ? data.items
+      : [];
 
 const buildStatValue = (loading, error, value) => {
   if (loading) return "...";
@@ -88,7 +88,7 @@ const isInvoiceOverdue = (inv) => {
       : Math.max(
           (typeof inv.amountMinor === "number" ? inv.amountMinor : 0) -
             (typeof inv.paidTotalMinor === "number" ? inv.paidTotalMinor : 0),
-          0
+          0,
         );
   return balance > 0 && due < Date.now();
 };
@@ -113,8 +113,7 @@ const PAYMENT_STATUS_STYLES = {
   Unpaid: "bg-rose-50 text-rose-800 ring-rose-200",
 };
 
-const OVERDUE_STATUS_STYLE =
-  "bg-rose-50 text-rose-800 ring-rose-200";
+const OVERDUE_STATUS_STYLE = "bg-rose-50 text-rose-800 ring-rose-200";
 
 function StatCard({ title, value, hint, to }) {
   const content = (
@@ -244,7 +243,8 @@ export default function AdminDashboardPage() {
   const ordersInProgressCount =
     (getTotalFromData(processingOrdersData) || 0) +
     (getTotalFromData(shippingOrdersData) || 0);
-  const ordersInProgressLoading = processingOrdersLoading || shippingOrdersLoading;
+  const ordersInProgressLoading =
+    processingOrdersLoading || shippingOrdersLoading;
   const ordersInProgressError = processingOrdersError || shippingOrdersError;
 
   const invoiceSummary = invoiceSummaryData || {};
@@ -257,15 +257,15 @@ export default function AdminDashboardPage() {
   const unpaidInvoicesHint = invoiceSummaryLoading
     ? "Loading..."
     : invoiceSummaryError
-    ? "Unavailable"
-    : `${formatCount(unpaidInvoicesCount)} invoice${
-        unpaidInvoicesCount === 1 ? "" : "s"
-      }`;
+      ? "Unavailable"
+      : `${formatCount(unpaidInvoicesCount)} invoice${
+          unpaidInvoicesCount === 1 ? "" : "s"
+        }`;
   const overdueInvoicesHint = invoiceSummaryLoading
     ? "Loading..."
     : invoiceSummaryError
-    ? "Unavailable"
-    : `${formatCount(overdueInvoicesCount)} overdue`;
+      ? "Unavailable"
+      : `${formatCount(overdueInvoicesCount)} overdue`;
   const paymentsCount = getTotalFromData(paymentsData) || 0;
   const usersCount = getTotalFromData(usersData) || 0;
 
@@ -291,7 +291,7 @@ export default function AdminDashboardPage() {
           value={buildStatValue(
             openRequestsLoading,
             openRequestsError,
-            openRequestsCount
+            openRequestsCount,
           )}
           hint="Processing + quoted"
           to="/admin/requests"
@@ -301,7 +301,7 @@ export default function AdminDashboardPage() {
           value={buildStatValue(
             ordersInProgressLoading,
             ordersInProgressError,
-            ordersInProgressCount
+            ordersInProgressCount,
           )}
           hint="Processing + shipping"
           to="/admin/orders"
@@ -314,7 +314,7 @@ export default function AdminDashboardPage() {
               invoiceSummaryError,
               unpaidBalanceMinor,
               invoiceSummaryCurrency,
-              invoiceSummaryFactor
+              invoiceSummaryFactor,
             )}
             hint={unpaidInvoicesHint}
             to="/admin/invoices"
@@ -328,7 +328,7 @@ export default function AdminDashboardPage() {
               invoiceSummaryError,
               overdueBalanceMinor,
               invoiceSummaryCurrency,
-              invoiceSummaryFactor
+              invoiceSummaryFactor,
             )}
             hint={overdueInvoicesHint}
             to="/admin/invoices"
@@ -348,7 +348,7 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <ListCard title="Recent requests" to="/admin/requests">
           {recentQuotesLoading ? (
             <div className="text-xs text-slate-500">Loading requests...</div>
@@ -467,7 +467,8 @@ export default function AdminDashboardPage() {
                           {invoiceNumber}
                         </div>
                         <div className="text-xs text-slate-500">
-                          {userName} - {formatMoneyMinor(inv?.amountMinor, currency, factor)}
+                          {userName} -{" "}
+                          {formatMoneyMinor(inv?.amountMinor, currency, factor)}
                         </div>
                       </div>
                       {showCancelled ? (
@@ -529,7 +530,11 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
                       <span className="text-xs font-semibold text-slate-700">
-                        {formatMoneyMinor(payment?.amountMinor, currency, factor)}
+                        {formatMoneyMinor(
+                          payment?.amountMinor,
+                          currency,
+                          factor,
+                        )}
                       </span>
                     </Link>
                   </li>

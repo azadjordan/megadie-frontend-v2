@@ -25,7 +25,14 @@ import { apiSlice } from "../../app/apiSlice";
 import { logout as logoutAction } from "../../features/auth/authSlice";
 import { useLogoutMutation } from "../../features/auth/usersApiSlice";
 
-function NavItem({ to, icon: Icon, label, onClick, end = false, className = "" }) {
+function NavItem({
+  to,
+  icon: Icon,
+  label,
+  onClick,
+  end = false,
+  className = "",
+}) {
   return (
     <NavLink
       to={to}
@@ -90,7 +97,7 @@ export default function AdminLayout() {
       { to: "/admin/price-rules", label: "Pricing Rules", icon: FiTag },
       { to: "/admin/filter-configs", label: "Filter Configs", icon: FiFilter },
     ],
-    []
+    [],
   );
 
   return (
@@ -111,7 +118,6 @@ export default function AdminLayout() {
                     onClick={() => navigate("/")}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-violet-200/40 transition hover:bg-violet-700"
                   >
-                    
                     Go To Site
                   </button>
                   <button
@@ -174,7 +180,11 @@ export default function AdminLayout() {
         className="fixed right-4 top-4 z-[90] inline-flex items-center justify-center rounded-full bg-slate-900 p-3 text-white shadow-lg shadow-slate-900/30 md:hidden"
         aria-label="Toggle admin navigation"
       >
-        {mobileOpen ? <FiX className="h-5 w-5" /> : <FiMenu className="h-5 w-5" />}
+        {mobileOpen ? (
+          <FiX className="h-5 w-5" />
+        ) : (
+          <FiMenu className="h-5 w-5" />
+        )}
       </button>
 
       {/* Mobile drawer */}
@@ -184,7 +194,7 @@ export default function AdminLayout() {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute right-4 top-16 w-[85%] max-w-[320px] rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-200">
+          <div className="absolute right-4 top-16 w-[85%] max-w-[320px] max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-200">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <FiUser className="h-4 w-4 text-slate-500" />
               {adminName}
