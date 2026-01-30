@@ -346,6 +346,14 @@ export default function AdminOrderDetailsPage() {
     !hasBlockingAllocations;
   const canReopenOrder =
     isCancelled &&
+    !hasInvoice &&
+    !isStockFinalized &&
+    !allocationCheckLoading &&
+    !allocationCheckError &&
+    !hasBlockingAllocations;
+  const canMoveBackToProcessing =
+    orderStatus === "Shipping" &&
+    !hasInvoice &&
     !isStockFinalized &&
     !allocationCheckLoading &&
     !allocationCheckError &&
@@ -361,12 +369,25 @@ export default function AdminOrderDetailsPage() {
     : "";
   const reopenReason = isStockFinalized
     ? "Stock finalized orders cannot be reopened."
+    : hasInvoice
+    ? "Remove the invoice before re-opening."
     : allocationCheckLoading
     ? "Checking allocations..."
     : allocationCheckError
     ? "Unable to load allocations."
     : hasBlockingAllocations
     ? "Remove allocations before re-opening."
+    : "";
+  const moveBackReason = isStockFinalized
+    ? "Stock finalized orders cannot be moved back to Processing."
+    : hasInvoice
+    ? "Remove the invoice before moving back to Processing."
+    : allocationCheckLoading
+    ? "Checking allocations..."
+    : allocationCheckError
+    ? "Unable to load allocations."
+    : hasBlockingAllocations
+    ? "Remove allocations before moving back to Processing."
     : "";
   const canDeleteOrder =
     isCancelled &&
@@ -1131,6 +1152,26 @@ export default function AdminOrderDetailsPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {orderStatus === "Shipping" ? (
+              <button
+                type="button"
+                onClick={handleMakeProcessing}
+                disabled={isUpdatingStatus || !canMoveBackToProcessing}
+                title={
+                  !isUpdatingStatus && !canMoveBackToProcessing
+                    ? moveBackReason
+                    : undefined
+                }
+                className={[
+                  "rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                  isUpdatingStatus || !canMoveBackToProcessing
+                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                    : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100",
+                ].join(" ")}
+              >
+                Back to Processing
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={isCancelled ? handleMakeProcessing : handleCancel}
@@ -1183,8 +1224,13 @@ export default function AdminOrderDetailsPage() {
         <div className="grid grid-cols-4 gap-2">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
+            const isLocked = Boolean(tab.locked);
             const numberClass = isActive
-              ? "bg-white/20 text-white"
+              ? isLocked
+                ? "bg-amber-100 text-amber-700"
+                : "bg-white/20 text-white"
+              : isLocked
+              ? "bg-slate-100 text-slate-400"
               : "bg-slate-100 text-slate-700";
             return (
               <button
@@ -1192,12 +1238,16 @@ export default function AdminOrderDetailsPage() {
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 aria-pressed={isActive}
-                title={tab.locked ? tab.lockReason : undefined}
+                title={isLocked ? tab.lockReason : undefined}
                 className={[
                   "flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[10px] font-semibold transition",
                   isActive
-                    ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                    ? isLocked
+                      ? "border-amber-300 bg-amber-50 text-amber-800"
+                      : "border-slate-900 bg-slate-900 text-white shadow-sm"
+                    : isLocked
+                    ? "border-slate-200 bg-slate-50 text-slate-400"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
               >
                 <span

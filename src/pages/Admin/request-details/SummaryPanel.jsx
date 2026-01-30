@@ -18,10 +18,6 @@ export default function SummaryPanel({
   showShareWithClient,
   onShareWithClient,
   shareDisabled,
-  showManualInvoice,
-  onCreateManualInvoice,
-  manualInvoiceDisabled,
-  manualInvoiceDisabledReason,
   lockReason,
 }) {
   const rows = [
@@ -87,7 +83,7 @@ export default function SummaryPanel({
           ))}
         </div>
 
-        {showConvertToOrder || showShareWithClient || showManualInvoice ? (
+        {showConvertToOrder || showShareWithClient ? (
           <div className="mt-4 border-t border-slate-200 pt-4 space-y-2">
             {showConvertToOrder ? (
               <button
@@ -120,27 +116,6 @@ export default function SummaryPanel({
                 ].join(" ")}
               >
                 Share with Client
-              </button>
-            ) : null}
-
-            {showManualInvoice ? (
-              <button
-                type="button"
-                onClick={onCreateManualInvoice}
-                disabled={manualInvoiceDisabled}
-                title={
-                  manualInvoiceDisabled
-                    ? manualInvoiceDisabledReason || lockReason
-                    : undefined
-                }
-                className={[
-                  "w-full rounded-xl px-5 py-3 text-sm font-semibold transition",
-                  !manualInvoiceDisabled
-                    ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                    : "cursor-default bg-slate-200 text-slate-500",
-                ].join(" ")}
-              >
-                Create Manual Invoice
               </button>
             ) : null}
           </div>

@@ -24,7 +24,7 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
     }),
 
     // ✅ Admin: all orders list (paginated, newest first)
-    // Backend enforces limit=5
+    // Backend enforces limit=20
     getOrdersAdmin: builder.query({
       query: ({ page = 1, status = "all", search = "" } = {}) => {
         const params = new URLSearchParams();

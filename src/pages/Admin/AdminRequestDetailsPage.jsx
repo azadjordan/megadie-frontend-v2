@@ -647,7 +647,8 @@ export default function AdminRequestDetailsPage() {
     (backendStatus === "Processing" || backendStatus === "Quoted") &&
     !orderCreated &&
     !manualInvoiceLocked &&
-    backendStatus !== "Cancelled";
+    backendStatus !== "Cancelled" &&
+    hasAvailabilityShortage;
   const manualInvoiceDisabled =
     !canCreateManualInvoice || isBusy || isCreatingManual;
   const manualInvoiceDisabledReason = manualInvoiceLocked
@@ -658,6 +659,8 @@ export default function AdminRequestDetailsPage() {
     ? "Cancelled quotes cannot be invoiced."
     : backendStatus === "Confirmed"
     ? "Confirmed quotes should be invoiced from orders."
+    : !hasAvailabilityShortage
+    ? "No shortage detected. Use the normal quote flow."
     : "";
 
   const onConvertToOrder = async () => {
@@ -1093,23 +1096,44 @@ export default function AdminRequestDetailsPage() {
           Back to requests
         </button>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold text-slate-900">Quote Details</div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-lg font-semibold text-slate-900">Quote Details</div>
 
-          <span className="text-xs text-slate-400">&bull;</span>
-          <div className="text-sm font-semibold text-slate-700">
-            {quote?.id || quote?._id}
+            <span className="text-xs text-slate-400">&bull;</span>
+            <div className="text-sm font-semibold text-slate-700">
+              {quote?.id || quote?._id}
+            </div>
+
+            <span className="text-xs text-slate-400">&bull;</span>
+            <StatusBadge status={backendStatus} />
+
+            {isQuoteFetching ? (
+              <>
+                <span className="text-xs text-slate-400">&bull;</span>
+                <span className="text-xs text-slate-400">Refreshing...</span>
+              </>
+            ) : null}
           </div>
 
-          <span className="text-xs text-slate-400">&bull;</span>
-          <StatusBadge status={backendStatus} />
-
-          {isQuoteFetching ? (
-            <>
-              <span className="text-xs text-slate-400">&bull;</span>
-              <span className="text-xs text-slate-400">Refreshing...</span>
-            </>
-          ) : null}
+          <button
+            type="button"
+            onClick={openManualFromQuote}
+            disabled={manualInvoiceDisabled}
+            title={
+              manualInvoiceDisabled
+                ? manualInvoiceDisabledReason || quoteLockReason
+                : undefined
+            }
+            className={[
+              "rounded-xl px-3 py-2 text-xs font-semibold transition",
+              !manualInvoiceDisabled
+                ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                : "cursor-default bg-slate-200 text-slate-500",
+            ].join(" ")}
+          >
+            Create Manual Invoice
+          </button>
         </div>
 
         <div className="mt-1 text-sm text-slate-500">
@@ -1217,10 +1241,6 @@ export default function AdminRequestDetailsPage() {
             showShareWithClient={canShareWithClient}
             onShareWithClient={onShareWithClient}
             shareDisabled={shareDisabled}
-            showManualInvoice
-            onCreateManualInvoice={openManualFromQuote}
-            manualInvoiceDisabled={manualInvoiceDisabled}
-            manualInvoiceDisabledReason={manualInvoiceDisabledReason}
             lockReason={quoteLockReason}
           />
         </aside>
