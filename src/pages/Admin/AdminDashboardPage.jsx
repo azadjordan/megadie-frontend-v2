@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { useGetAdminQuotesQuery } from "../../features/quotes/quotesApiSlice";
@@ -76,6 +77,16 @@ const formatPaymentStatusLabel = (status) => {
   if (status === "Paid") return "Paid";
   return "Unpaid";
 };
+
+const getRowTimestamp = (row) => {
+  const raw = row?.createdAt || row?.updatedAt || row?.created || row?.date;
+  if (!raw) return 0;
+  const ts = Date.parse(raw);
+  return Number.isFinite(ts) ? ts : 0;
+};
+
+const sortByNewest = (rows) =>
+  [...rows].sort((a, b) => getRowTimestamp(b) - getRowTimestamp(a));
 
 const isInvoiceOverdue = (inv) => {
   if (!inv || inv.status === "Cancelled") return false;
@@ -189,11 +200,6 @@ export default function AdminDashboardPage() {
     isLoading: quotedQuotesLoading,
     isError: quotedQuotesError,
   } = useGetAdminQuotesQuery({ page: 1, status: "Quoted" });
-  const {
-    data: recentQuotesData,
-    isLoading: recentQuotesLoading,
-    isError: recentQuotesError,
-  } = useGetAdminQuotesQuery({ page: 1 });
 
   const {
     data: processingOrdersData,
@@ -205,11 +211,6 @@ export default function AdminDashboardPage() {
     isLoading: shippingOrdersLoading,
     isError: shippingOrdersError,
   } = useGetOrdersAdminQuery({ page: 1, status: "Shipping" });
-  const {
-    data: recentOrdersData,
-    isLoading: recentOrdersLoading,
-    isError: recentOrdersError,
-  } = useGetOrdersAdminQuery({ page: 1 });
 
   const {
     data: invoiceSummaryData,
@@ -217,10 +218,10 @@ export default function AdminDashboardPage() {
     isError: invoiceSummaryError,
   } = useGetInvoicesAdminSummaryQuery();
   const {
-    data: recentInvoicesData,
-    isLoading: recentInvoicesLoading,
-    isError: recentInvoicesError,
-  } = useGetInvoicesAdminQuery({ page: 1, sort: "newest" });
+    data: actionableInvoicesData,
+    isLoading: actionableInvoicesLoading,
+    isError: actionableInvoicesError,
+  } = useGetInvoicesAdminQuery({ page: 1, unpaid: true, sort: "newest" });
 
   const {
     data: paymentsData,
@@ -269,10 +270,29 @@ export default function AdminDashboardPage() {
   const paymentsCount = getTotalFromData(paymentsData) || 0;
   const usersCount = getTotalFromData(usersData) || 0;
 
-  const recentQuotes = getRowsFromData(recentQuotesData);
-  const recentOrders = getRowsFromData(recentOrdersData);
-  const recentInvoices = getRowsFromData(recentInvoicesData);
-  const recentPayments = getRowsFromData(paymentsData);
+  const actionableQuotesLoading = processingQuotesLoading || quotedQuotesLoading;
+  const actionableQuotesError = processingQuotesError || quotedQuotesError;
+  const actionableQuotes = useMemo(
+    () =>
+      sortByNewest([
+        ...getRowsFromData(processingQuotesData),
+        ...getRowsFromData(quotedQuotesData),
+      ]).slice(0, 6),
+    [processingQuotesData, quotedQuotesData]
+  );
+
+  const actionableOrdersLoading = processingOrdersLoading || shippingOrdersLoading;
+  const actionableOrdersError = processingOrdersError || shippingOrdersError;
+  const actionableOrders = useMemo(
+    () =>
+      sortByNewest([
+        ...getRowsFromData(processingOrdersData),
+        ...getRowsFromData(shippingOrdersData),
+      ]).slice(0, 6),
+    [processingOrdersData, shippingOrdersData]
+  );
+
+  const actionableInvoices = getRowsFromData(actionableInvoicesData).slice(0, 6);
 
   return (
     <div className="space-y-5">
@@ -349,18 +369,20 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <ListCard title="Recent requests" to="/admin/requests">
-          {recentQuotesLoading ? (
+        <ListCard title="Requests to review" to="/admin/requests">
+          {actionableQuotesLoading ? (
             <div className="text-xs text-slate-500">Loading requests...</div>
-          ) : recentQuotesError ? (
+          ) : actionableQuotesError ? (
             <div className="text-xs font-semibold text-rose-600">
               Unable to load requests.
             </div>
-          ) : recentQuotes.length === 0 ? (
-            <div className="text-xs text-slate-500">No recent requests.</div>
+          ) : actionableQuotes.length === 0 ? (
+            <div className="text-xs text-slate-500">
+              No requests need action.
+            </div>
           ) : (
             <ul className="space-y-2">
-              {recentQuotes.map((quote) => {
+              {actionableQuotes.map((quote) => {
                 const quoteId = quote?._id;
                 const quoteNumber =
                   quote?.quoteNumber ||
@@ -392,18 +414,20 @@ export default function AdminDashboardPage() {
           )}
         </ListCard>
 
-        <ListCard title="Recent orders" to="/admin/orders">
-          {recentOrdersLoading ? (
+        <ListCard title="Orders in progress" to="/admin/orders">
+          {actionableOrdersLoading ? (
             <div className="text-xs text-slate-500">Loading orders...</div>
-          ) : recentOrdersError ? (
+          ) : actionableOrdersError ? (
             <div className="text-xs font-semibold text-rose-600">
               Unable to load orders.
             </div>
-          ) : recentOrders.length === 0 ? (
-            <div className="text-xs text-slate-500">No recent orders.</div>
+          ) : actionableOrders.length === 0 ? (
+            <div className="text-xs text-slate-500">
+              No orders need action.
+            </div>
           ) : (
             <ul className="space-y-2">
-              {recentOrders.map((order) => {
+              {actionableOrders.map((order) => {
                 const orderId = order?._id;
                 const orderNumber =
                   order?.orderNumber ||
@@ -435,18 +459,20 @@ export default function AdminDashboardPage() {
           )}
         </ListCard>
 
-        <ListCard title="Recent invoices" to="/admin/invoices">
-          {recentInvoicesLoading ? (
+        <ListCard title="Invoices to collect" to="/admin/invoices">
+          {actionableInvoicesLoading ? (
             <div className="text-xs text-slate-500">Loading invoices...</div>
-          ) : recentInvoicesError ? (
+          ) : actionableInvoicesError ? (
             <div className="text-xs font-semibold text-rose-600">
               Unable to load invoices.
             </div>
-          ) : recentInvoices.length === 0 ? (
-            <div className="text-xs text-slate-500">No recent invoices.</div>
+          ) : actionableInvoices.length === 0 ? (
+            <div className="text-xs text-slate-500">
+              No unpaid invoices right now.
+            </div>
           ) : (
             <ul className="space-y-2">
-              {recentInvoices.map((inv) => {
+              {actionableInvoices.map((inv) => {
                 const invoiceId = inv?._id;
                 const invoiceNumber =
                   inv?.invoiceNumber ||
@@ -486,56 +512,6 @@ export default function AdminDashboardPage() {
                           {overdue ? <OverdueBadge /> : null}
                         </div>
                       )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </ListCard>
-
-        <ListCard title="Recent payments" to="/admin/payments">
-          {paymentsLoading ? (
-            <div className="text-xs text-slate-500">Loading payments...</div>
-          ) : paymentsError ? (
-            <div className="text-xs font-semibold text-rose-600">
-              Unable to load payments.
-            </div>
-          ) : recentPayments.length === 0 ? (
-            <div className="text-xs text-slate-500">No recent payments.</div>
-          ) : (
-            <ul className="space-y-2">
-              {recentPayments.map((payment) => {
-                const paymentId = payment?._id;
-                const invoiceNumber =
-                  payment?.invoice?.invoiceNumber ||
-                  payment?.reference ||
-                  (paymentId ? paymentId.slice(-6).toUpperCase() : "Payment");
-                const userName = payment?.user?.name || "Unknown user";
-                const currency = payment?.invoice?.currency || "AED";
-                const factor = payment?.invoice?.minorUnitFactor || 100;
-                const paymentDate = payment?.paymentDate || payment?.createdAt;
-                return (
-                  <li key={paymentId}>
-                    <Link
-                      to="/admin/payments"
-                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:bg-slate-50"
-                    >
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          {invoiceNumber}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {userName} - {formatDate(paymentDate)}
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-700">
-                        {formatMoneyMinor(
-                          payment?.amountMinor,
-                          currency,
-                          factor,
-                        )}
-                      </span>
                     </Link>
                   </li>
                 );
