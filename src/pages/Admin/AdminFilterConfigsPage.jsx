@@ -66,6 +66,9 @@ export default function AdminFilterConfigsPage() {
   });
   const [createError, setCreateError] = useState("");
   const [deletingType, setDeletingType] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   const {
     data: configsData,
@@ -155,20 +158,41 @@ export default function AdminFilterConfigsPage() {
     }
   };
 
-  const handleDelete = async (config) => {
-    const productType = config?.productType;
-    if (!productType) return;
-    const ok = window.confirm(
-      `Delete filter config for ${productType}? This cannot be undone.`
-    );
-    if (!ok) return;
+  const openDeleteModal = (config) => {
+    setDeleteTarget(config || null);
+    setDeleteConfirmText("");
+    setDeleteError("");
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setDeleteTarget(null);
+    setDeleteConfirmText("");
+    setDeleteError("");
+  };
+
+  const handleDeleteConfirm = async () => {
+    const productType = deleteTarget?.productType;
+    if (!productType) {
+      setDeleteError("Missing product type.");
+      return;
+    }
+    if (deleteConfirmText.trim() !== productType) {
+      setDeleteError(`Type "${productType}" to confirm.`);
+      return;
+    }
 
     try {
+      setDeleteError("");
       setDeletingType(productType);
       const res = await deleteFilterConfig(productType).unwrap();
       toast.success(res?.message || "Filter config deleted.");
+      setDeleteTarget(null);
+      setDeleteConfirmText("");
     } catch (err) {
-      toast.error(friendlyApiError(err));
+      const message = friendlyApiError(err);
+      setDeleteError(message);
+      toast.error(message);
     } finally {
       setDeletingType("");
     }
@@ -211,16 +235,16 @@ export default function AdminFilterConfigsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-flow-col auto-cols-fr gap-2 sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-3 sm:gap-3">
         {summaryCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+            className="min-w-0 rounded-2xl bg-white p-2 ring-1 ring-slate-200 sm:p-4"
           >
-            <div className="text-xs font-semibold text-slate-500">
+            <div className="text-[10px] font-semibold text-slate-500 sm:text-xs">
               {card.label}
             </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
+            <div className="mt-1 text-sm font-semibold text-slate-900 sm:mt-2 sm:text-lg">
               {card.value}
             </div>
           </div>
@@ -405,7 +429,7 @@ export default function AdminFilterConfigsPage() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => handleDelete(config)}
+                      onClick={() => openDeleteModal(config)}
                       disabled={row.isDeletingRow}
                       className={[
                         "inline-flex items-center justify-center rounded-lg p-1.5 ring-1 transition",
@@ -539,6 +563,106 @@ export default function AdminFilterConfigsPage() {
                   type="button"
                   onClick={closeCreateModal}
                   className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+          onClick={closeDeleteModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="filter-config-delete-title"
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white shadow-xl ring-1 ring-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <div
+                  id="filter-config-delete-title"
+                  className="text-sm font-semibold text-slate-900"
+                >
+                  Delete filter config
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  This action cannot be undone.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:text-slate-900"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4 px-4 py-4">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                You are about to delete the filter config for{" "}
+                <span className="font-semibold">
+                  {deleteTarget?.productType || "Unknown"}
+                </span>
+                .
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">
+                  Type{" "}
+                  <span className="font-semibold text-slate-900">
+                    {deleteTarget?.productType || ""}
+                  </span>{" "}
+                  to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => {
+                    setDeleteConfirmText(e.target.value);
+                    setDeleteError("");
+                  }}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                  placeholder="Enter product type"
+                />
+              </div>
+
+              {deleteError ? (
+                <div className="text-xs font-semibold text-rose-600">
+                  {deleteError}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  disabled={
+                    isDeleting ||
+                    !deleteTarget?.productType ||
+                    deleteConfirmText.trim() !== deleteTarget.productType
+                  }
+                  className={[
+                    "rounded-xl px-4 py-2 text-sm font-semibold text-white",
+                    isDeleting
+                      ? "cursor-not-allowed bg-slate-300"
+                      : "bg-rose-600 hover:bg-rose-700",
+                  ].join(" ")}
+                >
+                  {isDeleting ? "Deleting..." : "Delete config"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={isDeleting}
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancel
                 </button>

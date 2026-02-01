@@ -166,6 +166,7 @@ export default function AdminInvoicesPage() {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [sort, setSort] = useState("newest");
   const [selectedUser, setSelectedUser] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualError, setManualError] = useState("");
   const [manualForm, setManualForm] = useState({
@@ -450,131 +451,153 @@ export default function AdminInvoicesPage() {
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_220px_200px_200px_auto] md:items-end">
-          <div>
-            <label
-              htmlFor="invoices-search"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Search
-            </label>
-            <input
-              id="invoices-search"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by invoice # or order #"
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="invoices-user"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              User
-            </label>
-            <select
-              id="invoices-user"
-              value={selectedUserId ? String(selectedUserId) : ""}
-              onChange={(e) => {
-                const nextId = e.target.value;
-                setPage(1);
-                if (!nextId) {
-                  setSelectedUser(null);
-                  return;
-                }
-                const nextUser = userOptions.find(
-                  (user) => String(user?._id || user?.id) === nextId
-                );
-                setSelectedUser(nextUser || { _id: nextId });
-              }}
-              disabled={usersLoading && userOptions.length === 0}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            >
-              <option value="">
-                {usersLoading && userOptions.length === 0
-                  ? "Loading users..."
-                  : "All users"}
-              </option>
-              {userOptions.map((user) => {
-                const userId = user._id || user.id;
-                const label = user.name
-                  ? `${user.name}${user.email ? ` - ${user.email}` : ""}`
-                  : user.email || userId;
-                return (
-                  <option key={userId} value={userId}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="invoices-payment-status"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Payment status
-            </label>
-            <select
-              id="invoices-payment-status"
-              value={paymentStatusFilter}
-              onChange={(e) => {
-                setPaymentStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            >
-              <option value="all">All payments</option>
-              <option value="Paid">Paid</option>
-              <option value="PartiallyPaid">Partially paid</option>
-              <option value="Unpaid">Unpaid</option>
-              <option value="overdue">Overdue</option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="invoices-sort"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Sort
-            </label>
-            <select
-              id="invoices-sort"
-              value={sort}
-              onChange={(e) => {
-                setSort(e.target.value);
-                setPage(1);
-              }}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            >
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="amountHigh">Amount (high)</option>
-              <option value="amountLow">Amount (low)</option>
-            </select>
-          </div>
-
-          <div className="flex items-end md:justify-end">
+          <div className="flex items-end gap-2 md:contents">
+            <div className="flex-1">
+              <label
+                htmlFor="invoices-search"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Search
+              </label>
+              <input
+                id="invoices-search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by invoice # or order #"
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              />
+            </div>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-              onClick={() => {
-                setSearch("");
-                setSelectedUser(null);
-                setPaymentStatusFilter("all");
-                setSort("newest");
-                setPage(1);
-              }}
+              onClick={() => setFiltersOpen((prev) => !prev)}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:hidden"
+              aria-expanded={filtersOpen}
+              aria-controls="invoice-filters-panel"
             >
-              <FiRefreshCw className="h-3.5 w-3.5 mr-1 text-slate-400" aria-hidden="true" />
-              Reset filters
+              {filtersOpen ? "Hide filters" : "Filters"}
             </button>
+          </div>
+
+          <div
+            id="invoice-filters-panel"
+            className={[
+              filtersOpen ? "grid grid-cols-2 gap-2" : "hidden",
+              "md:contents",
+            ].join(" ")}
+          >
+            <div>
+              <label
+                htmlFor="invoices-user"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                User
+              </label>
+              <select
+                id="invoices-user"
+                value={selectedUserId ? String(selectedUserId) : ""}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setPage(1);
+                  if (!nextId) {
+                    setSelectedUser(null);
+                    return;
+                  }
+                  const nextUser = userOptions.find(
+                    (user) => String(user?._id || user?.id) === nextId
+                  );
+                  setSelectedUser(nextUser || { _id: nextId });
+                }}
+                disabled={usersLoading && userOptions.length === 0}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="">
+                  {usersLoading && userOptions.length === 0
+                    ? "Loading users..."
+                    : "All users"}
+                </option>
+                {userOptions.map((user) => {
+                  const userId = user._id || user.id;
+                  const label = user.name
+                    ? `${user.name}${user.email ? ` - ${user.email}` : ""}`
+                    : user.email || userId;
+                  return (
+                    <option key={userId} value={userId}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="invoices-payment-status"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Payment status
+              </label>
+              <select
+                id="invoices-payment-status"
+                value={paymentStatusFilter}
+                onChange={(e) => {
+                  setPaymentStatusFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="all">All payments</option>
+                <option value="Paid">Paid</option>
+                <option value="PartiallyPaid">Partially paid</option>
+                <option value="Unpaid">Unpaid</option>
+                <option value="overdue">Overdue</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="invoices-sort"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Sort
+              </label>
+              <select
+                id="invoices-sort"
+                value={sort}
+                onChange={(e) => {
+                  setSort(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="amountHigh">Amount (high)</option>
+                <option value="amountLow">Amount (low)</option>
+              </select>
+            </div>
+
+            <div className="col-span-2 flex items-end md:col-auto md:justify-end">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                onClick={() => {
+                  setSearch("");
+                  setSelectedUser(null);
+                  setPaymentStatusFilter("all");
+                  setSort("newest");
+                  setPage(1);
+                }}
+              >
+                <FiRefreshCw
+                  className="h-3.5 w-3.5 mr-1 text-slate-400"
+                  aria-hidden="true"
+                />
+                Reset filters
+              </button>
+            </div>
           </div>
         </div>
       </div>

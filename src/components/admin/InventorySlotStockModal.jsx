@@ -26,11 +26,17 @@ export default function InventorySlotStockModal({
   const slotLabel = slot.label || "Unknown slot";
 
   const selectedEntries = Object.entries(selectedItems || {});
+  const selectedEntriesByRecent = [...selectedEntries].reverse();
   const selectedCount = selectedEntries.length;
   const trimmedSearch = String(search || "").trim();
   const failures = Array.isArray(submitFailures) ? submitFailures : [];
   const [showConfirm, setShowConfirm] = useState(false);
   const hasPendingChanges = selectedCount > 0;
+  const hasMissingQty = selectedEntries.some(([, entry]) => {
+    const qtyValue = Number(entry?.qty);
+    return !Number.isFinite(qtyValue) || qtyValue <= 0;
+  });
+  const canSubmit = selectedCount > 0 && !hasMissingQty;
 
   const handleRequestClose = () => {
     if (hasPendingChanges) {
@@ -53,6 +59,10 @@ export default function InventorySlotStockModal({
   }, [selectedCount]);
 
   useEffect(() => {
+    if (!canSubmit) setShowConfirm(false);
+  }, [canSubmit]);
+
+  useEffect(() => {
     if (submitting || submitSuccess) {
       setShowConfirm(false);
     }
@@ -60,14 +70,14 @@ export default function InventorySlotStockModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/50 p-2 sm:p-4"
       onClick={handleOverlayClick}
       role="dialog"
       aria-modal="true"
       aria-labelledby="stock-slot-title"
     >
       <div
-        className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 sm:max-w-4xl lg:max-w-6xl"
+        className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 sm:h-[90vh] sm:max-w-4xl lg:max-w-6xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-slate-200 px-4 py-4">
@@ -99,7 +109,7 @@ export default function InventorySlotStockModal({
           </div>
         </div>
 
-        <div className="grid flex-1 min-h-0 gap-4 overflow-hidden px-4 py-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto px-4 py-4 lg:grid-cols-[1.1fr_0.9fr] lg:overflow-hidden">
           <div className="flex min-h-0 flex-col">
             <label
               htmlFor="slot-stock-search"
@@ -115,7 +125,7 @@ export default function InventorySlotStockModal({
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             />
 
-            <div className="mt-3 flex min-h-0 flex-1 flex-col space-y-2">
+            <div className="mt-3 flex min-h-0 flex-col space-y-2 lg:flex-1">
               {!trimmedSearch ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
                   Type a SKU or product name to search.
@@ -133,7 +143,7 @@ export default function InventorySlotStockModal({
                   No products match this search.
                 </div>
               ) : (
-                <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+                <div className="space-y-2 overflow-visible lg:flex-1 lg:overflow-y-auto lg:pr-1">
                   {(searchRows || []).map((row) => {
                     const productId = row.id || row._id;
                     if (!productId) return null;
@@ -143,13 +153,13 @@ export default function InventorySlotStockModal({
                       <label
                         key={id}
                         className={[
-                          "flex cursor-pointer items-start justify-between gap-3 rounded-xl border px-3 py-2 text-left transition",
+                          "flex cursor-pointer items-start justify-between gap-2 rounded-xl border px-2 py-2 text-left transition sm:gap-3 sm:px-3",
                           isSelected
                             ? "border-emerald-200 bg-emerald-50/60"
                             : "border-slate-200 bg-white hover:bg-slate-50",
                         ].join(" ")}
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-2 sm:gap-3">
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -157,15 +167,15 @@ export default function InventorySlotStockModal({
                             className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                           />
                           <div>
-                            <div className="text-sm font-semibold text-slate-900">
+                            <div className="text-xs font-semibold text-slate-900 sm:text-sm">
                               {row.name || "Untitled product"}
                             </div>
-                            <div className="text-xs text-slate-500">
+                            <div className="text-[11px] text-slate-500 sm:text-xs">
                               {row.sku || "-"}
                             </div>
                           </div>
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-[11px] text-slate-500 sm:text-xs">
                           {isSelected ? "Selected" : ""}
                         </div>
                       </label>
@@ -197,36 +207,54 @@ export default function InventorySlotStockModal({
                 Select products from the search results to add stock.
               </div>
             ) : (
-              <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
-                {selectedEntries.map(([id, entry]) => (
+              <div className="mt-3 space-y-2 overflow-visible lg:max-h-[360px] lg:overflow-y-auto lg:pr-1">
+                {selectedEntriesByRecent.map(([id, entry]) => (
                   <div
                     key={id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                    className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 sm:px-3"
                   >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-900">
-                        {entry.product?.name || "Untitled product"}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {entry.product?.sku || "-"}
+                    <div className="flex items-start gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onRemoveSelected(id)}
+                        className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        aria-label="Remove selected SKU"
+                        title="Remove"
+                      >
+                        <svg
+                          viewBox="0 0 20 20"
+                          className="h-3.5 w-3.5"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-semibold text-slate-900 sm:text-sm">
+                          {entry.product?.name || "Untitled product"}
+                        </div>
+                        <div className="text-[11px] text-slate-500 sm:text-xs">
+                          {entry.product?.sku || "-"}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 pl-8">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Qty
+                      </div>
                       <input
                         type="number"
                         min="1"
                         step="1"
-                        value={entry.qty}
+                        value={entry.qty ?? ""}
                         onChange={(e) => onQtyChange(id, e.target.value)}
-                        className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                        className="w-full max-w-[120px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                       />
-                      <button
-                        type="button"
-                        onClick={() => onRemoveSelected(id)}
-                        className="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-900"
-                      >
-                        Remove
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -243,10 +271,10 @@ export default function InventorySlotStockModal({
                     <button
                       type="button"
                       onClick={onSubmit}
-                      disabled={submitting}
+                      disabled={submitting || hasMissingQty}
                       className={[
                         "rounded-xl px-3 py-2 text-xs font-semibold transition",
-                        submitting
+                        submitting || hasMissingQty
                           ? "cursor-not-allowed bg-slate-200 text-slate-500"
                           : "bg-emerald-600 text-white hover:bg-emerald-700",
                       ].join(" ")}
@@ -272,10 +300,10 @@ export default function InventorySlotStockModal({
                 <button
                   type="button"
                   onClick={() => setShowConfirm(true)}
-                  disabled={selectedCount === 0 || submitting}
+                  disabled={!canSubmit || submitting}
                   className={[
                     "rounded-xl px-4 py-2 text-xs font-semibold transition",
-                    selectedCount === 0 || submitting
+                    !canSubmit || submitting
                       ? "cursor-not-allowed bg-slate-200 text-slate-500"
                       : "bg-emerald-600 text-white hover:bg-emerald-700",
                   ].join(" ")}
@@ -284,6 +312,12 @@ export default function InventorySlotStockModal({
                 </button>
               )}
             </div>
+
+            {hasMissingQty ? (
+              <div className="mt-2 text-xs font-semibold text-rose-600">
+                Enter a qty for each selected SKU to continue.
+              </div>
+            ) : null}
 
             <div className="mt-3 space-y-2">
               {submitSuccess ? (

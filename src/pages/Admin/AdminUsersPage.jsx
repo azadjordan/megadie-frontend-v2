@@ -64,6 +64,7 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState("all");
   const [approvalStatus, setApprovalStatus] = useState("all");
   const [sort, setSort] = useState("newest");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const isDebouncing = trimmedSearch !== debouncedSearch;
@@ -138,107 +139,129 @@ export default function AdminUsersPage() {
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_180px_180px_auto] md:items-end">
-          <div>
-            <label
-              htmlFor="users-search"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Search
-            </label>
-            <input
-              id="users-search"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by name, email, phone..."
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="users-role"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Role
-            </label>
-            <select
-              id="users-role"
-              value={role}
-              onChange={(e) => {
-                setRole(e.target.value);
-                setPage(1);
-              }}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            >
-              <option value="all">All roles</option>
-              <option value="user">Users</option>
-              <option value="admin">Admins</option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="users-approval"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Approval
-            </label>
-            <select
-              id="users-approval"
-              value={approvalStatus}
-              onChange={(e) => {
-                setApprovalStatus(e.target.value);
-                setPage(1);
-              }}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            >
-              <option value="all">All approvals</option>
-              <option value="Approved">Approved</option>
-              <option value="Pending">Pending</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="users-sort"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Sort
-            </label>
-            <select
-              id="users-sort"
-              value={sort}
-              onChange={(e) => {
-                setSort(e.target.value);
-                setPage(1);
-              }}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            >
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="name">Name</option>
-            </select>
-          </div>
-
-          <div className="flex items-end md:justify-end">
+          <div className="flex items-end gap-2 md:contents">
+            <div className="flex-1">
+              <label
+                htmlFor="users-search"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Search
+              </label>
+              <input
+                id="users-search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by name, email, phone..."
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              />
+            </div>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-              onClick={() => {
-                setSearch("");
-                setRole("all");
-                setApprovalStatus("all");
-                setSort("newest");
-                setPage(1);
-              }}
+              onClick={() => setFiltersOpen((prev) => !prev)}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:hidden"
+              aria-expanded={filtersOpen}
+              aria-controls="users-filters-panel"
             >
-              <FiRefreshCw className="h-3.5 w-3.5 mr-1 text-slate-400" aria-hidden="true" />
-              Reset filters
+              {filtersOpen ? "Hide filters" : "Filters"}
             </button>
+          </div>
+
+          <div
+            id="users-filters-panel"
+            className={[
+              filtersOpen ? "grid grid-cols-2 gap-2" : "hidden",
+              "md:contents",
+            ].join(" ")}
+          >
+            <div>
+              <label
+                htmlFor="users-role"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Role
+              </label>
+              <select
+                id="users-role"
+                value={role}
+                onChange={(e) => {
+                  setRole(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="all">All roles</option>
+                <option value="user">Users</option>
+                <option value="admin">Admins</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="users-approval"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Approval
+              </label>
+              <select
+                id="users-approval"
+                value={approvalStatus}
+                onChange={(e) => {
+                  setApprovalStatus(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="all">All approvals</option>
+                <option value="Approved">Approved</option>
+                <option value="Pending">Pending</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="users-sort"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Sort
+              </label>
+              <select
+                id="users-sort"
+                value={sort}
+                onChange={(e) => {
+                  setSort(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="name">Name</option>
+              </select>
+            </div>
+
+            <div className="col-span-2 flex items-end md:col-auto md:justify-end">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                onClick={() => {
+                  setSearch("");
+                  setRole("all");
+                  setApprovalStatus("all");
+                  setSort("newest");
+                  setPage(1);
+                }}
+              >
+                <FiRefreshCw
+                  className="h-3.5 w-3.5 mr-1 text-slate-400"
+                  aria-hidden="true"
+                />
+                Reset filters
+              </button>
+            </div>
           </div>
         </div>
       </div>

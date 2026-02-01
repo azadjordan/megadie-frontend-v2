@@ -402,16 +402,16 @@ export default function AdminFilterConfigEditPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-flow-col auto-cols-fr gap-2 sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-3 sm:gap-3">
         {summaryCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+            className="min-w-0 rounded-2xl bg-white p-2 ring-1 ring-slate-200 sm:p-4"
           >
-            <div className="text-xs font-semibold text-slate-500">
+            <div className="text-[10px] font-semibold text-slate-500 sm:text-xs">
               {card.label}
             </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
+            <div className="mt-1 text-sm font-semibold text-slate-900 sm:mt-2 sm:text-lg">
               {card.value}
             </div>
           </div>

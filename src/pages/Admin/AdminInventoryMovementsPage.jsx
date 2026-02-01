@@ -153,6 +153,7 @@ export default function AdminInventoryMovementsPage() {
   const [dateTo, setDateTo] = useState(defaultRange.end);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const trimmedSearch = q.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -230,16 +231,16 @@ export default function AdminInventoryMovementsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-flow-col auto-cols-fr gap-2 sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
         {summaryCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+            className="min-w-0 rounded-2xl bg-white p-2 ring-1 ring-slate-200 sm:p-4"
           >
-            <div className="text-xs font-semibold text-slate-500">
+            <div className="text-[10px] font-semibold text-slate-500 sm:text-xs">
               {card.label}
             </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
+            <div className="mt-1 text-sm font-semibold text-slate-900 sm:mt-2 sm:text-lg">
               {card.value}
             </div>
           </div>
@@ -251,121 +252,140 @@ export default function AdminInventoryMovementsPage() {
           <AdminInventoryTabs />
 
           <div className="grid w-full grid-cols-1 gap-3 md:items-end md:grid-cols-[1fr_200px_170px_170px_160px_auto]">
-            <div>
-              <label
-                htmlFor="movement-search"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Search
-              </label>
-              <input
-                id="movement-search"
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Product, slot, order, actor..."
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="movement-type"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Movement type
-              </label>
-              <select
-                id="movement-type"
-                value={typeFilter}
-                onChange={(e) => {
-                  setTypeFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              >
-                {MOVEMENT_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="movement-date-from"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                From
-              </label>
-              <input
-                id="movement-date-from"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="movement-date-to"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                To
-              </label>
-              <input
-                id="movement-date-to"
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="movement-limit"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Per page
-              </label>
-              <select
-                id="movement-limit"
-                value={limit}
-                onChange={(e) => {
-                  setLimit(Number(e.target.value) || 25);
-                  setPage(1);
-                }}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              >
-                <option value={25}>25 / page</option>
-                <option value={50}>50 / page</option>
-                <option value={100}>100 / page</option>
-              </select>
-            </div>
-
-            <div className="flex items-end">
+            <div className="flex items-end gap-2 md:contents">
+              <div className="flex-1">
+                <label
+                  htmlFor="movement-search"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Search
+                </label>
+                <input
+                  id="movement-search"
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Product, slot, order, actor..."
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                onClick={resetFilters}
+                onClick={() => setFiltersOpen((prev) => !prev)}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:hidden"
+                aria-expanded={filtersOpen}
+                aria-controls="movement-filters-panel"
               >
-                <FiRefreshCw
-                  className="mr-1 h-3.5 w-3.5 text-slate-400"
-                  aria-hidden="true"
-                />
-                Reset
+                {filtersOpen ? "Hide filters" : "Filters"}
               </button>
+            </div>
+
+            <div
+              id="movement-filters-panel"
+              className={[
+                filtersOpen ? "grid grid-cols-2 gap-2" : "hidden",
+                "md:contents",
+              ].join(" ")}
+            >
+              <div>
+                <label
+                  htmlFor="movement-type"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Movement type
+                </label>
+                <select
+                  id="movement-type"
+                  value={typeFilter}
+                  onChange={(e) => {
+                    setTypeFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  {MOVEMENT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="movement-date-from"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  From
+                </label>
+                <input
+                  id="movement-date-from"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="movement-date-to"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  To
+                </label>
+                <input
+                  id="movement-date-to"
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="movement-limit"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Per page
+                </label>
+                <select
+                  id="movement-limit"
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value) || 25);
+                    setPage(1);
+                  }}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  <option value={25}>25 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                </select>
+              </div>
+
+              <div className="col-span-2 flex items-end md:col-auto">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  onClick={resetFilters}
+                >
+                  <FiRefreshCw
+                    className="mr-1 h-3.5 w-3.5 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  Reset
+                </button>
+              </div>
             </div>
           </div>
         </div>

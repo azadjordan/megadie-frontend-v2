@@ -67,6 +67,7 @@ export default function AdminInventoryCategoriesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
     productType: "",
@@ -254,16 +255,16 @@ export default function AdminInventoryCategoriesPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-flow-col auto-cols-fr gap-2 sm:grid-flow-row sm:auto-cols-auto sm:grid-cols-3 sm:gap-3">
         {summaryCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+            className="min-w-0 rounded-2xl bg-white p-2 ring-1 ring-slate-200 sm:p-4"
           >
-            <div className="text-xs font-semibold text-slate-500">
+            <div className="text-[10px] font-semibold text-slate-500 sm:text-xs">
               {card.label}
             </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
+            <div className="mt-1 text-sm font-semibold text-slate-900 sm:mt-2 sm:text-lg">
               {card.value}
             </div>
           </div>
@@ -273,102 +274,121 @@ export default function AdminInventoryCategoriesPage() {
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
         <div className="flex flex-col gap-3">
           <div className="grid w-full grid-cols-1 gap-3 md:items-end md:grid-cols-[1fr_200px_200px_160px]">
-            <div>
-              <label
-                htmlFor="category-search"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            <div className="flex items-end gap-2 md:contents">
+              <div className="flex-1">
+                <label
+                  htmlFor="category-search"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Search
+                </label>
+                <input
+                  id="category-search"
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search by label or key"
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((prev) => !prev)}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:hidden"
+                aria-expanded={filtersOpen}
+                aria-controls="category-filters-panel"
               >
-                Search
-              </label>
-              <input
-                id="category-search"
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search by label or key"
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              />
+                {filtersOpen ? "Hide filters" : "Filters"}
+              </button>
             </div>
 
-            <div>
-              <label
-                htmlFor="category-type"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Product type
-              </label>
-              <select
-                id="category-type"
-                value={productType}
-                onChange={(e) => {
-                  setProductType(e.target.value);
-                  setPage(1);
-                }}
-                disabled={metaLoading || !productTypes.length}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20 disabled:bg-slate-50"
-              >
-                <option value="all">All product types</option>
-                {productTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              {metaError ? (
-                <div className="mt-1 text-[11px] text-rose-600">
-                  Unable to load product types.
-                </div>
-              ) : null}
-            </div>
+            <div
+              id="category-filters-panel"
+              className={[
+                filtersOpen ? "grid grid-cols-2 gap-2" : "hidden",
+                "md:contents",
+              ].join(" ")}
+            >
+              <div>
+                <label
+                  htmlFor="category-type"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Product type
+                </label>
+                <select
+                  id="category-type"
+                  value={productType}
+                  onChange={(e) => {
+                    setProductType(e.target.value);
+                    setPage(1);
+                  }}
+                  disabled={metaLoading || !productTypes.length}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20 disabled:bg-slate-50"
+                >
+                  <option value="all">All product types</option>
+                  {productTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+                {metaError ? (
+                  <div className="mt-1 text-[11px] text-rose-600">
+                    Unable to load product types.
+                  </div>
+                ) : null}
+              </div>
 
-            <div>
-              <label
-                htmlFor="category-status"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Status
-              </label>
-              <select
-                id="category-status"
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPage(1);
-                }}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div>
+                <label
+                  htmlFor="category-status"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Status
+                </label>
+                <select
+                  id="category-status"
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label
-                htmlFor="category-limit"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                Page size
-              </label>
-              <select
-                id="category-limit"
-                value={limit}
-                onChange={(e) => {
-                  setLimit(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              >
-                {LIMIT_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <label
+                  htmlFor="category-limit"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Page size
+                </label>
+                <select
+                  id="category-limit"
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  {LIMIT_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
