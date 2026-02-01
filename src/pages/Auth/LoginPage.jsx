@@ -81,7 +81,7 @@ export default function LoginPage() {
 
       navigate(getLandingPath(res.data), { replace: true })
     } catch (err) {
-      setSubmitError(err?.data?.message || err?.error || 'Sign in failed')
+      setSubmitError(err?.data?.message || err?.error || 'Invalid email or password.')
     }
   }
 
