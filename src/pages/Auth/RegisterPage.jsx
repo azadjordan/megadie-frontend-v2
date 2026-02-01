@@ -7,9 +7,6 @@ import AuthShell from '../../components/auth/AuthShell'
 import { setCredentials } from '../../features/auth/authSlice'
 import { useLoginMutation, useRegisterMutation } from '../../features/auth/usersApiSlice'
 
-const UAE_DIAL_CODE = '+971'
-const UAE_PHONE_REGEX = /^\+971\d{8,9}$/
-
 export default function RegisterPage() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
@@ -18,10 +15,11 @@ export default function RegisterPage() {
   const { userInfo, isInitialized } = useSelector((state) => state.auth)
 
   const [name, setName] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState(UAE_DIAL_CODE)
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [submitError, setSubmitError] = useState('')
   const hasConfirm = confirmPassword.length > 0
   const isTooShort = password.length > 0 && password.length < 6
   const passwordsMatch = password.length >= 6 && password === confirmPassword
@@ -38,7 +36,7 @@ export default function RegisterPage() {
     return '/account/overview'
   }
 
-  const normalizeUaePhone = (value) =>
+  const normalizePhoneNumber = (value) =>
     String(value || '').replace(/[^\d+]/g, '')
 
   useEffect(() => {
@@ -50,19 +48,15 @@ export default function RegisterPage() {
 
   const submitHandler = async (e) => {
     e.preventDefault()
+    setSubmitError('')
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match.')
+      setSubmitError('Passwords do not match.')
       return
     }
 
     const trimmedEmail = email.trim()
-    const normalizedPhoneNumber = normalizeUaePhone(phoneNumber)
-
-    if (!UAE_PHONE_REGEX.test(normalizedPhoneNumber)) {
-      toast.error('Enter a valid UAE phone number starting with +971.')
-      return
-    }
+    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber)
 
     try {
       const registerResponse = await register({
@@ -89,15 +83,16 @@ export default function RegisterPage() {
           registerResponse?.message ||
             'Registration submitted. Await admin approval.'
         )
-        toast.error(
+        setSubmitError(
           loginError?.data?.message ||
             loginError?.error ||
             'Auto sign-in failed. Please sign in.'
         )
-        navigate('/login', { replace: true })
       }
     } catch (err) {
-      toast.error(err?.data?.message || err?.error || 'Registration failed')
+      const message =
+        err?.data?.message || err?.error || 'Registration failed'
+      setSubmitError(message)
     }
   }
 
@@ -128,7 +123,10 @@ export default function RegisterPage() {
             type="text"
             autoComplete="name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (submitError) setSubmitError('')
+            }}
             required
           />
         </div>
@@ -141,9 +139,12 @@ export default function RegisterPage() {
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="tel"
             autoComplete="tel"
-            placeholder="+971 5X XXX XXXX"
+            placeholder="Phone number"
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={(e) => {
+              setPhoneNumber(e.target.value)
+              if (submitError) setSubmitError('')
+            }}
             required
           />
         </div>
@@ -155,7 +156,10 @@ export default function RegisterPage() {
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (submitError) setSubmitError('')
+            }}
             required
           />
         </div>
@@ -174,7 +178,10 @@ export default function RegisterPage() {
             type="password"
             autoComplete="new-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              if (submitError) setSubmitError('')
+            }}
             required
             minLength={6}
           />
@@ -197,7 +204,10 @@ export default function RegisterPage() {
             type="password"
             autoComplete="new-password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value)
+              if (submitError) setSubmitError('')
+            }}
             required
             minLength={6}
           />
@@ -228,6 +238,11 @@ export default function RegisterPage() {
             ? 'Signing in...'
             : 'Create account'}
         </button>
+        {submitError ? (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+            {submitError}
+          </div>
+        ) : null}
       </form>
     </AuthShell>
   )

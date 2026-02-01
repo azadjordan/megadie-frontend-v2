@@ -11,7 +11,6 @@ import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
-import Pagination from "../../components/common/Pagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 import { useDeleteUserMutation, useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
@@ -66,6 +65,7 @@ function getUserRowMeta(user, state = {}) {
 
 export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
+  const USERS_PAGE_LIMIT = 100;
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
   const [approvalStatus, setApprovalStatus] = useState("all");
@@ -83,6 +83,7 @@ export default function AdminUsersPage() {
     error,
   } = useGetUsersAdminQuery({
     page,
+    limit: USERS_PAGE_LIMIT,
     search: debouncedSearch,
     role,
     sort,
@@ -93,20 +94,6 @@ export default function AdminUsersPage() {
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
-
-  const pagination = useMemo(() => {
-    if (!data) return null;
-    if (data.pagination) return data.pagination;
-
-    const cur = data.page || 1;
-    const totalPages = data.pages || 1;
-    return {
-      page: cur,
-      totalPages,
-      hasPrev: cur > 1,
-      hasNext: cur < totalPages,
-    };
-  }, [data]);
 
   const onDeleteUser = async (user) => {
     const userId = user?._id || user?.id;
@@ -287,13 +274,9 @@ export default function AdminUsersPage() {
             {isFetching ? <span className="ml-2">(Updating)</span> : null}
           </div>
 
-          {pagination ? (
-            <Pagination
-              pagination={pagination}
-              onPageChange={setPage}
-              variant="compact"
-            />
-          ) : null}
+          <span className="text-[11px] text-slate-400">
+            Showing up to {USERS_PAGE_LIMIT} users.
+          </span>
         </div>
       </div>
 
@@ -486,7 +469,8 @@ export default function AdminUsersPage() {
       )}
 
       <div className="text-xs text-slate-400">
-        Tip: users page is mainly for search and quick navigation.
+        Tip: users page is mainly for search and quick navigation. Refine filters
+        to find users beyond the first {USERS_PAGE_LIMIT}.
       </div>
     </div>
   );

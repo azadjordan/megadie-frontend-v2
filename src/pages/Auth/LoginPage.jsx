@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'react-toastify'
 
 import AuthShell from '../../components/auth/AuthShell'
 import { useLoginMutation } from '../../features/auth/usersApiSlice'
@@ -17,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [recentEmails, setRecentEmails] = useState([])
+  const [submitError, setSubmitError] = useState('')
 
   const [login, { isLoading }] = useLoginMutation()
 
@@ -56,6 +56,7 @@ export default function LoginPage() {
 
   const submitHandler = async (e) => {
     e.preventDefault()
+    setSubmitError('')
 
     try {
       const res = await login({
@@ -80,7 +81,7 @@ export default function LoginPage() {
 
       navigate(getLandingPath(res.data), { replace: true })
     } catch (err) {
-      toast.error(err?.data?.message || err?.error || 'Sign in failed')
+      setSubmitError(err?.data?.message || err?.error || 'Sign in failed')
     }
   }
 
@@ -110,7 +111,10 @@ export default function LoginPage() {
             autoComplete="email"
             list="recent-emails"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (submitError) setSubmitError('')
+            }}
             required
           />
           {recentEmails.length ? (
@@ -129,7 +133,10 @@ export default function LoginPage() {
             type="password"
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              if (submitError) setSubmitError('')
+            }}
             required
           />
           <div className="mt-2 text-right">
@@ -150,6 +157,11 @@ export default function LoginPage() {
         >
           {isLoading ? 'Signing in...' : 'Sign in'}
         </button>
+        {submitError ? (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+            {submitError}
+          </div>
+        ) : null}
       </form>
     </AuthShell>
   )
