@@ -714,23 +714,10 @@ export default function AdminSlotDetailsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={openStockModal}
-                  disabled={slotItemsBusy || isActionBusy}
-                  className={[
-                    "inline-flex h-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100",
-                    slotItemsBusy || isActionBusy
-                      ? "cursor-not-allowed opacity-60"
-                      : "",
-                  ].join(" ")}
-                >
-                  Stock
-                </button>
-                <button
-                  type="button"
                   onClick={toggleSelectionMode}
                   disabled={!hasSlotItems || slotItemsBusy || isActionBusy}
                   className={[
-                    "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                    "inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold transition",
                     selectionMode
                       ? "bg-slate-900 text-white"
                       : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50",
@@ -741,6 +728,19 @@ export default function AdminSlotDetailsPage() {
                 >
                   {selectionMode ? "Cancel" : "Select"}
                 </button>
+                <button
+                  type="button"
+                  onClick={openStockModal}
+                  disabled={selectionMode || slotItemsBusy || isActionBusy}
+                  className={[
+                    "inline-flex h-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100",
+                    selectionMode || slotItemsBusy || isActionBusy
+                      ? "cursor-not-allowed opacity-60"
+                      : "",
+                  ].join(" ")}
+                >
+                  Stock
+                </button>
                 {selectionMode ? (
                   <>
                     <button
@@ -750,7 +750,7 @@ export default function AdminSlotDetailsPage() {
                         selectedCount === 0 || slotItemsBusy || isActionBusy
                       }
                       className={[
-                        "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                        "inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold transition",
                         selectedCount === 0 || slotItemsBusy || isActionBusy
                           ? "cursor-not-allowed bg-slate-200 text-slate-500"
                           : "bg-slate-900 text-white hover:bg-slate-800",
@@ -765,7 +765,7 @@ export default function AdminSlotDetailsPage() {
                         selectedCount === 0 || slotItemsBusy || isActionBusy
                       }
                       className={[
-                        "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                        "inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold transition",
                         selectedCount === 0 || slotItemsBusy || isActionBusy
                           ? "cursor-not-allowed bg-slate-200 text-slate-500"
                           : "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100",
@@ -781,7 +781,7 @@ export default function AdminSlotDetailsPage() {
                       onClick={() => openMoveModal("all")}
                       disabled={!hasSlotItems || slotItemsBusy || isActionBusy}
                       className={[
-                        "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                        "inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold transition",
                         !hasSlotItems || slotItemsBusy || isActionBusy
                           ? "cursor-not-allowed bg-slate-200 text-slate-500"
                           : "bg-slate-900 text-white hover:bg-slate-800",
@@ -794,7 +794,7 @@ export default function AdminSlotDetailsPage() {
                       onClick={() => openClearModal("all")}
                       disabled={!hasSlotItems || slotItemsBusy || isActionBusy}
                       className={[
-                        "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                        "inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold transition",
                         !hasSlotItems || slotItemsBusy || isActionBusy
                           ? "cursor-not-allowed bg-slate-200 text-slate-500"
                           : "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100",

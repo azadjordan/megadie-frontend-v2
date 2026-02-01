@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FiRefreshCw, FiSettings, FiTrash2 } from "react-icons/fi";
+import {
+  FiChevronDown,
+  FiChevronUp,
+  FiRefreshCw,
+  FiSettings,
+  FiTrash2,
+} from "react-icons/fi";
 import { toast } from "react-toastify";
 import Pagination from "../../components/common/Pagination";
 import AdminInventoryTabs from "../../components/admin/AdminInventoryTabs";
@@ -583,11 +589,16 @@ export default function AdminInventoryPage() {
               <button
                 type="button"
                 onClick={() => setFiltersOpen((prev) => !prev)}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:hidden"
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:hidden"
                 aria-expanded={filtersOpen}
                 aria-controls="inventory-filters-panel"
               >
-                {filtersOpen ? "Hide filters" : "Filters"}
+                <span>{filtersOpen ? "Hide filters" : "Filters"}</span>
+                {filtersOpen ? (
+                  <FiChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                  <FiChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
               </button>
             </div>
 

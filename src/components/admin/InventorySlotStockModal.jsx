@@ -109,7 +109,7 @@ export default function InventorySlotStockModal({
           </div>
         </div>
 
-        <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto px-4 py-4 lg:grid-cols-[1.1fr_0.9fr] lg:overflow-hidden">
+        <div className="grid flex-1 min-h-0 gap-4 overflow-y-auto px-4 py-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:overflow-hidden">
           <div className="flex min-h-0 flex-col">
             <label
               htmlFor="slot-stock-search"
@@ -125,7 +125,7 @@ export default function InventorySlotStockModal({
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
             />
 
-            <div className="mt-3 flex min-h-0 flex-col space-y-2 lg:flex-1">
+            <div className="mt-3 flex min-h-0 flex-1 flex-col space-y-2">
               {!trimmedSearch ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
                   Type a SKU or product name to search.
@@ -143,7 +143,7 @@ export default function InventorySlotStockModal({
                   No products match this search.
                 </div>
               ) : (
-                <div className="space-y-2 overflow-visible lg:flex-1 lg:overflow-y-auto lg:pr-1">
+                <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1 lg:max-h-none lg:flex-1">
                   {(searchRows || []).map((row) => {
                     const productId = row.id || row._id;
                     if (!productId) return null;
@@ -186,7 +186,7 @@ export default function InventorySlotStockModal({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-col">
+          <div className="flex min-h-0 flex-col lg:border-l lg:border-slate-200 lg:pl-4">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Selected ({selectedCount})
@@ -202,64 +202,66 @@ export default function InventorySlotStockModal({
               ) : null}
             </div>
 
-            {selectedCount === 0 ? (
-              <div className="mt-3 rounded-xl border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
-                Select products from the search results to add stock.
-              </div>
-            ) : (
-              <div className="mt-3 space-y-2 overflow-visible lg:max-h-[360px] lg:overflow-y-auto lg:pr-1">
-                {selectedEntriesByRecent.map(([id, entry]) => (
-                  <div
-                    key={id}
-                    className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 sm:px-3"
-                  >
-                    <div className="flex items-start gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onRemoveSelected(id)}
-                        className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                        aria-label="Remove selected SKU"
-                        title="Remove"
-                      >
-                        <svg
-                          viewBox="0 0 20 20"
-                          className="h-3.5 w-3.5"
-                          fill="currentColor"
-                          aria-hidden="true"
+            <div className="mt-3 flex min-h-0 flex-1 flex-col">
+              {selectedCount === 0 ? (
+                <div className="flex-1 rounded-xl border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500">
+                  Select products from the search results to add stock.
+                </div>
+              ) : (
+                <div className="max-h-[32vh] space-y-2 overflow-y-auto pr-1 lg:max-h-none lg:flex-1">
+                  {selectedEntriesByRecent.map(([id, entry]) => (
+                    <div
+                      key={id}
+                      className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2 sm:px-3"
+                    >
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onRemoveSelected(id)}
+                          className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          aria-label="Remove selected SKU"
+                          title="Remove"
                         >
-                          <path
-                            fillRule="evenodd"
-                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </button>
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-semibold text-slate-900 sm:text-sm">
-                          {entry.product?.name || "Untitled product"}
-                        </div>
-                        <div className="text-[11px] text-slate-500 sm:text-xs">
-                          {entry.product?.sku || "-"}
+                          <svg
+                            viewBox="0 0 20 20"
+                            className="h-3.5 w-3.5"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold text-slate-900 sm:text-sm">
+                            {entry.product?.name || "Untitled product"}
+                          </div>
+                          <div className="text-[11px] text-slate-500 sm:text-xs">
+                            {entry.product?.sku || "-"}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 pl-8">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                        Qty
+                      <div className="flex items-center gap-2 pl-8">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          Qty
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={entry.qty ?? ""}
+                          onChange={(e) => onQtyChange(id, e.target.value)}
+                          className="w-full max-w-[120px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                        />
                       </div>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={entry.qty ?? ""}
-                        onChange={(e) => onQtyChange(id, e.target.value)}
-                        className="w-full max-w-[120px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                      />
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="mt-3">
               {showConfirm ? (
