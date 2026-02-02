@@ -13,6 +13,11 @@ export default function InventoryMoveModal({
   selectedTargetSlot,
   selectedTargetSlotId,
   onSelectTargetSlot,
+  moveItems,
+  moveQuantities,
+  onMoveQtyChange,
+  moveItemErrors,
+  canSubmit,
   onSubmit,
   moving,
   moveError,
@@ -27,6 +32,7 @@ export default function InventoryMoveModal({
   const totalUnits = Number.isFinite(unitCount) ? unitCount : 0;
   const sourceLabel = sourceSlotLabel || "this slot";
   const rows = Array.isArray(moveSearchRows) ? moveSearchRows : [];
+  const items = Array.isArray(moveItems) ? moveItems : [];
   const hasQuery = String(moveSearch || "").trim().length > 0;
 
   return (
@@ -134,14 +140,104 @@ export default function InventoryMoveModal({
             )}
           </div>
 
+          {items.length > 0 ? (
+            <div className="mt-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Items to move
+              </div>
+              <div className="mt-2 max-h-64 divide-y divide-slate-200 overflow-y-auto rounded-xl border border-slate-200">
+                {items.map((item) => {
+                  const product = item.product || {};
+                  const itemId = String(item.id || item._id);
+                  const onHand = Number(item.qty) || 0;
+                  const qtyValue =
+                    moveQuantities && Object.prototype.hasOwnProperty.call(moveQuantities, itemId)
+                      ? moveQuantities[itemId]
+                      : "";
+                  const error =
+                    moveItemErrors && Object.prototype.hasOwnProperty.call(moveItemErrors, itemId)
+                      ? moveItemErrors[itemId]
+                      : "";
+                  const remaining = Math.max(0, onHand - (Number(qtyValue) || 0));
+                  return (
+                    <div key={itemId} className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {product.name || "Unknown product"}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {product.sku || "-"}
+                          </div>
+                        </div>
+                        <div className="text-right text-xs text-slate-500">
+                          On-hand{" "}
+                          <span className="font-semibold text-slate-700">
+                            {qtyFormatter(onHand)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <label
+                          htmlFor={`move-qty-${itemId}`}
+                          className="text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                        >
+                          Move qty
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id={`move-qty-${itemId}`}
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={qtyValue}
+                            onChange={(e) =>
+                              typeof onMoveQtyChange === "function" &&
+                              onMoveQtyChange(itemId, e.target.value)
+                            }
+                            className="w-24 rounded-lg bg-white px-2 py-1 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              typeof onMoveQtyChange === "function" &&
+                              onMoveQtyChange(itemId, String(onHand))
+                            }
+                            className="rounded-lg px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-900"
+                          >
+                            Max
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-1 text-[10px] text-slate-500">
+                        Remaining {qtyFormatter(remaining)}
+                      </div>
+                      {error ? (
+                        <div className="mt-1 text-[10px] font-semibold text-rose-600">
+                          {error}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                Total move qty:{" "}
+                <span className="font-semibold text-slate-900">
+                  {qtyFormatter(totalUnits)}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-4">
             <button
               type="button"
               onClick={onSubmit}
-              disabled={!selectedTargetSlotId || moving}
+              disabled={!selectedTargetSlotId || moving || canSubmit === false}
               className={[
                 "rounded-xl px-4 py-2 text-xs font-semibold",
-                !selectedTargetSlotId || moving
+                !selectedTargetSlotId || moving || canSubmit === false
                   ? "cursor-not-allowed bg-slate-200 text-slate-500"
                   : "bg-slate-900 text-white hover:bg-slate-800",
               ].join(" ")}

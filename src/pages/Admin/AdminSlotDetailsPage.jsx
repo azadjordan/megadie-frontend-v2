@@ -66,6 +66,7 @@ export default function AdminSlotDetailsPage() {
   const [moveSearchError, setMoveSearchError] = useState("");
   const [moveTargetSlot, setMoveTargetSlot] = useState(null);
   const [moveError, setMoveError] = useState("");
+  const [moveQuantities, setMoveQuantities] = useState({});
   const [clearError, setClearError] = useState("");
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [stockSearch, setStockSearch] = useState("");
@@ -150,13 +151,9 @@ export default function AdminSlotDetailsPage() {
       return selectedSlotItemIds.has(itemId);
     });
   }, [slotItems, selectedSlotItemIds]);
-  const selectedUnits = useMemo(
-    () =>
-      selectedSlotItems.reduce(
-        (sum, item) => sum + (Number(item.qty) || 0),
-        0
-      ),
-    [selectedSlotItems]
+  const moveCandidates = useMemo(
+    () => (moveScope === "all" ? slotItems : selectedSlotItems),
+    [moveScope, slotItems, selectedSlotItems]
   );
   const hasSlotItems = slotItems.length > 0;
   const allSelected = hasSlotItems && selectedCount === slotItems.length;
@@ -165,9 +162,32 @@ export default function AdminSlotDetailsPage() {
     ? String(moveTargetSlot._id || moveTargetSlot.id)
     : "";
   const isActionBusy = movingSlotItems || clearingSlotItems;
-  const moveItemCount =
-    moveScope === "all" ? slotItems.length : selectedSlotItems.length;
-  const moveUnitCount = moveScope === "all" ? totalQty : selectedUnits;
+  const moveValidation = useMemo(() => {
+    const errors = {};
+    let totalUnits = 0;
+    moveCandidates.forEach((item) => {
+      const itemId = String(item.id || item._id);
+      const onHand = Number(item.qty) || 0;
+      const rawValue = moveQuantities[itemId];
+      const qtyValue = Number(rawValue);
+      if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
+        errors[itemId] = "Enter a qty.";
+        return;
+      }
+      if (qtyValue > onHand) {
+        errors[itemId] = "Exceeds on-hand qty.";
+        return;
+      }
+      totalUnits += qtyValue;
+    });
+
+    const isValid =
+      moveCandidates.length > 0 && Object.keys(errors).length === 0;
+
+    return { errors, totalUnits, isValid };
+  }, [moveCandidates, moveQuantities]);
+  const moveItemCount = moveCandidates.length;
+  const moveUnitCount = moveValidation.totalUnits;
   const clearTargetCount =
     clearScope === "all" ? slotItems.length : selectedSlotItems.length;
 
@@ -342,6 +362,14 @@ export default function AdminSlotDetailsPage() {
   };
 
   const openMoveModal = (scope) => {
+    const sourceItems = scope === "all" ? slotItems : selectedSlotItems;
+    const initialQuantities = {};
+    sourceItems.forEach((item) => {
+      const itemId = String(item.id || item._id);
+      if (itemId) {
+        initialQuantities[itemId] = String(item.qty ?? "");
+      }
+    });
     setMoveScope(scope);
     setMoveModalOpen(true);
     setMoveSearch("");
@@ -350,6 +378,7 @@ export default function AdminSlotDetailsPage() {
     setMoveSearchError("");
     setMoveTargetSlot(null);
     setMoveError("");
+    setMoveQuantities(initialQuantities);
   };
 
   const closeMoveModal = () => {
@@ -360,6 +389,7 @@ export default function AdminSlotDetailsPage() {
     setMoveSearchError("");
     setMoveTargetSlot(null);
     setMoveError("");
+    setMoveQuantities({});
   };
 
   const openClearModal = (scope) => {
@@ -538,6 +568,12 @@ export default function AdminSlotDetailsPage() {
     setMoveError("");
   };
 
+  const handleMoveQtyChange = (slotItemId, value) => {
+    const key = String(slotItemId);
+    setMoveQuantities((prev) => ({ ...prev, [key]: value }));
+    setMoveError("");
+  };
+
   const handleMoveSubmit = async () => {
     if (!moveTargetSlotId) {
       setMoveError("Select a target slot.");
@@ -548,10 +584,24 @@ export default function AdminSlotDetailsPage() {
       return;
     }
 
-    const targetIds =
-      moveScope === "all" ? slotItemIds : selectedSlotItemIdsList;
-    if (!targetIds.length) {
+    if (!moveCandidates.length) {
       setMoveError("Select at least one slot item to move.");
+      return;
+    }
+    if (!moveValidation.isValid) {
+      setMoveError("Enter a valid qty for every item.");
+      return;
+    }
+
+    const moves = moveCandidates.reduce((acc, item) => {
+      const itemId = String(item.id || item._id);
+      const qtyValue = Number(moveQuantities[itemId]);
+      if (!itemId || !Number.isFinite(qtyValue) || qtyValue <= 0) return acc;
+      acc.push({ slotItemId: itemId, qty: qtyValue });
+      return acc;
+    }, []);
+    if (moves.length === 0) {
+      setMoveError("Enter a valid qty for every item.");
       return;
     }
 
@@ -560,7 +610,7 @@ export default function AdminSlotDetailsPage() {
       await moveSlotItems({
         fromSlotId: slotId,
         toSlotId: moveTargetSlotId,
-        slotItemIds: targetIds,
+        moves,
       }).unwrap();
       closeMoveModal();
       setSelectionMode(false);
@@ -952,6 +1002,11 @@ export default function AdminSlotDetailsPage() {
         selectedTargetSlot={moveTargetSlot}
         selectedTargetSlotId={moveTargetSlotId}
         onSelectTargetSlot={handleMoveSelectSlot}
+        moveItems={moveCandidates}
+        moveQuantities={moveQuantities}
+        onMoveQtyChange={handleMoveQtyChange}
+        moveItemErrors={moveValidation.errors}
+        canSubmit={moveValidation.isValid}
         onSubmit={handleMoveSubmit}
         moving={movingSlotItems}
         moveError={moveError}

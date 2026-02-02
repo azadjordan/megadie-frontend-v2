@@ -4,10 +4,11 @@ import { FiMinus, FiPlus } from "react-icons/fi";
 const clampValue = (value, min, max) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return min;
+  const integer = Math.trunc(numeric);
   if (max != null && Number.isFinite(max)) {
-    return Math.min(Math.max(numeric, min), max);
+    return Math.min(Math.max(integer, min), max);
   }
-  return Math.max(numeric, min);
+  return Math.max(integer, min);
 };
 
 export default function QuantityControlRequests({
@@ -30,10 +31,18 @@ export default function QuantityControlRequests({
 
   const handleInputChange = (event) => {
     const next = event.target.value;
-    setInputValue(next);
+    if (next === "") {
+      setInputValue("");
+      return;
+    }
+    const sanitized = next.replace(/[^\d]/g, "");
+    if (!sanitized) {
+      setInputValue("");
+      return;
+    }
+    setInputValue(sanitized);
     if (onChangeRaw) {
-      if (next === "") return;
-      const parsed = Number(next);
+      const parsed = Number(sanitized);
       if (!Number.isFinite(parsed)) return;
       onChangeRaw(parsed);
     }
@@ -72,6 +81,7 @@ export default function QuantityControlRequests({
         type="number"
         min={min}
         max={max}
+        step={1}
         value={inputValue}
         onChange={handleInputChange}
         onBlur={(event) => {

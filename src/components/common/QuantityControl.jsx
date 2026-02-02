@@ -3,10 +3,11 @@ import { FiMinus, FiPlus } from "react-icons/fi";
 const clampValue = (val, min, max) => {
   const next = Number(val);
   if (!Number.isFinite(next)) return min;
+  const integer = Math.trunc(next);
   if (max != null && Number.isFinite(max)) {
-    return Math.min(Math.max(next, min), max);
+    return Math.min(Math.max(integer, min), max);
   }
-  return Math.max(next, min);
+  return Math.max(integer, min);
 };
 
 export default function QuantityControl({
@@ -18,7 +19,9 @@ export default function QuantityControl({
   compact = false,
   disabled = false,
 }) {
-  const numericQty = Number.isFinite(Number(quantity)) ? Number(quantity) : min;
+  const numericQty = Number.isFinite(Number(quantity))
+    ? Math.trunc(Number(quantity))
+    : min;
   const clampedQty = clampValue(numericQty, min, max);
   const canDecrease = clampedQty > min;
   const canIncrease =
@@ -51,8 +54,8 @@ export default function QuantityControl({
 
   const handleChange = (event) => {
     const raw = event.target.value;
-    const parsed = parseInt(raw, 10);
-    if (!Number.isFinite(parsed)) return;
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed)) return;
     setQuantity(clampValue(parsed, min, max));
   };
 
@@ -78,6 +81,7 @@ export default function QuantityControl({
         type="number"
         min={min}
         max={max}
+        step={1}
         value={clampedQty}
         onChange={handleChange}
         disabled={disabled}
