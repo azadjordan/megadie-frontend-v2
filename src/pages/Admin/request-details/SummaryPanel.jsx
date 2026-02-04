@@ -15,9 +15,6 @@ export default function SummaryPanel({
   onConvertToOrder,
   isCreatingOrder,
   convertDisabled,
-  showShareWithClient,
-  onShareWithClient,
-  shareDisabled,
   lockReason,
 }) {
   const rows = [
@@ -83,7 +80,7 @@ export default function SummaryPanel({
           ))}
         </div>
 
-        {showConvertToOrder || showShareWithClient ? (
+        {showConvertToOrder ? (
           <div className="mt-4 border-t border-slate-200 pt-4 space-y-2">
             {showConvertToOrder ? (
               <button
@@ -99,23 +96,6 @@ export default function SummaryPanel({
                 ].join(" ")}
               >
                 {isCreatingOrder ? "Converting..." : "Convert to Order"}
-              </button>
-            ) : null}
-
-            {showShareWithClient ? (
-              <button
-                type="button"
-                onClick={onShareWithClient}
-                disabled={shareDisabled}
-                title={shareDisabled && lockReason ? lockReason : undefined}
-                className={[
-                  "w-full rounded-xl px-5 py-3 text-sm font-semibold transition",
-                  !shareDisabled
-                    ? "bg-violet-600 text-white hover:bg-violet-500"
-                    : "cursor-default bg-slate-200 text-slate-500",
-                ].join(" ")}
-              >
-                Share with Client
               </button>
             ) : null}
           </div>

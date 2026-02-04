@@ -5,8 +5,6 @@ import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
-import { copyTextToClipboard } from "../../utils/clipboard";
-import { buildClientShareMessage } from "../../utils/quoteShare";
 import CreateManualInvoiceModal from "../../components/admin/CreateManualInvoiceModal";
 
 import {
@@ -132,7 +130,6 @@ export default function AdminRequestDetailsPage() {
     useCreateOrderFromQuoteMutation();
   const [createManualInvoice, { isLoading: isCreatingManual, error: manualCreateError }] =
     useCreateManualInvoiceMutation();
-  const [isSharing, setIsSharing] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualError, setManualError] = useState("");
   const [manualForm, setManualForm] = useState({
@@ -640,9 +637,6 @@ export default function AdminRequestDetailsPage() {
     isCreatingOrder ||
     quoteLocked ||
     backendStatus !== "Confirmed";
-  const canShareWithClient =
-    backendStatus === "Quoted" && !orderCreated && !manualInvoiceLocked;
-  const shareDisabled = !canShareWithClient || isSharing;
   const canCreateManualInvoice =
     (backendStatus === "Processing" || backendStatus === "Quoted") &&
     !orderCreated &&
@@ -813,20 +807,6 @@ export default function AdminRequestDetailsPage() {
         );
       default:
         return null;
-    }
-  };
-
-  const onShareWithClient = async () => {
-    if (!canShareWithClient || !quote) return;
-    try {
-      setIsSharing(true);
-      const text = buildClientShareMessage(quote);
-      await copyTextToClipboard(text);
-      toast.success("Client message copied.");
-    } catch (err) {
-      toast.error(resolveToastError(err, "Failed to copy client message."));
-    } finally {
-      setIsSharing(false);
     }
   };
 
@@ -1238,9 +1218,6 @@ export default function AdminRequestDetailsPage() {
             onConvertToOrder={onConvertToOrder}
             isCreatingOrder={isCreatingOrder}
             convertDisabled={convertDisabled}
-            showShareWithClient={canShareWithClient}
-            onShareWithClient={onShareWithClient}
-            shareDisabled={shareDisabled}
             lockReason={quoteLockReason}
           />
         </aside>

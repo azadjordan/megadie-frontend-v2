@@ -67,6 +67,7 @@ export default function ProductCard({ product }) {
   const tags = useMemo(
     () =>
       [
+        product.size,
         product.packingUnit,
         product.grade,
         product.catalogCode ? `Code ${product.catalogCode}` : null,
