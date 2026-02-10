@@ -78,6 +78,16 @@ function getOrderRowMeta(order) {
   return { isFinalized, orderNumber, itemCountLabel };
 }
 
+function getStatusAccentClass(status) {
+  const map = {
+    Processing: "bg-slate-300",
+    Shipping: "bg-blue-400",
+    Delivered: "bg-emerald-400",
+    Cancelled: "bg-rose-400",
+  };
+  return map[status] || map.Processing;
+}
+
 function StatusBadge({ status, size = "default" }) {
   const base =
     "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
@@ -293,61 +303,67 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
-<div className="grid grid-cols-2 gap-3 md:hidden">
+      <div className="space-y-3">
+<div className="grid grid-cols-1 gap-3 md:hidden">
   {rows.map((o) => {
     const row = getOrderRowMeta(o);
     return (
       <div
         key={o._id}
-        className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"
+        className="relative rounded-2xl bg-white p-4 ring-1 ring-slate-200"
       >
-        <div className="flex items-start justify-between gap-2">
+        <span
+          aria-hidden="true"
+          className={`absolute left-0 top-4 bottom-4 w-1 rounded-r-full ${getStatusAccentClass(
+            o.status
+          )}`}
+        />
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-slate-900">
               {row.orderNumber}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-xs text-slate-500">
               {formatDateTime(o.createdAt)}
             </div>
           </div>
-          <StatusBadge status={o.status} size="compact" />
+          <StatusBadge status={o.status} />
         </div>
 
-        <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5">
-          <div className="truncate text-[11px] font-semibold text-slate-900">
+        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-center">
+          <div className="truncate text-sm font-semibold text-slate-900">
             {o.user?.name || "-"}
           </div>
-          <div className="truncate text-[10px] text-slate-500">
+          <div className="truncate text-xs text-slate-500">
             {o.user?.email || ""}
           </div>
         </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
+        <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
           <div>
-            <div className="uppercase font-semibold tracking-wide text-slate-400">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Stock
             </div>
-            <StockBadge finalized={row.isFinalized} size="compact" />
+            <StockBadge finalized={row.isFinalized} />
           </div>
 
           <div className="text-right">
-            <div className="uppercase font-semibold tracking-wide text-slate-400">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Total
             </div>
-            <div className="font-semibold text-slate-900">
+            <div className="mt-1 text-sm font-semibold text-slate-900">
               {formatMoney(getOrderTotal(o))}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-xs text-slate-600">
               {row.itemCountLabel}
             </div>
           </div>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-4 flex items-center justify-end">
           <Link
             to={`/admin/orders/${o._id}`}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
             aria-label="Open order"
             title="Open order"
           >

@@ -15,7 +15,7 @@ import Pagination from "../../components/common/Pagination";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import { copyTextToClipboard } from "../../utils/clipboard";
-import { buildClientQuoteLink } from "../../utils/quoteShare";
+import { buildAdminQuoteShareText } from "../../utils/quoteShare";
 import {
   useDeleteQuoteByAdminMutation,
   useGetAdminQuotesQuery,
@@ -37,32 +37,14 @@ function formatDateTime(iso) {
   }
 }
 
-function formatDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
-  } catch {
-    return iso || "-";
-  }
-}
 
-const ZWSP = "\u200B";
-
-function preventAutoLink(text) {
-  if (!text) return text;
-  let result = String(text);
-  result = result.replace(/(\d)(?=\d)/g, `$1${ZWSP}`);
-  result = result.replace(/@/g, `${ZWSP}@${ZWSP}`);
-  result = result.replace(/\.(?=[^.\s])/g, `.${ZWSP}`);
-  return result;
-}
-
-function StatusBadge({ status }) {
+function StatusBadge({ status, size = "default" }) {
   const base =
-    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+    "inline-flex items-center gap-1 rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
 
   const map = {
     Processing: "bg-slate-50 text-slate-700 ring-slate-200",
@@ -72,15 +54,19 @@ function StatusBadge({ status }) {
   };
 
   return (
-    <span className={`${base} ${map[status] || map.Processing}`}>
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[status] || map.Processing}`}>
       {status}
     </span>
   );
 }
 
-function AvailabilityBadge({ status }) {
+function AvailabilityBadge({ status, size = "default" }) {
   const base =
-    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+    "inline-flex items-center gap-1 rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
   const map = {
     AVAILABLE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     SHORTAGE: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -94,7 +80,7 @@ function AvailabilityBadge({ status }) {
     NOT_CHECKED: "Not checked",
   };
   return (
-    <span className={`${base} ${map[status] || map.NOT_CHECKED}`}>
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[status] || map.NOT_CHECKED}`}>
       {status === "SHORTAGE" ? <FiAlertTriangle className="h-3 w-3" /> : null}
       {labelMap[status] || labelMap.NOT_CHECKED}
     </span>
@@ -162,7 +148,7 @@ function getRowMeta(q, state = {}) {
   const { deletingId, pdfId, copyId } = state;
   const hasOrder = Boolean(q.order);
   const canPdf = q.status === "Quoted";
-  const canCopy = q.status === "Quoted";
+  const canCopy = q.status === "Quoted" || q.status === "Confirmed";
   const isCancelled = q.status === "Cancelled";
 
   const requestedItems = Array.isArray(q.requestedItems) ? q.requestedItems : [];
@@ -215,62 +201,6 @@ function getRowMeta(q, state = {}) {
     rowCopy,
     displayTotal,
   };
-}
-
-function buildQuoteShareText(q) {
-  const quoteNo = q?.quoteNumber || q?._id || "-";
-  const createdAt = q?.createdAt ? formatDate(q.createdAt) : "-";
-  const clientName = q?.user?.name || "Unnamed";
-  const clientEmail = q?.user?.email || "-";
-  const items = Array.isArray(q?.requestedItems) ? q.requestedItems : [];
-  const quoteId = q?._id || q?.id;
-  const link = buildClientQuoteLink(quoteId);
-  const safeQuoteNo = preventAutoLink(quoteNo);
-  const safeCreatedAt = preventAutoLink(createdAt);
-  const safeClientEmail = preventAutoLink(clientEmail);
-
-  const lines = [];
-  lines.push("Quote Details");
-  lines.push(`Quote #: ${safeQuoteNo}`);
-  lines.push(`Date: ${safeCreatedAt}`);
-  lines.push(`Client: ${clientName}`);
-  lines.push(`Email: ${safeClientEmail}`);
-  lines.push("");
-
-  lines.push("Items:");
-  if (!items.length) {
-    lines.push("- None");
-  } else {
-    items.forEach((item, idx) => {
-      const qty = Number(item?.qty) || 0;
-      const unit = Number(item?.unitPrice) || 0;
-      const lineTotal = Math.max(0, unit * qty);
-      const label = item?.product?.name || "Unnamed";
-      lines.push(`${idx + 1}. *${label}* Qty: ${qty}, ${money(lineTotal)}`);
-      if (idx < items.length - 1) {
-        lines.push("");
-      }
-    });
-  }
-
-  lines.push("");
-  lines.push(`Delivery Charge: ${money(q?.deliveryCharge)}`);
-  lines.push(`Extra Fee: ${money(q?.extraFee)}`);
-  lines.push(`Total Price: ${money(q?.totalPrice)}`);
-  lines.push("");
-  lines.push("Please review your request.");
-  lines.push(
-    "If everything looks correct, reply with *Confirm* or confirm using the link below:"
-  );
-  lines.push("يرجى مراجعة طلبك.");
-  lines.push(
-    "إذا كان كل شيء صحيحًا، يرجى الرد بكلمة *تأكيد* أو يمكنك التأكيد عبر الرابط أدناه:"
-  );
-  if (link) {
-    lines.push(link);
-  }
-
-  return lines.join("\n");
 }
 
 export default function AdminRequestsPage() {
@@ -351,11 +281,11 @@ export default function AdminRequestsPage() {
 
   async function onCopy(q) {
     try {
-      if (q.status !== "Quoted") return;
+      if (q.status !== "Quoted" && q.status !== "Confirmed") return;
       setCopyId(q._id);
       const res = await getQuoteShare(q._id).unwrap();
       const quote = res?.data ?? res ?? q;
-      const text = buildQuoteShareText(quote);
+      const text = buildAdminQuoteShareText(quote);
       await copyTextToClipboard(text);
       toast.success("Quote copied to clipboard.");
     } catch (e) {
@@ -515,7 +445,7 @@ export default function AdminRequestsPage() {
                       title={
                         row.canCopy
                           ? "Copy quote"
-                          : "Copy is available for Quoted requests only"
+                          : "Copy is available for Quoted or Confirmed requests only"
                       }
                     >
                       <FiSend className="h-3.5 w-3.5" />
@@ -616,13 +546,13 @@ export default function AdminRequestsPage() {
 
                         {/* Status */}
                         <td className="px-4 py-3">
-                          <StatusBadge status={q.status} />
+                          <StatusBadge status={q.status} size="compact" />
                         </td>
 
                         {/* Availability */}
                         <td className="px-4 py-3">
                           {row.showAvailability ? (
-                            <AvailabilityBadge status={row.availabilityStatus} />
+                            <AvailabilityBadge status={row.availabilityStatus} size="compact" />
                           ) : (
                             <span className="text-xs text-slate-400">-</span>
                           )}
@@ -665,7 +595,7 @@ export default function AdminRequestsPage() {
                               title={
                                 row.canCopy
                                   ? "Copy quote"
-                                  : "Copy is available for Quoted requests only"
+                                  : "Copy is available for Quoted or Confirmed requests only"
                               }
                             >
                               <FiSend className="h-3.5 w-3.5" />

@@ -6,6 +6,7 @@ import {
   FaStore,
   FaShoppingCart,
   FaUser,
+  FaShieldAlt,
   FaBars,
   FaTimes,
   FaSignOutAlt,
@@ -343,26 +344,34 @@ export default function Header() {
 
                 <NavLink to="/cart" className={drawerLink}>
                   <span className="flex items-center gap-3">
-                    <span className="relative">
-                      <FaShoppingCart size={20} />
-                      {count > 0 && (
-                        <span className="absolute -right-2 -top-2 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-                          {count}
-                        </span>
-                      )}
-                    </span>
+                    <FaShoppingCart size={20} />
                     Cart
                   </span>
+                  {count > 0 ? (
+                    <span className="rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm shadow-violet-300/60">
+                      {count} item{count !== 1 ? "s" : ""}
+                    </span>
+                  ) : null}
                 </NavLink>
 
                 <div className="border-t border-slate-200 pt-2" />
 
                 {/* Account */}
                 {!isInitialized ? null : isAuthed ? (
-                  <NavLink to="/account" className={drawerLink}>
-                    <span className="flex items-center gap-3">
-                      <FaUser size={20} />
-                      {firstName}
+                  <NavLink
+                    to="/account"
+                    className={(props) => `${drawerLink(props)} items-start`}
+                  >
+                    <span className="flex items-start gap-3">
+                      <FaUser size={20} className="mt-0.5" />
+                      <span className="flex flex-col">
+                        <span className="text-base font-semibold text-slate-900">
+                          Account
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {userInfo?.email || firstName}
+                        </span>
+                      </span>
                     </span>
                   </NavLink>
                 ) : (
@@ -380,12 +389,8 @@ export default function Header() {
                     <div className="border-t border-slate-200 pt-2" />
                     <NavLink to="/admin" className={drawerLink}>
                       <span className="flex items-center gap-3">
-                        <FaUser size={20} />
+                        <FaShieldAlt size={20} />
                         Admin Panel
-                      </span>
-
-                      <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
-                        Admin
                       </span>
                     </NavLink>
                   </>

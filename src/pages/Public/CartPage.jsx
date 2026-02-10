@@ -2,7 +2,8 @@
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaTrash, FaShoppingCart, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaShoppingCart } from "react-icons/fa";
+import { FiTrash2 } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import {
@@ -50,7 +51,7 @@ export default function CartPage() {
   };
 
   const submit = async () => {
-    if (!isInitialized) return;
+    if (!isInitialized || isSubmitting) return;
 
     if (!userInfo) {
       return navigate("/login", { state: { from: location }, replace: true });
@@ -67,36 +68,51 @@ export default function CartPage() {
 
     if (requestedItems.length === 0) return;
 
-    try {
-      await createQuote({
-        requestedItems,
-        clientToAdminNote: note?.trim() ? note.trim() : undefined,
-      }).unwrap();
+    const request = createQuote({
+      requestedItems,
+      clientToAdminNote: note?.trim() ? note.trim() : undefined,
+    });
 
+    const timeoutMs = 20000;
+    let timeoutId;
+    if (typeof request?.abort === "function") {
+      timeoutId = setTimeout(() => request.abort(), timeoutMs);
+    }
+
+    try {
+      await request.unwrap();
       dispatch(clearCart());
       setNote("");
       navigate("/account/requests", { replace: true });
     } catch (err) {
-      toast.error(err?.data?.message || err?.error || "Failed to submit request");
+      const isTimeout =
+        err?.name === "AbortError" || err?.error?.name === "AbortError";
+      toast.error(
+        isTimeout
+          ? "Request timed out. Please try again."
+          : err?.data?.message || err?.error || "Failed to submit request"
+      );
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <div className="mx-auto max-w-6xl space-y-8 px-0 py-8 sm:px-4 lg:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-1">
           <div className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
             <FaShoppingCart size={18} />
             Cart
           </div>
-          <div className="mt-1 text-sm text-slate-600">
+          <div className="text-sm text-slate-600">
             {summary.lines} item{summary.lines !== 1 && "s"}, {summary.units}{" "}
-            unit{summary.units !== 1 && "s"} in cart
+            unit{summary.units !== 1 && "s"}
           </div>
         </div>
         <Link
           to="/shop"
-          className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="ml-auto inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           <FaArrowLeft size={12} />
           Back to shop
@@ -124,16 +140,22 @@ export default function CartPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="text-sm font-semibold text-slate-900">Items</div>
-              <div className="mt-4 space-y-3 md:max-h-[420px] md:overflow-y-auto md:pr-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="min-w-0 space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-base font-semibold text-slate-900">Items</div>
+                <div className="text-xs text-slate-500">
+                  {summary.lines} items • {summary.units} units
+                </div>
+              </div>
+              <div className="mt-4 space-y-4">
                 {items.map(({ productId, product, quantity }) => {
                   const image =
                     product?.images?.[0] || product?.imageUrl || placeholder;
                   const name = product?.name || "Untitled product";
                   const tags = [
+                    product?.size,
                     product?.packingUnit,
                     product?.grade,
                     product?.catalogCode
@@ -144,16 +166,24 @@ export default function CartPage() {
                   return (
                     <div
                       key={productId}
-                      className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4"
+                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                     >
-                      <div className="sm:hidden">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="line-clamp-2 text-sm font-semibold text-slate-900">
+                        <div className="min-w-0">
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                            <p className="line-clamp-2 text-base font-semibold text-slate-900 sm:text-sm">
                               {name}
                             </p>
+                            <button
+                              type="button"
+                              onClick={() => dispatch(removeFromCart(productId))}
+                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 sm:hidden"
+                              aria-label="Remove item"
+                              title="Remove item"
+                            >
+                              <FiTrash2 size={18} />
+                            </button>
                             {tags.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1 text-[11px] text-slate-600">
+                              <div className="col-span-2 mt-2 flex flex-wrap gap-1.5 text-xs text-slate-600">
                                 {tags.map((tag) => (
                                   <span
                                     key={tag}
@@ -166,95 +196,48 @@ export default function CartPage() {
                               </div>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => dispatch(removeFromCart(productId))}
-                            className="inline-flex items-center gap-1 rounded-xl border border-rose-200 px-2.5 py-2 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
-                            aria-label="Remove item"
-                            title="Remove item"
-                          >
-                            <FaTimes size={12} />
-                            Remove
-                          </button>
-                        </div>
 
-                        <div className="mt-3 flex items-center gap-3">
-                          <img
-                            src={image}
-                            alt={name}
-                            className="h-16 w-16 shrink-0 rounded-xl bg-white object-cover ring-1 ring-slate-200"
-                            loading="lazy"
-                            decoding="async"
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = placeholder;
-                            }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                              Quantity
-                            </div>
-                            <div className="mt-2">
-                              <QuantityControl
-                                quantity={quantity}
-                                setQuantity={(val) => setQty(productId, val)}
-                                min={1}
-                                size="md"
-                              />
+                        <div className="mt-4 sm:mt-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={image}
+                              alt={name}
+                              className="h-16 w-16 shrink-0 rounded-2xl bg-white object-cover ring-1 ring-slate-200"
+                              loading="lazy"
+                              decoding="async"
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = placeholder;
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                  Quantity
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    dispatch(removeFromCart(productId))
+                                  }
+                                  className="hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 sm:inline-flex"
+                                  aria-label="Remove item"
+                                  title="Remove item"
+                                >
+                                  <FiTrash2 size={16} />
+                                </button>
+                              </div>
+                              <div className="mt-2">
+                                <QuantityControl
+                                  quantity={quantity}
+                                  setQuantity={(val) => setQty(productId, val)}
+                                  min={1}
+                                  size="sm"
+                                  className="w-full max-w-[140px]"
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="hidden sm:flex flex-wrap items-center gap-3 sm:flex-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => dispatch(removeFromCart(productId))}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-                          aria-label="Remove item"
-                          title="Remove item"
-                        >
-                          <FaTimes size={13} />
-                        </button>
-                        <img
-                          src={image}
-                          alt={name}
-                          className="h-14 w-14 shrink-0 rounded-xl bg-white object-cover ring-1 ring-slate-200"
-                          loading="lazy"
-                          decoding="async"
-                          onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = placeholder;
-                          }}
-                        />
-
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-1 text-sm font-semibold text-slate-900">
-                            {name}
-                          </p>
-                          {tags.length > 0 && (
-                            <div className="mt-1 flex min-w-0 flex-nowrap gap-1 overflow-hidden text-[11px] text-slate-600">
-                              {tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200/70"
-                                  title={tag}
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <QuantityControl
-                            quantity={quantity}
-                            setQuantity={(val) => setQty(productId, val)}
-                            min={1}
-                            size="sm"
-                            compact
-                          />
                         </div>
                       </div>
                     </div>
@@ -262,47 +245,44 @@ export default function CartPage() {
                 })}
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="space-y-4">
+          <aside className="min-w-0 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <label className="block text-sm font-semibold text-slate-900">
                 Note (optional)
               </label>
-
               <textarea
                 rows={3}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Add any special request or details for your quote."
-                className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-violet-500 focus:outline-none"
+                className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition focus:border-violet-500 focus:outline-none"
               />
             </div>
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-[calc(var(--app-header-h,0px)+1.5rem)]">
-              <div className="text-sm font-semibold text-slate-900">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-[calc(var(--app-header-h,0px)+1.5rem)]">
+              <div className="text-base font-semibold text-slate-900">
                 Summary
               </div>
               <div className="mt-4 space-y-3 text-sm text-slate-600">
-                <div className="space-y-2">
-                  {typeSummary.map(([type, qty]) => (
-                    <div
-                      key={type}
-                      className="flex items-center justify-between gap-3"
-                    >
-                      <span className="truncate">{type}</span>
-                      <span className="font-semibold text-slate-900">
-                        x {qty}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                {typeSummary.map(([type, qty]) => (
+                  <div
+                    key={type}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span className="truncate">{type}</span>
+                    <span className="font-semibold text-slate-900">
+                      x {qty}
+                    </span>
+                  </div>
+                ))}
               </div>
 
               <button
                 type="button"
                 onClick={submit}
                 disabled={isSubmitting || !isInitialized}
-                className="mt-5 w-full rounded-2xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700 disabled:opacity-60"
+                className="mt-5 w-full rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700 disabled:opacity-60"
               >
                 {isSubmitting ? "Submitting..." : "Submit request"}
               </button>
@@ -311,12 +291,12 @@ export default function CartPage() {
                 type="button"
                 onClick={() => dispatch(clearCart())}
                 disabled={isSubmitting}
-                className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
                 Clear cart
               </button>
             </div>
-          </div>
+          </aside>
         </div>
       )}
 

@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { Link } from 'react-router-dom'
-import { FaShoppingCart, FaCheck, FaPlus } from 'react-icons/fa'
+import { FaShoppingCart, FaCheck } from 'react-icons/fa'
 import { addToCart } from '../../features/cart/cartSlice'
 import QuantityControl from './QuantityControl'
 
@@ -177,12 +177,13 @@ export default function ProductCard({ product }) {
         )}
 
         {/* Bottom controls */}
-        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+        <div className="mt-auto flex flex-col gap-2 pt-2">
           <QuantityControl
             quantity={quantity}
             setQuantity={setQuantity}
             min={1}
             size="sm"
+            className="w-full"
           />
 
           <button
@@ -191,15 +192,24 @@ export default function ProductCard({ product }) {
             disabled={isAdded}
             aria-label={isAdded ? 'Added to cart' : 'Add to cart'}
             className={[
-              'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition ring-1 ring-inset',
+              'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition ring-1 ring-inset',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
               isAdded
-                ? 'cursor-default bg-violet-100 text-violet-700 ring-violet-200'
+                ? 'cursor-default bg-emerald-600 text-white ring-emerald-600'
                 : 'bg-white text-violet-700 ring-violet-300 hover:bg-violet-600 hover:text-white hover:ring-violet-600',
             ].join(' ')}
           >
-            {isAdded ? <FaCheck size={14} /> : <FaShoppingCart size={14} />}
-            {!isAdded && <FaPlus size={10} />}
+            {isAdded ? (
+              <>
+                <FaCheck size={14} />
+                Added
+              </>
+            ) : (
+              <>
+                <FaShoppingCart size={14} />
+                Add to Cart
+              </>
+            )}
           </button>
         </div>
       </div>

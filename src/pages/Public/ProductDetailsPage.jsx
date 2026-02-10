@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { FaArrowLeft, FaCheck, FaPlus, FaShoppingCart } from "react-icons/fa";
+import { FaArrowLeft, FaCheck, FaShoppingCart } from "react-icons/fa";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -267,22 +267,25 @@ export default function ProductDetailsPage() {
               {product?.packingUnit ? ` ${product.packingUnit}` : ""}
             </div>
 
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <QuantityControl
                 quantity={quantity}
                 setQuantity={setQuantity}
                 min={minQty}
                 size="md"
                 disabled={!isAvailable}
+                className="flex-1 min-w-[180px] sm:max-w-[180px]"
               />
               <button
                 type="button"
                 onClick={handleAddToCart}
                 disabled={isAdded || !isAvailable}
                 className={[
-                  "inline-flex items-center gap-1.5 rounded-2xl px-4 py-2 text-sm font-semibold transition",
+                  "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2",
-                  isAdded || !isAvailable
+                  isAdded
+                    ? "cursor-default bg-emerald-600 text-white"
+                    : !isAvailable
                     ? "cursor-not-allowed bg-violet-100 text-violet-700"
                     : "bg-violet-600 text-white hover:bg-violet-700",
                 ].join(" ")}
@@ -297,8 +300,7 @@ export default function ProductDetailsPage() {
                 ) : (
                   <>
                     <FaShoppingCart size={14} />
-                    <FaPlus size={10} />
-                    Add to cart
+                    Add to Cart
                   </>
                 )}
               </button>

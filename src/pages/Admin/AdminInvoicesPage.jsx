@@ -110,9 +110,13 @@ function isOverdue(inv) {
   return balanceDueMinor(inv) > 0 && due < Date.now();
 }
 
-function PaymentStatusBadge({ status }) {
+function PaymentStatusBadge({ status, size = "default" }) {
   const base =
-    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+    "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
 
   const map = {
     Paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
@@ -127,15 +131,38 @@ function PaymentStatusBadge({ status }) {
       ? "Paid"
       : "Unpaid";
 
-  return <span className={`${base} ${map[status] || map.Unpaid}`}>{label}</span>;
+  return (
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[status] || map.Unpaid}`}>
+      {label}
+    </span>
+  );
 }
 
-function OverdueBadge() {
+function OverdueBadge({ size = "default" }) {
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
   return (
-    <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
+    <span
+      className={`inline-flex items-center rounded-full bg-rose-50 font-semibold text-rose-800 ring-1 ring-inset ring-rose-200 ${
+        sizes[size] || sizes.default
+      }`}
+    >
       Overdue
     </span>
   );
+}
+
+function getInvoiceAccentClass(inv, isOverdueInvoice = false) {
+  if (inv?.status === "Cancelled") return "bg-rose-400";
+  if (isOverdueInvoice) return "bg-rose-400";
+  const map = {
+    Paid: "bg-emerald-400",
+    PartiallyPaid: "bg-amber-400",
+    Unpaid: "bg-rose-400",
+  };
+  return map[inv?.paymentStatus] || "bg-slate-300";
 }
 
 function friendlyApiError(err) {
@@ -657,21 +684,28 @@ export default function AdminInvoicesPage() {
         </div>
       ) : (
         <div className="space-y-3">
-<div className="grid grid-cols-2 gap-3 md:hidden">
+<div className="grid grid-cols-1 gap-3 md:hidden">
   {rows.map((inv) => {
     const row = getInvoiceRowMeta(inv, { pdfId });
 
     return (
       <div
         key={inv._id}
-        className="rounded-2xl bg-white p-3 ring-1 ring-slate-200"
+        className="relative rounded-2xl bg-white p-4 ring-1 ring-slate-200"
       >
-        <div className="flex items-start justify-between gap-2">
+        <span
+          aria-hidden="true"
+          className={`absolute left-0 top-4 bottom-4 w-1 rounded-r-full ${getInvoiceAccentClass(
+            inv,
+            row.overdue
+          )}`}
+        />
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-slate-900">
               {inv.invoiceNumber || inv._id}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-xs text-slate-500">
               <span
                 className={[
                   "font-semibold",
@@ -693,25 +727,25 @@ export default function AdminInvoicesPage() {
           ) : null}
         </div>
 
-        <div className="mt-2 text-[10px] text-slate-500">
+        <div className="mt-3 text-xs text-slate-500">
           <span className="font-semibold text-slate-500">Due:</span>{" "}
           <span className={row.overdue ? "font-semibold text-rose-700" : ""}>
             {inv.dueDate ? formatDate(inv.dueDate) : "No due"}
           </span>
         </div>
 
-        <div className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5">
-          <div className="truncate text-[11px] font-semibold text-slate-900">
+        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
+          <div className="truncate text-xs font-semibold text-slate-900">
             {inv.user?.name || ""}
           </div>
-          <div className="truncate text-[10px] text-slate-500">
+          <div className="truncate text-xs text-slate-500">
             {inv.user?.email || ""}
           </div>
         </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
+        <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
           <div>
-            <div className="uppercase font-semibold tracking-wide text-slate-400">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Status
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -721,23 +755,23 @@ export default function AdminInvoicesPage() {
           </div>
 
           <div className="text-right">
-            <div className="uppercase font-semibold tracking-wide text-slate-400">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Amount
             </div>
-            <div className="mt-1 font-semibold text-slate-900">
+            <div className="mt-1 text-sm font-semibold text-slate-900">
               {moneyMinorRounded(inv.amountMinor, row.currency, row.factor)}
             </div>
-            <div className="text-[10px] text-slate-500">
+            <div className="text-xs text-slate-600">
               Bal: {numberMinorRounded(row.balance, row.factor)}
             </div>
           </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
             className={[
-              "inline-flex flex-1 items-center justify-center rounded-lg px-2 py-2 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
               row.rowPdf || isPdfLoading
                 ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                 : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
@@ -751,7 +785,7 @@ export default function AdminInvoicesPage() {
 
           <Link
             to={`/admin/invoices/${inv._id}/edit`}
-            className="inline-flex flex-1 items-center justify-center rounded-lg bg-slate-900 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
             title="Edit invoice"
             aria-label="Edit invoice"
           >
@@ -835,8 +869,8 @@ export default function AdminInvoicesPage() {
 
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <PaymentStatusBadge status={inv.paymentStatus} />
-                            {row.overdue ? <OverdueBadge /> : null}
+                            <PaymentStatusBadge status={inv.paymentStatus} size="compact" />
+                            {row.overdue ? <OverdueBadge size="compact" /> : null}
                           </div>
                         </td>
 
