@@ -92,6 +92,20 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       ],
     }),
 
+    // Admin: cancel order with cleanup (invoice + allocations)
+    cancelOrderByAdmin: builder.mutation({
+      query: (id) => ({
+        url: `/orders/${id}/cancel`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: "Order", id: "LIST" },
+        { type: "Order", id },
+        { type: "Invoice", id: "LIST" },
+        { type: "Invoice", id: "SUMMARY" },
+      ],
+    }),
+
     deleteOrderByAdmin: builder.mutation({
       query: (id) => ({
         url: `/orders/${id}`,
@@ -113,5 +127,6 @@ export const {
   useCreateOrderFromQuoteMutation,
   useUpdateOrderByAdminMutation,
   useMarkOrderDeliveredMutation,
+  useCancelOrderByAdminMutation,
   useDeleteOrderByAdminMutation,
 } = ordersApiSlice;

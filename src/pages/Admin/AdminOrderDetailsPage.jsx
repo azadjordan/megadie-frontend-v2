@@ -14,9 +14,9 @@ import { StatusBadge, StockBadge } from "./order-details/Badges";
 
 import {
   useGetOrderByIdQuery,
-  useDeleteOrderByAdminMutation,
   useUpdateOrderByAdminMutation,
   useMarkOrderDeliveredMutation,
+  useCancelOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
 import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
 import {
@@ -146,20 +146,26 @@ export default function AdminOrderDetailsPage() {
   const hasInvoice = Boolean(invoiceId);
   const isProcessing = orderStatus === "Processing";
   const canEditNotes = isProcessing;
-  const canEditFees = isProcessing && !hasInvoice;
-  const editNotice = !isProcessing
-    ? "Notes and fees are editable only while the order is Processing."
-    : hasInvoice
-    ? "Fees are locked once an invoice exists."
+  const canEditFees = !hasInvoice && !isCancelled;
+  const editNotice = !canEditNotes
+    ? "Notes are editable only while the order is Processing."
+    : !canEditFees
+    ? isCancelled
+      ? "Fees are locked once the order is cancelled."
+      : "Fees are locked once an invoice exists."
     : "";
-  const canCreateInvoice = orderStatus === "Processing" && !hasInvoice;
+  const canCreateInvoice =
+    ["Shipping", "Delivered"].includes(orderStatus) && !hasInvoice;
   const createInvoiceReason = hasInvoice
     ? "Invoice attached."
-    : orderStatus !== "Processing"
-    ? "Only Processing orders can create invoices."
+    : !["Shipping", "Delivered"].includes(orderStatus)
+    ? "Invoices can be created once the order is Shipping or Delivered."
     : "";
   const shouldLoadAllocations =
-    Boolean(orderId) && (orderStatus === "Shipping" || orderStatus === "Cancelled");
+    Boolean(orderId) &&
+    (orderStatus === "Shipping" ||
+      orderStatus === "Delivered" ||
+      orderStatus === "Cancelled");
   const {
     data: allocationsResult,
     isLoading: isAllocationsLoading,
@@ -266,37 +272,40 @@ export default function AdminOrderDetailsPage() {
   }, [allocations, items]);
 
   const isStockFinalized =
-    Boolean(order?.stockFinalizedAt) ||
-    orderStatus === "Delivered" ||
-    allocationMetrics.isFullyDeducted;
-  const canAllocate =
-    orderStatus === "Shipping" && hasInvoice && !isStockFinalized;
-  const allocationLockReason = !hasInvoice
-    ? "Invoice required before managing allocations."
-    : isStockFinalized
+    Boolean(order?.stockFinalizedAt) || allocationMetrics.isFullyDeducted;
+  const releaseAllowed =
+    orderStatus === "Shipping" &&
+    !hasInvoice &&
+    !isStockFinalized &&
+    !hasDeductedAllocations;
+  const canAllocate = orderStatus === "Shipping" && !isStockFinalized;
+  const allocationLockReason = isStockFinalized
     ? "Stock finalized."
     : orderStatus === "Cancelled"
     ? "Order is cancelled."
+    : orderStatus === "Delivered"
+    ? hasInvoice
+      ? "Remove the invoice before adjusting reservations."
+      : "Reservations are locked once delivered."
     : orderStatus !== "Shipping"
     ? "Order must be Shipping before managing allocations."
     : "";
-  const isAllocationLocked =
-    ["Delivered", "Cancelled"].includes(orderStatus) || !canAllocate;
   const hasPartialDeduction = hasDeductedAllocations && !isFullyDeducted;
 
   let finalizeHint = "";
-  if (!isAllocationLocked && !isAllocationsLoading) {
-    if (!hasAllocations) {
-      finalizeHint = "No reservations yet.";
-    } else if (!isFullyReserved) {
-      finalizeHint = "Reserve all items before finalizing stock.";
-    } else {
-      finalizeHint = "Finalizing deducts reserved qty from stock.";
-    }
+  if (isAllocationsLoading) {
+    finalizeHint = "Checking allocations...";
+  } else if (!hasAllocations) {
+    finalizeHint = "Reserve all items before finalizing stock.";
+  } else if (!isFullyReserved) {
+    finalizeHint = "Reserve all items before finalizing stock.";
+  } else {
+    finalizeHint = "Finalizing deducts reserved qty from stock.";
   }
 
   const canFinalize =
-    !isAllocationLocked &&
+    orderStatus === "Delivered" &&
+    hasInvoice &&
     !isFullyDeducted &&
     !hasPartialDeduction &&
     hasAllocations &&
@@ -305,37 +314,43 @@ export default function AdminOrderDetailsPage() {
   const finalizeTooltip = !canFinalize
     ? isStockFinalized
       ? "Stock already Finalized"
+      : orderStatus !== "Delivered"
+      ? "Order must be Delivered before finalizing stock."
+      : !hasInvoice
+      ? "Invoice required before finalizing stock."
+      : hasPartialDeduction
+      ? "Resolve allocations before finalizing stock."
       : finalizeHint || allocationLockReason
     : "";
 
   const isShipping = orderStatus === "Shipping";
-  const canShip = orderStatus === "Processing" && hasInvoice;
-  const shippingLockReason = !hasInvoice
-    ? "Invoice required before Shipping."
-    : orderStatus === "Processing" || isShipping
-    ? ""
-    : "Only Processing orders can mark Shipping.";
+  const canShip = orderStatus === "Processing";
+  const shippingLockReason =
+    orderStatus === "Processing"
+      ? ""
+      : isShipping
+      ? "Order is already Shipping."
+      : "Only Processing orders can mark Shipping.";
 
   let deliverLockReason = "";
-  if (!hasInvoice) {
-    deliverLockReason = "Invoice required before delivery.";
+  if (orderStatus === "Delivered") {
+    deliverLockReason = "Order already delivered.";
   } else if (orderStatus !== "Shipping") {
     deliverLockReason = "Order must be Shipping before delivery.";
-  } else if (!isStockFinalized) {
-    if (isAllocationsLoading) {
-      deliverLockReason = "Checking allocations...";
-    } else if (isAllocationsError) {
-      deliverLockReason = "Unable to load allocation status.";
-    } else if (!allocationMetrics.hasAllocations) {
-      deliverLockReason = "Reserve and finalize stock before delivery.";
-    } else if (allocationMetrics.hasReservedAllocations) {
-      deliverLockReason = "Finalize allocations before delivery.";
-    } else if (!allocationMetrics.isFullyDeducted) {
-      deliverLockReason = "Finalize allocations before delivery.";
-    }
+  } else if (isAllocationsLoading) {
+    deliverLockReason = "Checking allocations...";
+  } else if (isAllocationsError) {
+    deliverLockReason = "Unable to load allocation status.";
+  } else if (!allocationMetrics.hasAllocations) {
+    deliverLockReason = "Reserve all items before delivery.";
+  } else if (hasPartialDeduction) {
+    deliverLockReason = "Resolve allocations before delivery.";
+  } else if (!isFullyReserved && !allocationMetrics.isFullyDeducted) {
+    deliverLockReason = "Reserve all items before delivery.";
   }
   const canDeliver = deliverLockReason === "";
-  const needsAllocationCheck = orderStatus === "Shipping" || isCancelled;
+  const needsAllocationCheck =
+    orderStatus === "Shipping" || orderStatus === "Delivered" || isCancelled;
   const allocationCheckLoading = needsAllocationCheck && isAllocationsLoading;
   const allocationCheckError = needsAllocationCheck && isAllocationsError;
   const canCancelOrder =
@@ -343,7 +358,7 @@ export default function AdminOrderDetailsPage() {
     !isStockFinalized &&
     !allocationCheckLoading &&
     !allocationCheckError &&
-    !hasBlockingAllocations;
+    !hasDeductedAllocations;
   const canReopenOrder =
     isCancelled &&
     !hasInvoice &&
@@ -351,21 +366,14 @@ export default function AdminOrderDetailsPage() {
     !allocationCheckLoading &&
     !allocationCheckError &&
     !hasBlockingAllocations;
-  const canMoveBackToProcessing =
-    orderStatus === "Shipping" &&
-    !hasInvoice &&
-    !isStockFinalized &&
-    !allocationCheckLoading &&
-    !allocationCheckError &&
-    !hasBlockingAllocations;
   const cancelReason = isStockFinalized
     ? "Stock finalized orders cannot be cancelled."
+    : hasDeductedAllocations
+    ? "Stock already deducted. Reverse before cancelling."
     : allocationCheckLoading
     ? "Checking allocations..."
     : allocationCheckError
     ? "Unable to load allocations."
-    : hasBlockingAllocations
-    ? "Remove allocations before cancelling."
     : "";
   const reopenReason = isStockFinalized
     ? "Stock finalized orders cannot be reopened."
@@ -377,34 +385,6 @@ export default function AdminOrderDetailsPage() {
     ? "Unable to load allocations."
     : hasBlockingAllocations
     ? "Remove allocations before re-opening."
-    : "";
-  const moveBackReason = isStockFinalized
-    ? "Stock finalized orders cannot be moved back to Processing."
-    : hasInvoice
-    ? "Remove the invoice before moving back to Processing."
-    : allocationCheckLoading
-    ? "Checking allocations..."
-    : allocationCheckError
-    ? "Unable to load allocations."
-    : hasBlockingAllocations
-    ? "Remove allocations before moving back to Processing."
-    : "";
-  const canDeleteOrder =
-    isCancelled &&
-    !isStockFinalized &&
-    !allocationCheckLoading &&
-    !allocationCheckError &&
-    !hasBlockingAllocations;
-  const deleteReason = !isCancelled
-    ? "Cancel order before deleting."
-    : isStockFinalized
-    ? "Stock finalized orders cannot be deleted."
-    : allocationCheckLoading
-    ? "Checking allocations..."
-    : allocationCheckError
-    ? "Unable to load allocations."
-    : hasBlockingAllocations
-    ? "Remove allocations before deleting."
     : "";
   const canToggleCancel = isCancelled ? canReopenOrder : canCancelOrder;
   const [deliveryCharge, setDeliveryCharge] = useState("0");
@@ -443,8 +423,8 @@ export default function AdminOrderDetailsPage() {
     useUpdateOrderByAdminMutation();
   const [updateOrderStatus, { isLoading: isUpdatingStatus }] =
     useUpdateOrderByAdminMutation();
-  const [deleteOrderByAdmin, { isLoading: isDeleting }] =
-    useDeleteOrderByAdminMutation();
+  const [cancelOrderByAdmin, { isLoading: isCancelling }] =
+    useCancelOrderByAdminMutation();
   const [
     markOrderDelivered,
     { isLoading: isDelivering, error: deliverError },
@@ -557,18 +537,15 @@ export default function AdminOrderDetailsPage() {
   };
 
   const handleCancel = async () => {
-    if (!order || isUpdatingStatus) return;
+    if (!order || isUpdatingStatus || isCancelling) return;
     const confirmed = window.confirm(
-      "Cancel this order? You can still delete it after cancelling."
+      "Cancel this order? This will delete the invoice and payments (if any), unreserve all items, and mark the order as Cancelled."
     );
     if (!confirmed) return;
     setOverviewError("");
     try {
-      await updateOrderStatus({
-        id: orderId,
-        status: "Cancelled",
-      }).unwrap();
-      toast.success("Order cancelled.");
+      const res = await cancelOrderByAdmin(orderId).unwrap();
+      toast.success(res?.message || "Order cancelled.");
     } catch (err) {
       setOverviewError(
         err?.data?.message || err?.error || "Failed to cancel order."
@@ -596,20 +573,6 @@ export default function AdminOrderDetailsPage() {
     }
   };
 
-  const handleDeleteOrder = async () => {
-    if (!order || !canDeleteOrder || isDeleting) return;
-    const confirmed = window.confirm(
-      "Delete this cancelled order? This will delete its quote, invoice, payments, and allocations."
-    );
-    if (!confirmed) return;
-    try {
-      await deleteOrderByAdmin(orderId).unwrap();
-      toast.success("Order deleted.");
-      navigate("/admin/orders");
-    } catch (err) {
-      toast.error(err?.data?.message || err?.error || "Delete failed.");
-    }
-  };
   const openDeliverModal = () => {
     if (!order || !canDeliver || isDelivering) return;
     setDeliverFormError("");
@@ -682,40 +645,39 @@ export default function AdminOrderDetailsPage() {
     }
   };
 
-  const invoiceShipLockReason =
-    !canCreateInvoice && createInvoiceReason
+  const deliverInvoiceLockReason =
+    !canDeliver && deliverLockReason
+      ? deliverLockReason
+      : !canCreateInvoice && createInvoiceReason
       ? createInvoiceReason
-      : !canShip && shippingLockReason
-      ? shippingLockReason
       : "";
   const finalizeStepLockReason =
-    !canFinalize && finalizeTooltip
-      ? finalizeTooltip
-      : !canDeliver && deliverLockReason
-      ? deliverLockReason
-      : "";
+    !canFinalize && finalizeTooltip ? finalizeTooltip : "";
 
   const tabs = [
-    { id: "general", label: "General", number: 1 },
-    {
-      id: "invoice",
-      label: "Invoice & Ship",
-      number: 2,
-      locked: !canCreateInvoice && !canShip,
-      lockReason: invoiceShipLockReason,
-    },
+    { id: "general", label: "Ship", shortLabel: "Ship", number: 1 },
     {
       id: "stock",
-      label: "Allocate Stock",
-      number: 3,
+      label: "Reserve Stock",
+      shortLabel: "Reserve",
+      number: 2,
       locked: !canAllocate,
       lockReason: allocationLockReason,
     },
     {
+      id: "invoice",
+      label: "Deliver & Invoice",
+      shortLabel: "Del & Inv",
+      number: 3,
+      locked: !canDeliver && !canCreateInvoice,
+      lockReason: deliverInvoiceLockReason,
+    },
+    {
       id: "finalize",
-      label: "Finalize",
+      label: "Finalize Stock",
+      shortLabel: "Finalize",
       number: 4,
-      locked: !canFinalize && !canDeliver,
+      locked: !canFinalize,
       lockReason: finalizeStepLockReason,
     },
   ];
@@ -724,11 +686,11 @@ export default function AdminOrderDetailsPage() {
     switch (activeTab) {
       case "general":
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-4 lg:space-y-0">
             <StepCard
               n={1}
-              title="General"
-              subtitle="Edit notes and charges."
+              title="Ship"
+              subtitle="Update notes and fees, then mark the order as Shipping."
             >
               {editNotice ? (
                 <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
@@ -736,7 +698,7 @@ export default function AdminOrderDetailsPage() {
                 </div>
               ) : null}
 
-              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div>
                   <div className="mb-1 text-xs font-semibold text-slate-600">
                     Status
@@ -754,9 +716,7 @@ export default function AdminOrderDetailsPage() {
                     {order?.deliveredBy || "-"}
                   </div>
                 </div>
-              </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600">
                     Delivery charge
@@ -798,16 +758,7 @@ export default function AdminOrderDetailsPage() {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-3">
-                <div>
-                  <div className="mb-1 text-xs font-semibold text-slate-600">
-                    Client to Admin
-                  </div>
-                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
-                    {order.clientToAdminNote || "No client note."}
-                  </div>
-                </div>
-
+              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600">
                     Admin to Admin
@@ -845,6 +796,15 @@ export default function AdminOrderDetailsPage() {
                     ].join(" ")}
                   />
                 </div>
+
+                <div>
+                  <div className="mb-1 text-xs font-semibold text-slate-600">
+                    Client to Admin
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
+                    {order.clientToAdminNote || "No client note."}
+                  </div>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -853,7 +813,7 @@ export default function AdminOrderDetailsPage() {
                   onClick={onSave}
                   disabled={isSaving || (!canEditNotes && !canEditFees)}
                   className={[
-                    "rounded-xl px-4 py-2 text-sm font-semibold text-white",
+                    "h-10 rounded-xl px-4 py-2 text-sm font-semibold text-white",
                     isSaving || (!canEditNotes && !canEditFees)
                       ? "cursor-not-allowed bg-slate-300"
                       : "bg-slate-900 hover:bg-slate-800",
@@ -867,7 +827,28 @@ export default function AdminOrderDetailsPage() {
                     Saved.
                   </span>
                 ) : null}
+
+                <button
+                  type="button"
+                  onClick={handleShip}
+                  disabled={!canShip || isUpdatingStatus}
+                  title={shippingLockReason || undefined}
+                  className={[
+                    "h-10 rounded-xl px-4 py-2 text-sm font-semibold text-white",
+                    !canShip || isUpdatingStatus
+                      ? "cursor-not-allowed bg-blue-200 text-blue-600"
+                      : "bg-blue-600 hover:bg-blue-700",
+                  ].join(" ")}
+                >
+                  {isUpdatingStatus ? "Updating..." : "Mark Shipping"}
+                </button>
               </div>
+
+              {shippingError ? (
+                <div className="mt-2 text-[11px] text-rose-600">
+                  {shippingError}
+                </div>
+              ) : null}
 
               {overviewError ? (
                 <div className="mt-3 rounded-xl bg-rose-50 p-3 text-xs text-rose-800 ring-1 ring-rose-200">
@@ -881,49 +862,43 @@ export default function AdminOrderDetailsPage() {
                 </div>
               ) : null}
 
-              <div className="mt-6 border-t border-slate-200 pt-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Danger zone
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  Delete is available only for cancelled orders without stock finalized.
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDeleteOrder}
-                  disabled={!canDeleteOrder || isDeleting}
-                  title={deleteReason || undefined}
-                  className={[
-                    "mt-3 inline-flex items-center rounded-xl px-4 py-2 text-xs font-semibold text-white",
-                    !canDeleteOrder || isDeleting
-                      ? "cursor-not-allowed bg-rose-200 text-rose-50"
-                      : "bg-rose-600 hover:bg-rose-700",
-                  ].join(" ")}
-                >
-                  {isDeleting ? "Deleting..." : "Delete Order"}
-                </button>
-              </div>
             </StepCard>
 
-            <AdminOrderAllocation
-              orderId={orderId}
-              orderStatus={orderStatus}
-              items={items}
-              formatMoney={moneyPlain}
-              showSlots={false}
-              title="Order items"
-            />
-
+            <div className="lg:sticky lg:top-6 lg:self-start">
+              <AdminOrderAllocation
+                orderId={orderId}
+                orderStatus={orderStatus}
+                items={items}
+                formatMoney={moneyPlain}
+                showSlots={false}
+                title="Order items"
+              />
+            </div>
           </div>
         );
       case "invoice":
         return (
           <StepCard
-            n={2}
-            title="Invoice & Ship"
-            subtitle="Create the invoice and move the order to Shipping."
+            n={3}
+            title="Deliver & Invoice"
+            subtitle="Mark the order delivered, then create the invoice."
           >
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openDeliverModal}
+                disabled={!canDeliver || isDelivering}
+                title={deliverLockReason || undefined}
+                className={[
+                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
+                  !canDeliver || isDelivering
+                    ? "cursor-not-allowed bg-emerald-300"
+                    : "bg-emerald-600 hover:bg-emerald-700",
+                ].join(" ")}
+              >
+                {isDelivering ? "Delivering..." : "Mark Delivered"}
+              </button>
+
               <button
                 type="button"
                 onClick={openCreateModal}
@@ -938,26 +913,11 @@ export default function AdminOrderDetailsPage() {
               >
                 {isCreating ? "Creating..." : "Create Invoice"}
               </button>
-
-              <button
-                type="button"
-                onClick={handleShip}
-                disabled={!canShip || isUpdatingStatus}
-                title={shippingLockReason || undefined}
-                className={[
-                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
-                  !canShip || isUpdatingStatus
-                    ? "cursor-not-allowed bg-blue-200 text-blue-600"
-                    : "bg-blue-600 hover:bg-blue-700",
-                ].join(" ")}
-              >
-                {isUpdatingStatus ? "Updating..." : "Mark Shipping"}
-              </button>
             </div>
 
-            {shippingError ? (
-              <div className="mt-3 text-[11px] text-rose-600">
-                {shippingError}
+            {orderStatus === "Shipping" && canCreateInvoice ? (
+              <div className="mt-3 text-[11px] text-slate-500">
+                Invoice is typically created after delivery.
               </div>
             ) : null}
           </StepCard>
@@ -970,9 +930,10 @@ export default function AdminOrderDetailsPage() {
             items={items}
             formatMoney={money}
             showPricing={false}
-            title="Allocate Stock"
+            title="Reserve Stock"
             allocationEnabled={canAllocate}
             allocationLockReason={allocationLockReason}
+            allowRelease={releaseAllowed}
             mode="stock"
           />
         );
@@ -980,8 +941,8 @@ export default function AdminOrderDetailsPage() {
         return (
           <StepCard
             n={4}
-            title="Finalize"
-            subtitle="Finalize stock allocations and mark the order delivered."
+            title="Finalize Stock"
+            subtitle="Deduct reserved stock after delivery and invoice."
           >
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -997,21 +958,6 @@ export default function AdminOrderDetailsPage() {
                 ].join(" ")}
               >
                 {isFinalizing ? "Finalizing..." : "Finalize Stock"}
-              </button>
-
-              <button
-                type="button"
-                onClick={openDeliverModal}
-                disabled={!canDeliver || isDelivering}
-                title={deliverLockReason || undefined}
-                className={[
-                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
-                  !canDeliver || isDelivering
-                    ? "cursor-not-allowed bg-emerald-300"
-                    : "bg-emerald-600 hover:bg-emerald-700",
-                ].join(" ")}
-              >
-                {isDelivering ? "Delivering..." : "Mark Delivered"}
               </button>
             </div>
 
@@ -1151,54 +1097,7 @@ export default function AdminOrderDetailsPage() {
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
-            {orderStatus === "Shipping" ? (
-              <button
-                type="button"
-                onClick={handleMakeProcessing}
-                disabled={isUpdatingStatus || !canMoveBackToProcessing}
-                title={
-                  !isUpdatingStatus && !canMoveBackToProcessing
-                    ? moveBackReason
-                    : undefined
-                }
-                className={[
-                  "rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                  isUpdatingStatus || !canMoveBackToProcessing
-                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
-                    : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100",
-                ].join(" ")}
-              >
-                Back to Processing
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={isCancelled ? handleMakeProcessing : handleCancel}
-              disabled={isUpdatingStatus || !canToggleCancel}
-              title={
-                !isUpdatingStatus && !canToggleCancel
-                  ? isCancelled
-                    ? reopenReason
-                    : cancelReason
-                  : undefined
-              }
-              className={[
-                "rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                isUpdatingStatus || !canToggleCancel
-                  ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
-                  : isCancelled
-                  ? "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                  : "border-rose-500 bg-white text-rose-600 hover:bg-rose-50",
-              ].join(" ")}
-            >
-              {isUpdatingStatus
-                ? "Updating..."
-                : isCancelled
-                ? "Make Processing"
-                : "Cancel order"}
-            </button>
-          </div>
+          <div className="flex items-center gap-2" />
         </div>
 
         <div className="mt-1 text-sm text-slate-500">
@@ -1217,6 +1116,36 @@ export default function AdminOrderDetailsPage() {
 
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           {summaryPanel}
+          <div className="rounded-2xl border border-slate-200 bg-white p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={isCancelled ? handleMakeProcessing : handleCancel}
+                disabled={(isUpdatingStatus || isCancelling) || !canToggleCancel}
+                title={
+                  !(isUpdatingStatus || isCancelling) && !canToggleCancel
+                    ? isCancelled
+                      ? reopenReason
+                      : cancelReason
+                    : undefined
+                }
+                className={[
+                  "rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                  (isUpdatingStatus || isCancelling) || !canToggleCancel
+                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                    : isCancelled
+                    ? "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                    : "border-rose-500 bg-white text-rose-600 hover:bg-rose-50",
+                ].join(" ")}
+              >
+                {isUpdatingStatus || isCancelling
+                  ? "Updating..."
+                  : isCancelled
+                  ? "Make Processing"
+                  : "Unreserve & Cancel"}
+              </button>
+            </div>
+          </div>
         </aside>
       </div>
 
@@ -1258,7 +1187,9 @@ export default function AdminOrderDetailsPage() {
                 >
                   {tab.number}
                 </span>
-                <span>{tab.label}</span>
+                <span className="whitespace-nowrap text-[10px] leading-tight">
+                  {tab.shortLabel || tab.label}
+                </span>
               </button>
             );
           })}

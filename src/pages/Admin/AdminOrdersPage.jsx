@@ -5,13 +5,21 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiRefreshCw,
+  FiSend,
   FiSettings,
+  FiTrash2,
 } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
-import { useGetOrdersAdminQuery } from "../../features/orders/ordersApiSlice";
+import { copyTextToClipboard } from "../../utils/clipboard";
+import { buildAdminOrderShareText } from "../../utils/orderShare";
+import {
+  useDeleteOrderByAdminMutation,
+  useGetOrdersAdminQuery,
+} from "../../features/orders/ordersApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 function formatDateTime(iso) {
@@ -71,8 +79,7 @@ function getOrderTotal(order) {
 }
 
 function getOrderRowMeta(order) {
-  const isFinalized =
-    Boolean(order?.stockFinalizedAt) || order?.status === "Delivered";
+  const isFinalized = Boolean(order?.stockFinalizedAt);
   const orderNumber = order?.orderNumber || order?._id || "-";
   const itemCountLabel = formatItemCount(order?.orderItems);
   return { isFinalized, orderNumber, itemCountLabel };
@@ -149,6 +156,11 @@ export default function AdminOrdersPage() {
   // Note: Pagination (server-side)
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [copyId, setCopyId] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
+
+  const [deleteOrderByAdmin, { isLoading: isDeleting }] =
+    useDeleteOrderByAdminMutation();
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -170,6 +182,42 @@ export default function AdminOrdersPage() {
   const pagination = ordersRes?.pagination;
   const totalItems =
     typeof pagination?.total === "number" ? pagination.total : rows.length;
+
+  async function onCopy(order) {
+    if (!order || copyId) return;
+    try {
+      setCopyId(order._id);
+      const text = buildAdminOrderShareText(order);
+      await copyTextToClipboard(text);
+      toast.success("Order copied to clipboard.");
+    } catch (e) {
+      toast.error("Failed to copy order.");
+    } finally {
+      setCopyId(null);
+    }
+  }
+
+  async function onDelete(order) {
+    if (!order || deleteId || isDeleting) return;
+    const confirmed = window.confirm(
+      "Delete this cancelled order? This will delete its quote, invoice, payments, and allocations."
+    );
+    if (!confirmed) return;
+    try {
+      setDeleteId(order._id);
+      await deleteOrderByAdmin(order._id).unwrap();
+      toast.success("Order deleted.");
+    } catch (e) {
+      const msg = e?.data?.message || e?.error || "Delete failed.";
+      const friendly =
+        /allocation/i.test(msg) || /reserve/i.test(msg)
+          ? "Cannot delete: remove reservations/allocations first."
+          : msg;
+      toast.error(friendly);
+    } finally {
+      setDeleteId(null);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -307,6 +355,15 @@ export default function AdminOrdersPage() {
 <div className="grid grid-cols-1 gap-3 md:hidden">
   {rows.map((o) => {
     const row = getOrderRowMeta(o);
+    const rowCopy = copyId === o._id;
+    const rowDelete = deleteId === o._id;
+    const canDelete = o.status === "Cancelled" && !row.isFinalized;
+    const deleteHint =
+      o.status !== "Cancelled"
+        ? "Cancel order before deleting."
+        : row.isFinalized
+        ? "Stock finalized orders cannot be deleted."
+        : "Delete order";
     return (
       <div
         key={o._id}
@@ -360,7 +417,22 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-end">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            className={[
+              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+              rowCopy
+                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+            ].join(" ")}
+            disabled={rowCopy}
+            onClick={() => onCopy(o)}
+            title="Copy order"
+          >
+            <FiSend className="h-3.5 w-3.5" />
+            Copy
+          </button>
           <Link
             to={`/admin/orders/${o._id}`}
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
@@ -370,6 +442,21 @@ export default function AdminOrdersPage() {
             <FiSettings className="h-3.5 w-3.5" />
             Open
           </Link>
+          <button
+            type="button"
+            className={[
+              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+              !canDelete || rowDelete || isDeleting
+                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
+            ].join(" ")}
+            disabled={!canDelete || rowDelete || isDeleting}
+            onClick={() => onDelete(o)}
+            title={deleteHint}
+          >
+            <FiTrash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
         </div>
       </div>
     );
@@ -394,6 +481,16 @@ export default function AdminOrdersPage() {
                 <tbody className="divide-y divide-slate-200">
                   {rows.map((o) => {
                     const row = getOrderRowMeta(o);
+                    const rowCopy = copyId === o._id;
+                    const rowDelete = deleteId === o._id;
+                    const canDelete =
+                      o.status === "Cancelled" && !row.isFinalized;
+                    const deleteHint =
+                      o.status !== "Cancelled"
+                        ? "Cancel order before deleting."
+                        : row.isFinalized
+                        ? "Stock finalized orders cannot be deleted."
+                        : "Delete order";
                     return (
                       <tr key={o._id} className="hover:bg-slate-50">
                         <td className="px-4 py-3">
@@ -435,6 +532,19 @@ export default function AdminOrdersPage() {
 
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              className={[
+                                "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                                rowCopy ? "cursor-not-allowed text-slate-300" : "",
+                              ].join(" ")}
+                              disabled={rowCopy}
+                              onClick={() => onCopy(o)}
+                              aria-label="Copy order"
+                              title="Copy order"
+                            >
+                              <FiSend className="h-4 w-4" />
+                            </button>
                             <Link
                               to={`/admin/orders/${o._id}`}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -443,6 +553,21 @@ export default function AdminOrdersPage() {
                             >
                               <FiSettings className="h-4 w-4" />
                             </Link>
+                            <button
+                              type="button"
+                              className={[
+                                "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-rose-600 hover:bg-rose-50",
+                                !canDelete || rowDelete || isDeleting
+                                  ? "cursor-not-allowed text-slate-300 hover:bg-white"
+                                  : "",
+                              ].join(" ")}
+                              disabled={!canDelete || rowDelete || isDeleting}
+                              onClick={() => onDelete(o)}
+                              aria-label="Delete order"
+                              title={deleteHint}
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>

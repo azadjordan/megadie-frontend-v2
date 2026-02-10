@@ -79,6 +79,8 @@ function SlotItemsPanel({
   allocationSummaryList,
   showAllocationHistory = false,
   isLocked = false,
+  isReserveLocked,
+  isReleaseLocked,
   lockMessage = "",
   onAvailabilityChange,
   buttonPlacement = "inline",
@@ -91,7 +93,10 @@ function SlotItemsPanel({
   const isDisabled = !productId || !orderId;
   const isOpen = forceOpen || open;
   const shouldSkip = isDisabled || !isOpen;
-  const showLockedMessage = isLocked && Boolean(lockMessage);
+  const reserveLocked = isReserveLocked ?? isLocked;
+  const releaseLocked = isReleaseLocked ?? isLocked;
+  const showLockedMessage =
+    Boolean(lockMessage) && (reserveLocked || releaseLocked);
   const [drafts, setDrafts] = useState({});
   const [localError, setLocalError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -220,7 +225,7 @@ function SlotItemsPanel({
   };
 
   const handlePick = async ({ slotId, availableQty, existing, draftValue }) => {
-    if (!orderId || !productId || isLocked) return;
+    if (!orderId || !productId || reserveLocked) return;
     setLocalError("");
     setActionError("");
 
@@ -281,7 +286,7 @@ function SlotItemsPanel({
   };
 
   const handlePickAll = async () => {
-    if (!orderId || !productId || isLocked) return;
+    if (!orderId || !productId || reserveLocked) return;
     setLocalError("");
     setActionError("");
 
@@ -352,7 +357,7 @@ function SlotItemsPanel({
   };
 
   const handleUnpick = async ({ slotId, existing }) => {
-    if (!orderId || isLocked) return;
+    if (!orderId || releaseLocked) return;
     const allocationId = resolveEntityId(existing);
     if (!allocationId) return;
     setLocalError("");
@@ -376,7 +381,7 @@ function SlotItemsPanel({
   };
 
   const handleUnpickAll = async () => {
-    if (!orderId || !hasReservations || isLocked) return;
+    if (!orderId || !hasReservations || releaseLocked) return;
     const confirmed = window.confirm("Remove all reservations for this item?");
     if (!confirmed) return;
     setLocalError("");
@@ -414,11 +419,11 @@ function SlotItemsPanel({
     isDisabled ||
     isBusy ||
     isFetching ||
-    isLocked ||
+    reserveLocked ||
     rows.length === 0 ||
     remainingQty <= 0;
   const unpickAllDisabled =
-    isDisabled || isBusy || isLocked || !hasReservations;
+    isDisabled || isBusy || releaseLocked || !hasReservations;
 
   const buttonNode = hideToggle ? null : (
     <>
@@ -731,7 +736,7 @@ function SlotItemsPanel({
                     const reserveDisabled =
                       isDisabled ||
                       isBusy ||
-                      isLocked ||
+                      reserveLocked ||
                       isAlreadyReserved ||
                       isFullyReserved ||
                       isOutOfStock ||
@@ -801,10 +806,10 @@ function SlotItemsPanel({
                               }))
                             }
                             placeholder="0"
-                            disabled={isLocked}
+                            disabled={reserveLocked}
                             className={[
                               "w-full rounded-lg px-3 py-2 text-sm ring-1 ring-slate-200",
-                              isLocked
+                              reserveLocked
                                 ? "cursor-not-allowed bg-slate-50 text-slate-400"
                                 : "bg-white text-slate-700",
                             ].join(" ")}
@@ -839,7 +844,12 @@ function SlotItemsPanel({
                                 existing,
                               })
                             }
-                            disabled={isDisabled || isBusy || isLocked || !allocationId}
+                            disabled={
+                              isDisabled ||
+                              isBusy ||
+                              releaseLocked ||
+                              !allocationId
+                            }
                             title={
                               allocationId
                                 ? "Remove this reservation (removes full reservation)."
@@ -847,7 +857,7 @@ function SlotItemsPanel({
                             }
                             className={[
                               "inline-flex w-full items-center justify-center rounded-lg border px-3 py-2 text-xs font-semibold transition",
-                              allocationId && !isLocked
+                              allocationId && !releaseLocked
                                 ? "border-rose-400 bg-white text-rose-700 hover:bg-rose-50"
                                 : "border-rose-200 bg-white text-rose-300",
                               "disabled:cursor-not-allowed",
@@ -909,7 +919,7 @@ function SlotItemsPanel({
                           const reserveDisabled =
                             isDisabled ||
                             isBusy ||
-                            isLocked ||
+                            reserveLocked ||
                             isAlreadyReserved ||
                             isFullyReserved ||
                             isOutOfStock ||
@@ -974,10 +984,10 @@ function SlotItemsPanel({
                                       }))
                                     }
                                     placeholder="0"
-                                    disabled={isLocked}
+                                    disabled={reserveLocked}
                                     className={[
                                       "w-[44px] rounded-md px-1 py-1 text-center text-[11px] ring-1 ring-slate-200",
-                                      isLocked
+                                      reserveLocked
                                         ? "cursor-not-allowed bg-slate-50 text-slate-400"
                                         : "bg-white text-slate-700",
                                     ].join(" ")}
@@ -1015,7 +1025,12 @@ function SlotItemsPanel({
                                       existing,
                                     })
                                   }
-                                  disabled={isDisabled || isBusy || isLocked || !allocationId}
+                                  disabled={
+                                    isDisabled ||
+                                    isBusy ||
+                                    releaseLocked ||
+                                    !allocationId
+                                  }
                                   title={
                                     allocationId
                                       ? "Remove this reservation (removes full reservation)."
@@ -1023,7 +1038,7 @@ function SlotItemsPanel({
                                   }
                                   className={[
                                     "inline-flex min-w-[60px] items-center justify-center rounded border px-2 py-1 text-[11px] font-semibold transition",
-                                    allocationId && !isLocked
+                                    allocationId && !releaseLocked
                                       ? "border-rose-400 bg-white text-rose-700 hover:bg-rose-50"
                                       : "border-rose-200 bg-white text-rose-300",
                                     "disabled:cursor-not-allowed",
@@ -1064,7 +1079,8 @@ function AllocationItemCard({
   item,
   allocationInfo,
   allocationSummary,
-  isAllocationLocked,
+  isReserveLocked,
+  isReleaseLocked,
   allocationLockMessage,
   showAvailability = true,
   showSlotActions = true,
@@ -1169,7 +1185,8 @@ function AllocationItemCard({
             allocationsList={allocationInfo?.list}
             allocationSummaryList={allocationSummary}
             showAllocationHistory={showAllocationHistory}
-            isLocked={isAllocationLocked}
+            isReserveLocked={isReserveLocked}
+            isReleaseLocked={isReleaseLocked}
             lockMessage={allocationLockMessage}
             onAvailabilityChange={showAvailability ? setAvailability : undefined}
             buttonPlacement="corner"
@@ -1193,6 +1210,7 @@ export default function AdminOrderAllocation({
   title = "Items",
   allocationEnabled = true,
   allocationLockReason = "",
+  allowRelease = false,
   mode,
 }) {
   const rows = Array.isArray(items) ? items : [];
@@ -1207,8 +1225,6 @@ export default function AdminOrderAllocation({
   const showAvailability =
     resolvedMode === "allocation" || resolvedMode === "stock";
   const isWorkflowLocked = isAllocationView && !allocationEnabled;
-  const isOrderLocked =
-    ["Delivered", "Cancelled"].includes(orderStatus) || isWorkflowLocked;
   const shouldLoadAllocations = Boolean(orderId) && isAllocationView;
 
   const {
@@ -1237,6 +1253,17 @@ export default function AdminOrderAllocation({
     [allocations]
   );
   const hasDeducted = deductedAllocations.length > 0;
+  const allowDeliveredRelease = Boolean(allowRelease) && orderStatus === "Delivered";
+  const isReserveLocked =
+    isAllocationView &&
+    (isWorkflowLocked || orderStatus !== "Shipping" || hasDeducted);
+  const isReleaseLocked =
+    isAllocationView &&
+    (isWorkflowLocked ||
+      !allowRelease ||
+      orderStatus === "Cancelled" ||
+      (orderStatus === "Delivered" && !allowDeliveredRelease) ||
+      hasDeducted);
 
   const allocationsByProduct = useMemo(() => {
     const map = new Map();
@@ -1354,19 +1381,28 @@ export default function AdminOrderAllocation({
       0
     );
 
-    const isAllocationLocked = isOrderLocked || hasDeducted;
+    const isAllocationLocked = isReserveLocked && isReleaseLocked;
 
     let allocationLockMessage = "";
+    let allocationNoticeMessage = "";
     if (hasDeducted) {
       allocationLockMessage = "Stock finalized.";
     } else if (isWorkflowLocked) {
       allocationLockMessage =
-        allocationLockReason || "Invoice and Shipping required before reserving.";
-    } else if (["Delivered", "Cancelled"].includes(orderStatus)) {
-      allocationLockMessage =
-        "Reservations are locked for delivered or cancelled orders.";
+        allocationLockReason || "Shipping required before reserving.";
+    } else if (orderStatus === "Cancelled") {
+      allocationLockMessage = "Reservations are locked for cancelled orders.";
+    } else if (orderStatus === "Delivered" && allowDeliveredRelease) {
+      allocationNoticeMessage =
+        "Delivered: you can remove reservations. New reservations require Shipping.";
+    } else if (orderStatus === "Delivered") {
+      allocationLockMessage = "Reservations are locked for delivered orders.";
     }
-    const slotLockMessage = isAllocationLocked ? "" : allocationLockMessage;
+    const allocationMessage = allocationNoticeMessage || allocationLockMessage;
+    const showAllocationMessage =
+      Boolean(allocationMessage) &&
+      (allocationNoticeMessage || isAllocationLocked);
+    const slotLockMessage = isAllocationLocked ? "" : allocationMessage;
 
     const activeRow =
       itemRows.find((row) => row.key === activeItemKey) || itemRows[0] || null;
@@ -1421,9 +1457,9 @@ export default function AdminOrderAllocation({
               <ErrorMessage error={allocationsError} />
             </div>
           ) : null}
-          {isAllocationLocked ? (
+          {showAllocationMessage ? (
             <div className="mt-2 text-xs text-amber-700">
-              {allocationLockMessage}
+              {allocationMessage}
             </div>
           ) : null}
         </div>
@@ -1491,7 +1527,8 @@ export default function AdminOrderAllocation({
                   item={activeRow.item}
                   allocationInfo={activeRow.allocationInfo}
                   allocationSummary={activeRow.allocationSummary}
-                  isAllocationLocked={isAllocationLocked}
+                  isReserveLocked={isReserveLocked}
+                  isReleaseLocked={isReleaseLocked}
                   allocationLockMessage={slotLockMessage}
                   showAvailability={showAvailability}
                   showSlotActions={showSlotActions}
@@ -1593,7 +1630,8 @@ export default function AdminOrderAllocation({
                     item={activeRow.item}
                     allocationInfo={activeRow.allocationInfo}
                     allocationSummary={activeRow.allocationSummary}
-                    isAllocationLocked={isAllocationLocked}
+                    isReserveLocked={isReserveLocked}
+                    isReleaseLocked={isReleaseLocked}
                     allocationLockMessage={slotLockMessage}
                     showAvailability={showAvailability}
                     showSlotActions={showSlotActions}

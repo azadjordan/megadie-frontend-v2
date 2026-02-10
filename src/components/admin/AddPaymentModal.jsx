@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import ErrorMessage from "../common/ErrorMessage";
 
 function modalLabel(id) {
@@ -15,6 +16,7 @@ export default function AddPaymentModal({
   fieldErrors,
 }) {
   if (!open) return null;
+  const backdropMouseDown = useRef(false);
 
   const receivedByOptions = [
     "Azad",
@@ -35,7 +37,15 @@ export default function AddPaymentModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        backdropMouseDown.current = e.target === e.currentTarget;
+      }}
+      onMouseUp={(e) => {
+        if (backdropMouseDown.current && e.target === e.currentTarget) {
+          onClose();
+        }
+        backdropMouseDown.current = false;
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={modalLabel("title")}

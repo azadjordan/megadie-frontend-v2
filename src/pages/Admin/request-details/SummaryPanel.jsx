@@ -16,13 +16,7 @@ export default function SummaryPanel({
   isCreatingOrder,
   convertDisabled,
   lockReason,
-  onShareWithClient,
-  shareDisabled = false,
-  shareDisabledReason,
-  isSharing = false,
 }) {
-  const shareIsDisabled = shareDisabled || isSharing;
-
   const rows = [
     {
       label: "Client",
@@ -86,23 +80,8 @@ export default function SummaryPanel({
           ))}
         </div>
 
-        <div className="mt-4 border-t border-slate-200 pt-4 space-y-2">
-          <button
-            type="button"
-            onClick={onShareWithClient}
-            disabled={shareIsDisabled}
-            title={shareIsDisabled ? shareDisabledReason : undefined}
-            className={[
-              "w-full rounded-xl px-5 py-3 text-sm font-semibold transition",
-              !shareIsDisabled
-                ? "bg-violet-600 text-white hover:bg-violet-500"
-                : "cursor-default bg-slate-200 text-slate-500",
-            ].join(" ")}
-          >
-            {isSharing ? "Preparing..." : "Share with client"}
-          </button>
-
-          {showConvertToOrder ? (
+        {showConvertToOrder ? (
+          <div className="mt-4 border-t border-slate-200 pt-4">
             <button
               type="button"
               onClick={onConvertToOrder}
@@ -117,8 +96,8 @@ export default function SummaryPanel({
             >
               {isCreatingOrder ? "Converting..." : "Convert to Order"}
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </StepCard>
     </div>
   );

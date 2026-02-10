@@ -16,15 +16,12 @@ import {
   useUpdateQuoteStatusByAdminMutation,
   useRecheckQuoteAvailabilityByAdminMutation,
   useLazyGetQuoteStockCheckByAdminQuery,
-  useLazyGetQuoteShareQuery,
 } from "../../features/quotes/quotesApiSlice";
 import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import { useLazyGetUserPricesQuery } from "../../features/userPrices/userPricesApiSlice";
 import { useLazyGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
 import { useCreateManualInvoiceMutation } from "../../features/invoices/invoicesApiSlice";
-import { copyTextToClipboard } from "../../utils/clipboard";
-import { buildAdminQuoteShareText } from "../../utils/quoteShare";
 
 import OwnerStep from "./request-details/OwnerStep";
 import QuantitiesStep from "./request-details/QuantitiesStep";
@@ -129,8 +126,6 @@ export default function AdminRequestDetailsPage() {
     loadQuoteStockCheck,
     { isFetching: isCheckingStock, error: stockCheckError },
   ] = useLazyGetQuoteStockCheckByAdminQuery();
-  const [getQuoteShare, { isFetching: isSharingQuote }] =
-    useLazyGetQuoteShareQuery();
   const [createOrderFromQuote, { isLoading: isCreatingOrder }] =
     useCreateOrderFromQuoteMutation();
   const [createManualInvoice, { isLoading: isCreatingManual, error: manualCreateError }] =
@@ -251,14 +246,6 @@ export default function AdminRequestDetailsPage() {
       : "";
   const isCheckingAvailability = isCheckingStock || isRecheckingAvailability;
   const canCheckStock = showAvailability && Boolean(quoteId) && !quoteLocked;
-  const canShareWithClient =
-    backendStatus === "Quoted" || backendStatus === "Confirmed";
-  const shareDisabledReason = !quoteId
-    ? "Quote ID is missing."
-    : !canShareWithClient
-    ? "Share is available for Quoted or Confirmed requests only."
-    : undefined;
-  const shareDisabled = !quoteId || !canShareWithClient || isSharingQuote;
 
   const stockCheckByProduct = useMemo(() => {
     const map = new Map();
@@ -691,20 +678,6 @@ export default function AdminRequestDetailsPage() {
       next[idx] = { ...next[idx], unitPriceStr: value };
       return next;
     });
-  };
-
-  const onShareWithClient = async () => {
-    if (shareDisabled) return;
-
-    try {
-      const res = await getQuoteShare(quoteId).unwrap();
-      const shareQuote = res?.data ?? res ?? quote;
-      const text = buildAdminQuoteShareText(shareQuote);
-      await copyTextToClipboard(text);
-      toast.success("Quote copied to clipboard.");
-    } catch (err) {
-      toast.error("Failed to copy quote.");
-    }
   };
 
   const onToggleEditQty = () => {
@@ -1246,10 +1219,6 @@ export default function AdminRequestDetailsPage() {
             isCreatingOrder={isCreatingOrder}
             convertDisabled={convertDisabled}
             lockReason={quoteLockReason}
-            onShareWithClient={onShareWithClient}
-            shareDisabled={shareDisabled}
-            shareDisabledReason={shareDisabledReason}
-            isSharing={isSharingQuote}
           />
         </aside>
       </div>

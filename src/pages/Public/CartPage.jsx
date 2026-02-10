@@ -140,7 +140,7 @@ export default function CartPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <div className="flex items-center justify-between gap-3">
@@ -149,7 +149,7 @@ export default function CartPage() {
                   {summary.lines} items • {summary.units} units
                 </div>
               </div>
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-4 lg:max-h-[calc(100vh-320px)] lg:overflow-y-auto lg:pr-2">
                 {items.map(({ productId, product, quantity }) => {
                   const image =
                     product?.images?.[0] || product?.imageUrl || placeholder;
@@ -168,34 +168,35 @@ export default function CartPage() {
                       key={productId}
                       className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                     >
-                        <div className="min-w-0">
-                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                            <p className="line-clamp-2 text-base font-semibold text-slate-900 sm:text-sm">
-                              {name}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => dispatch(removeFromCart(productId))}
-                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 sm:hidden"
-                              aria-label="Remove item"
-                              title="Remove item"
-                            >
-                              <FiTrash2 size={18} />
-                            </button>
-                            {tags.length > 0 && (
-                              <div className="col-span-2 mt-2 flex flex-wrap gap-1.5 text-xs text-slate-600">
-                                {tags.map((tag) => (
-                                  <span
-                                    key={tag}
-                                    className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200/70"
-                                    title={tag}
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                      {/* Mobile layout */}
+                      <div className="min-w-0 lg:hidden">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                          <p className="line-clamp-2 text-base font-semibold text-slate-900 sm:text-sm">
+                            {name}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => dispatch(removeFromCart(productId))}
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 sm:hidden"
+                            aria-label="Remove item"
+                            title="Remove item"
+                          >
+                            <FiTrash2 size={18} />
+                          </button>
+                          {tags.length > 0 && (
+                            <div className="col-span-2 mt-2 flex flex-wrap gap-1.5 text-xs text-slate-600">
+                              {tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200/70"
+                                  title={tag}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
 
                         <div className="mt-4 sm:mt-3">
                           <div className="flex items-center gap-3">
@@ -238,6 +239,57 @@ export default function CartPage() {
                               </div>
                             </div>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Desktop layout */}
+                      <div className="hidden min-w-0 lg:grid lg:grid-cols-[auto_auto_minmax(0,1fr)_auto] lg:items-start lg:gap-4">
+                        <button
+                          type="button"
+                          onClick={() => dispatch(removeFromCart(productId))}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 self-center"
+                          aria-label="Remove item"
+                          title="Remove item"
+                        >
+                          <FiTrash2 size={18} />
+                        </button>
+                        <img
+                          src={image}
+                          alt={name}
+                          className="h-20 w-20 shrink-0 rounded-2xl bg-white object-cover ring-1 ring-slate-200"
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = placeholder;
+                          }}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-base font-semibold text-slate-900">
+                            {name}
+                          </p>
+                          {tags.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-600">
+                              {tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200/70"
+                                  title={tag}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2 self-center">
+                          <QuantityControl
+                            quantity={quantity}
+                            setQuantity={(val) => setQty(productId, val)}
+                            min={1}
+                            size="sm"
+                            className="w-full max-w-[140px]"
+                          />
                         </div>
                       </div>
                     </div>
