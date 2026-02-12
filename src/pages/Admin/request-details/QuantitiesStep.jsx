@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { FiRefreshCw } from "react-icons/fi";
+import { FiCornerUpLeft, FiPlus, FiRefreshCw, FiTrash2 } from "react-icons/fi";
 
 import StepCard from "./StepCard";
 import ErrorMessage from "../../../components/common/ErrorMessage";
-import QuantityControlRequests from "../../../components/common/QantityControlRequests";
+import QuantityControl from "../../../components/common/QuantityControl";
 import { parseNullableNumber } from "./helpers";
 
 export default function QuantitiesStep({
@@ -21,6 +20,8 @@ export default function QuantitiesStep({
   onUpdateQty,
   isEditingQty,
   onToggleEditQty,
+  onAddItem,
+  canAddItem,
   editDraft,
   adjustDraftQty,
   quoteLocked,
@@ -28,32 +29,6 @@ export default function QuantitiesStep({
   showUpdateError,
   updateError,
 }) {
-  const [maxHit, setMaxHit] = useState({});
-  const maxHitTimers = useRef({});
-
-  useEffect(
-    () => () => {
-      Object.values(maxHitTimers.current).forEach(clearTimeout);
-      maxHitTimers.current = {};
-    },
-    []
-  );
-
-  const triggerMaxHit = (key) => {
-    if (!key) return;
-    setMaxHit((prev) => ({ ...prev, [key]: true }));
-    const timers = maxHitTimers.current;
-    if (timers[key]) clearTimeout(timers[key]);
-    timers[key] = setTimeout(() => {
-      setMaxHit((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      delete timers[key];
-    }, 1500);
-  };
-
   const itemRows = items.map((it, idx) => {
     const inputQty = parseNullableNumber(it.qtyStr);
     const qty = inputQty == null ? 0 : inputQty;
@@ -78,8 +53,13 @@ export default function QuantitiesStep({
       showAvailability && Number.isFinite(availableCap)
         ? Math.max(0, requestedQty - availableCap)
         : null;
+    const shortageDisplay =
+      Number.isFinite(Number(shortage)) && Number(shortage) > 0
+        ? Number(shortage)
+        : null;
     const key = productKey;
     const draftQty = Number(editDraft?.[key]);
+    const hasDraftQty = Number.isFinite(draftQty);
     const hasAvailableCap = stockRow
       ? Number.isFinite(availableValue)
       : Number.isFinite(availableNow);
@@ -95,8 +75,13 @@ export default function QuantitiesStep({
       availableCap > 0 &&
       !quoteLocked &&
       Boolean(it.productId);
+    const canRemove =
+      showAvailability && isEditingQty && !quoteLocked && Boolean(it.productId);
+    const isRemoved = isEditingQty && hasDraftQty && Number(draftQty) === 0;
     const displayQty = showAvailability
-      ? canAdjustQty
+      ? isRemoved
+        ? editingQty
+        : canAdjustQty
         ? editingQty
         : availableCap
       : qty;
@@ -122,14 +107,26 @@ export default function QuantitiesStep({
       onHandDisplay,
       availableDisplay,
       availabilityTone,
+      shortageDisplay,
       canAdjustQty,
+      canRemove,
+      isRemoved,
       displayQty,
       availableCap,
       fallbackQty,
-      maxHitKey: productKey,
+      draftQty,
       qty,
     };
   });
+  const allRemoved =
+    isEditingQty && itemRows.length > 0 && itemRows.every((row) => row.isRemoved);
+  const saveDisabled = updateQtyDisabled || allRemoved;
+  const canAddItems =
+    Boolean(onAddItem) &&
+    Boolean(canAddItem) &&
+    isEditingQty &&
+    !isUpdatingQty &&
+    !isCheckingStock;
 
   return (
     <StepCard
@@ -139,23 +136,47 @@ export default function QuantitiesStep({
       showNumber={false}
     >
       <div className="mb-3 grid gap-2 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div className="text-xs text-slate-500">
-          {showAvailability
-            ? stockCheckedAt
-              ? `Stock checked ${stockCheckedAt}`
-              : "No stock check yet."
-            : "Stock check hidden for cancelled quotes."}
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <span>
+            {showAvailability
+              ? stockCheckedAt
+                ? `Stock checked ${stockCheckedAt}`
+                : "No stock check yet."
+              : "Stock check hidden for cancelled quotes."}
+          </span>
+          {isEditingQty ? (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+              Edit mode
+            </span>
+          ) : null}
         </div>
 
         {showAvailability ? (
-          <div className="flex flex-row items-center gap-2 justify-start lg:justify-end">
+          <div className="flex flex-row items-center gap-2 justify-start lg:justify-end min-h-[44px]">
+            <button
+              type="button"
+              onClick={onAddItem}
+              disabled={!canAddItems}
+              title={quoteLocked ? lockReason : undefined}
+              className={[
+                "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold transition",
+                !canAddItems
+                  ? "cursor-not-allowed border-slate-200 bg-white text-slate-400"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                isEditingQty ? "" : "invisible pointer-events-none",
+              ].join(" ")}
+            >
+              <FiPlus className="h-3.5 w-3.5" aria-hidden="true" />
+              Add product
+            </button>
+
             <button
               type="button"
               onClick={onCheckStock}
               disabled={!canCheckStock || isCheckingStock}
               title={quoteLocked ? lockReason : undefined}
               className={[
-                "inline-flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-xs font-semibold transition",
+                "inline-flex h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition",
                 !canCheckStock || isCheckingStock
                   ? "cursor-not-allowed bg-slate-300 text-white"
                   : "bg-slate-900 text-white hover:bg-slate-800",
@@ -177,7 +198,7 @@ export default function QuantitiesStep({
               disabled={!canUpdateQty || isUpdatingQty || isCheckingStock}
               title={quoteLocked ? lockReason : undefined}
               className={[
-                "inline-flex items-center justify-center rounded-xl border px-3 py-3 text-xs font-semibold transition",
+                "inline-flex h-11 min-w-[96px] items-center justify-center rounded-xl border px-3 text-xs font-semibold transition",
                 !canUpdateQty || isUpdatingQty || isCheckingStock
                   ? "cursor-not-allowed border-slate-200 bg-white text-slate-400"
                   : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50",
@@ -201,256 +222,221 @@ export default function QuantitiesStep({
         </div>
       ) : null}
 
-      <div className="space-y-3 md:hidden">
-        {itemRows.map((row) => (
-          <div
-            key={row.key}
-            className="rounded-xl border border-slate-200 bg-white p-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-slate-900">
-                  {row.item.sku || "-"}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {row.item.name || "Unnamed item"}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Requested
-                </div>
-                <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
-                  {row.requestedDisplay}
-                </div>
-              </div>
-            </div>
-
-            {showAvailability ? (
-              <div className="mt-2 text-[11px] text-slate-600 tabular-nums">
-                <span
-                  className={[
-                    "inline-flex items-center rounded-md px-2 py-0.5",
-                    row.availabilityTone || "text-slate-600",
-                  ].join(" ")}
-                >
-                  {`Hand ${row.onHandDisplay} / Avl ${row.availableDisplay}`}
-                </span>
-              </div>
-            ) : null}
-
-            {isEditingQty ? (
-              <div className="mt-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  New Qty
-                </div>
-                <div className="mt-2">
-                  {showAvailability ? (
-                    row.canAdjustQty ? (
-                      <QuantityControlRequests
-                        value={row.displayQty}
-                        onIncrease={() => {
-                          const maxQty = Number(row.item.availableNow) || 0;
-                          if (row.displayQty + 1 >= maxQty) {
-                            triggerMaxHit(row.maxHitKey);
-                          }
-                          adjustDraftQty(
-                            row.key,
-                            1,
-                            row.availableCap,
-                            row.fallbackQty
-                          );
-                        }}
-                        onDecrease={() =>
-                          adjustDraftQty(
-                            row.key,
-                            -1,
-                            row.availableCap,
-                            row.fallbackQty
-                          )
-                        }
-                        onChangeRaw={(rawValue) => {
-                          const maxQty = row.availableCap;
-                          if (!Number.isFinite(rawValue)) return;
-                          const next = Math.max(0, rawValue);
-                          adjustDraftQty(
-                            row.key,
-                            next - row.displayQty,
-                            maxQty,
-                            row.fallbackQty,
-                            { allowAboveMax: true }
-                          );
-                        }}
-                        onCommit={(rawValue) => {
-                          const maxQty = row.availableCap;
-                          const next = Math.max(
-                            0,
-                            Math.min(Number(rawValue) || 0, maxQty)
-                          );
-                          adjustDraftQty(
-                            row.key,
-                            next - row.displayQty,
-                            maxQty,
-                            row.fallbackQty
-                          );
-                        }}
-                        min={0}
-                        max={row.availableCap}
-                        disableDecrease={row.displayQty <= 0}
-                        maxHit={Boolean(maxHit[row.maxHitKey])}
-                      />
-                    ) : (
-                      <span className="tabular-nums text-slate-900">
-                        {row.displayQty}
-                      </span>
-                    )
-                  ) : (
-                    <span className="tabular-nums text-slate-900">{row.qty}</span>
-                  )}
-                </div>
-              </div>
-            ) : null}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+        {itemRows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+            No items in this quote yet.
           </div>
-        ))}
-      </div>
+        ) : (
+          <div className="divide-y divide-slate-200">
+            {itemRows.map((row) => {
+              const gridCols =
+                "sm:grid-cols-[80px_minmax(0,1.2fr)_minmax(0,0.85fr)_minmax(0,0.9fr)]";
 
-      <div className="hidden md:block overflow-x-auto">
-        <table className="min-w-full table-fixed text-left text-sm">
-          <thead className="text-xs font-semibold text-slate-500">
-            <tr className="border-b border-slate-200">
-              <th className="w-[30%] py-2 pr-3">Item</th>
-              <th className={`${isEditingQty ? "w-[45%]" : "w-[70%]"} py-2 pr-3`}>
-                Qty
-              </th>
-              {isEditingQty ? (
-                <th className="w-[25%] py-2 pr-3">New Qty</th>
-              ) : null}
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-slate-200">
-            {itemRows.map((row) => (
-              <tr key={row.key} className="hover:bg-slate-50">
-                <td className="py-3 pr-3">
-                  <div className="text-xs font-semibold text-slate-900">
-                    {row.item.sku || "-"}
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    {row.item.name || "Unnamed item"}
-                  </div>
-                </td>
-
-                <td className="py-3 pr-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-semibold text-slate-900 tabular-nums">
-                      {row.requestedDisplay}
+              return (
+                <div
+                  key={row.key}
+                  className="relative py-3"
+                >
+                  <div
+                    className={[
+                      `grid gap-4 ${gridCols} items-center`,
+                      row.isRemoved ? "opacity-70" : "",
+                    ].join(" ")}
+                  >
+                    <div className="hidden sm:flex items-center justify-center self-stretch">
+                      {isEditingQty && row.canRemove && !row.isRemoved ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            adjustDraftQty(
+                              row.key,
+                              -row.displayQty,
+                              row.availableCap,
+                              row.fallbackQty
+                            )
+                          }
+                          className="flex h-7 items-center justify-center gap-1.5 rounded-md border border-rose-200 px-2 text-[11px] font-semibold text-rose-600 hover:border-rose-300 hover:text-rose-700 leading-none"
+                          aria-label="Remove item"
+                          title="Remove"
+                        >
+                          <FiTrash2 className="h-3.5 w-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      ) : null}
                     </div>
-                    {showAvailability ? (
-                      <div className="text-[11px] text-slate-600 tabular-nums">
-                        <span
+
+                    <div className="flex items-center gap-2 sm:self-center">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          SKU / Name
+                        </div>
+                        <div className="text-xs font-semibold text-slate-900">
+                          {row.item.sku || "-"}
+                        </div>
+                        <div className="text-[11px] text-slate-600">
+                          {row.item.name || "Unnamed item"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 sm:contents">
+                      <div className="flex flex-col justify-center gap-1 sm:self-center">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Requested
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900 tabular-nums">
+                          <span>{row.requestedDisplay}</span>
+                          {showAvailability ? (
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full px-2 py-0.5 font-semibold",
+                                row.availabilityTone || "text-slate-600",
+                              ].join(" ")}
+                            >
+                              {`Hand ${row.onHandDisplay} / Avl ${row.availableDisplay}`}
+                              {row.shortageDisplay ? (
+                                <span className="ml-1">
+                                  {`(Short ${row.shortageDisplay})`}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-500">
+                              Stock hidden
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col justify-center gap-1 sm:self-center">
+                        <div
                           className={[
-                            "inline-flex items-center rounded-md px-2 py-0.5",
-                            row.availabilityTone || "text-slate-600",
+                            "text-[10px] font-semibold uppercase tracking-wider text-slate-400",
+                            isEditingQty && !row.isRemoved ? "" : "invisible",
                           ].join(" ")}
                         >
-                          {`Hand ${row.onHandDisplay} / Avl ${row.availableDisplay}`}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-                </td>
-
-                {isEditingQty ? (
-                  <td className="py-3 pr-3 overflow-visible">
-                    {showAvailability ? (
-                      <div className="inline-flex items-center text-slate-900">
-                        {row.canAdjustQty ? (
-                          <QuantityControlRequests
-                            value={row.displayQty}
-                            onIncrease={() => {
-                              const maxQty = Number(row.item.availableNow) || 0;
-                              if (row.displayQty + 1 >= maxQty) {
-                                triggerMaxHit(row.maxHitKey);
-                              }
-                              adjustDraftQty(
-                                row.key,
-                                1,
-                                row.availableCap,
-                                row.fallbackQty
-                              );
-                            }}
-                            onDecrease={() =>
-                              adjustDraftQty(
-                                row.key,
-                                -1,
-                                row.availableCap,
-                                row.fallbackQty
+                          New qty
+                        </div>
+                        <div className="min-h-[36px] flex items-center">
+                          {isEditingQty ? (
+                            showAvailability ? (
+                              row.isRemoved ? (
+                                <div className="h-5" aria-hidden="true" />
+                              ) : row.canAdjustQty ? (
+                                <QuantityControl
+                                  quantity={row.displayQty}
+                                  setQuantity={(nextValue) =>
+                                    adjustDraftQty(
+                                      row.key,
+                                      nextValue - row.displayQty,
+                                      row.availableCap,
+                                      row.fallbackQty
+                                    )
+                                  }
+                                  min={0}
+                                  max={row.availableCap}
+                                  size="sm"
+                                  compact
+                                />
+                              ) : (
+                                <div className="text-xs text-slate-500">
+                                  No stock available
+                                </div>
                               )
-                            }
-                            onChangeRaw={(rawValue) => {
-                              const maxQty = row.availableCap;
-                              if (!Number.isFinite(rawValue)) return;
-                              const next = Math.max(0, rawValue);
-                              adjustDraftQty(
-                                row.key,
-                                next - row.displayQty,
-                                maxQty,
-                                row.fallbackQty,
-                                { allowAboveMax: true }
-                              );
-                            }}
-                            onCommit={(rawValue) => {
-                              const maxQty = row.availableCap;
-                              const next = Math.max(
-                                0,
-                                Math.min(Number(rawValue) || 0, maxQty)
-                              );
-                              adjustDraftQty(
-                                row.key,
-                                next - row.displayQty,
-                                maxQty,
-                                row.fallbackQty
-                              );
-                            }}
-                            min={0}
-                            max={row.availableCap}
-                            disableDecrease={row.displayQty <= 0}
-                            maxHit={Boolean(maxHit[row.maxHitKey])}
-                          />
-                        ) : (
-                          <span className="tabular-nums text-slate-900">
-                            {row.displayQty}
-                          </span>
-                        )}
+                            ) : (
+                              <span className="tabular-nums text-slate-900">
+                                {row.qty}
+                              </span>
+                            )
+                          ) : null}
+                        </div>
                       </div>
-                    ) : (
-                      <span className="tabular-nums text-slate-900">
-                        {row.qty}
+                    </div>
+                  </div>
+
+                  {isEditingQty && row.canRemove && !row.isRemoved ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        adjustDraftQty(
+                          row.key,
+                          -row.displayQty,
+                          row.availableCap,
+                          row.fallbackQty
+                        )
+                      }
+                      className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-600 hover:border-rose-300 hover:text-rose-700 sm:hidden"
+                      aria-label="Remove item"
+                      title="Remove"
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                  {isEditingQty && row.isRemoved ? (
+                    <div className="absolute bottom-3 right-3 flex items-center gap-2 text-rose-700">
+                      <span className="inline-flex items-center rounded-full border border-rose-200 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-rose-700">
+                        Will be removed
                       </span>
-                    )}
-                  </td>
-                ) : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      {row.canRemove ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            adjustDraftQty(
+                              row.key,
+                              row.fallbackQty - row.displayQty,
+                              row.availableCap,
+                              row.fallbackQty
+                            )
+                          }
+                          className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-700 hover:bg-emerald-100"
+                        >
+                          <FiCornerUpLeft className="h-3.5 w-3.5" />
+                          Undo
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {canUpdateQty ? (
+      {canUpdateQty && isEditingQty ? (
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          {allRemoved ? (
+            <div className="text-xs font-semibold text-rose-600">
+              At least one item must remain.
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={onToggleEditQty}
+            disabled={isUpdatingQty}
+            className={[
+              "inline-flex w-full items-center justify-center rounded-xl border px-4 py-2.5 text-xs font-semibold transition sm:w-auto",
+              isUpdatingQty
+                ? "cursor-not-allowed border-slate-200 bg-white text-slate-400"
+                : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50",
+            ].join(" ")}
+          >
+            Cancel Edit
+          </button>
           <button
             type="button"
             onClick={onUpdateQty}
-            disabled={updateQtyDisabled}
+            disabled={saveDisabled}
             title={quoteLocked ? lockReason : undefined}
-          className={[
+            className={[
               "inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white transition sm:w-auto",
-              updateQtyDisabled
+              saveDisabled
                 ? "cursor-not-allowed opacity-50"
                 : "hover:bg-blue-500",
             ].join(" ")}
           >
-            {isUpdatingQty ? "Updating..." : "Update Quantity"}
+            {isUpdatingQty ? "Updating..." : "Update"}
           </button>
         </div>
       ) : null}

@@ -58,6 +58,16 @@ const computeTotal = (order) => {
 
 export const buildAdminOrderShareText = (order) => {
   const createdAt = order?.createdAt ? formatShareDate(order.createdAt) : "-";
+  const orderNumber = order?.orderNumber || order?._id || "-";
+  const invoiceValue = order?.invoice;
+  const invoiceId =
+    typeof invoiceValue === "string" ? invoiceValue : invoiceValue?._id || "";
+  const invoiceNumber =
+    order?.invoiceNumber ||
+    (invoiceValue && typeof invoiceValue === "object"
+      ? invoiceValue.invoiceNumber
+      : "");
+  const invoiceLabel = invoiceNumber || invoiceId || "-";
   const clientName = order?.user?.name || "Unnamed";
   const clientEmail = order?.user?.email || "-";
   const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
@@ -67,10 +77,14 @@ export const buildAdminOrderShareText = (order) => {
   const stockStatus = stockFinalized ? "Finalized" : "Not Finalized";
 
   const safeDate = preventAutoLink(createdAt);
+  const safeOrderNumber = preventAutoLink(orderNumber);
+  const safeInvoiceLabel = preventAutoLink(invoiceLabel);
   const safeEmail = preventAutoLink(clientEmail);
 
   const lines = [];
   lines.push("ORDER");
+  lines.push(`Order #: ${safeOrderNumber}`);
+  lines.push(`Invoice #: ${safeInvoiceLabel}`);
   lines.push(`Date: ${safeDate}`);
   lines.push(`Client: ${clientName}`);
   lines.push(`Email: ${safeEmail}`);

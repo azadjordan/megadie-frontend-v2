@@ -6,22 +6,25 @@ import { toast } from "react-toastify";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import CreateManualInvoiceModal from "../../components/admin/CreateManualInvoiceModal";
+import AddQuoteItemsModal from "../../components/admin/AddQuoteItemsModal";
 
 import {
   useGetQuoteByIdQuery,
   useUpdateQuoteOwnerByAdminMutation,
-  useUpdateQuoteQuantitiesByAdminMutation,
+  useUpdateQuoteItemsByAdminMutation,
   useUpdateQuotePricingByAdminMutation,
   useUpdateQuoteNotesByAdminMutation,
   useUpdateQuoteStatusByAdminMutation,
   useRecheckQuoteAvailabilityByAdminMutation,
   useLazyGetQuoteStockCheckByAdminQuery,
 } from "../../features/quotes/quotesApiSlice";
+import { useLazyGetInventoryProductsQuery } from "../../features/inventory/inventoryApiSlice";
 import { useCreateOrderFromQuoteMutation } from "../../features/orders/ordersApiSlice";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import { useLazyGetUserPricesQuery } from "../../features/userPrices/userPricesApiSlice";
 import { useLazyGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
 import { useCreateManualInvoiceMutation } from "../../features/invoices/invoicesApiSlice";
+import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 import OwnerStep from "./request-details/OwnerStep";
 import QuantitiesStep from "./request-details/QuantitiesStep";
@@ -95,9 +98,9 @@ export default function AdminRequestDetailsPage() {
     { isLoading: isUpdatingOwner, error: updateOwnerError },
   ] = useUpdateQuoteOwnerByAdminMutation();
   const [
-    updateQuoteQuantitiesByAdmin,
-    { isLoading: isUpdatingQuantities, error: updateQuantitiesError },
-  ] = useUpdateQuoteQuantitiesByAdminMutation();
+    updateQuoteItemsByAdmin,
+    { isLoading: isUpdatingItems, error: updateItemsError },
+  ] = useUpdateQuoteItemsByAdminMutation();
   const [
     updateQuotePricingByAdmin,
     { isLoading: isUpdatingPricing, error: updatePricingError },
@@ -110,6 +113,7 @@ export default function AdminRequestDetailsPage() {
     loadPriceRules,
     { isLoading: isLoadingPriceRules },
   ] = useLazyGetPriceRulesQuery();
+  const [loadInventoryProducts] = useLazyGetInventoryProductsQuery();
   const [
     updateQuoteNotesByAdmin,
     { isLoading: isUpdatingNotes, error: updateNotesError },
@@ -144,15 +148,25 @@ export default function AdminRequestDetailsPage() {
     { id: "item-1", description: "", qty: "1", unitPrice: "" },
   ]);
 
-
   // Step 1
   const [userId, setUserId] = useState("");
 
   // Step 2
   const [items, setItems] = useState([]);
+  const [editItems, setEditItems] = useState(null);
   const [editDraft, setEditDraft] = useState({});
   const [isEditingQty, setIsEditingQty] = useState(false);
   const [stockCheckData, setStockCheckData] = useState(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addSearch, setAddSearch] = useState("");
+  const [addSearchRows, setAddSearchRows] = useState([]);
+  const [addSearchLoading, setAddSearchLoading] = useState(false);
+  const [addSearchError, setAddSearchError] = useState("");
+  const [addSelected, setAddSelected] = useState({});
+
+  const trimmedAddSearch = addSearch.trim();
+  const debouncedAddSearch = useDebouncedValue(trimmedAddSearch, 600);
+  const isAddDebouncing = trimmedAddSearch !== debouncedAddSearch;
 
   // Step 3
   const [deliveryChargeStr, setDeliveryChargeStr] = useState(
@@ -197,9 +211,16 @@ export default function AdminRequestDetailsPage() {
     setAdminToAdminNote(quote.adminToAdminNote || "");
     setAdminToClientNote(quote.adminToClientNote || "");
 
+    setEditItems(null);
     setEditDraft({});
     setIsEditingQty(false);
     setStockCheckData(null);
+    setAddModalOpen(false);
+    setAddSearch("");
+    setAddSearchRows([]);
+    setAddSearchError("");
+    setAddSearchLoading(false);
+    setAddSelected({});
   }, [quote?.id, quote?._id, quote?.updatedAt, quote?.availabilityCheckedAt]);
 
   const selectedUser = useMemo(() => {
@@ -257,9 +278,27 @@ export default function AdminRequestDetailsPage() {
     return map;
   }, [stockCheckItems]);
 
+  const quantityItems = useMemo(
+    () => (isEditingQty ? editItems || items : items),
+    [editItems, isEditingQty, items]
+  );
+  const addExistingProductIds = useMemo(
+    () =>
+      new Set(
+        (editItems || items || [])
+          .map((item) => String(item.productId))
+          .filter(Boolean)
+      ),
+    [editItems, items]
+  );
+
   const hasMissingProductId = useMemo(
     () => (items || []).some((it) => !it.productId),
     [items]
+  );
+  const hasMissingProductIdForQty = useMemo(
+    () => (quantityItems || []).some((it) => !it.productId),
+    [quantityItems]
   );
 
   const hasShortage = useMemo(
@@ -276,23 +315,82 @@ export default function AdminRequestDetailsPage() {
       }),
     [items]
   );
+  const hasAnyAvailableForQty = useMemo(
+    () =>
+      (quantityItems || []).some((it) => {
+        const status = normalizeAvailabilityStatus(it.availabilityStatus);
+        if (status === "AVAILABLE" || status === "SHORTAGE") return true;
+        return Number(it.availableNow) > 0;
+      }),
+    [quantityItems]
+  );
 
-  const canUpdateQtyAdmin =
+  const canEditItemsAdmin =
     showAvailability &&
     !quoteLocked &&
-    !hasMissingProductId &&
-    (backendStatus === "Processing" || backendStatus === "Quoted") &&
-    hasAnyAvailable;
+    !hasMissingProductIdForQty &&
+    (backendStatus === "Processing" || backendStatus === "Quoted");
+
+  const canUpdateQtyAdmin =
+    canEditItemsAdmin && hasAnyAvailableForQty;
   useEffect(() => {
     if (!canUpdateQtyAdmin && isEditingQty) {
       setIsEditingQty(false);
       setEditDraft({});
+      setEditItems(null);
+      setAddModalOpen(false);
+      setAddSearch("");
+      setAddSearchRows([]);
+      setAddSearchError("");
+      setAddSearchLoading(false);
+      setAddSelected({});
     }
   }, [canUpdateQtyAdmin, isEditingQty]);
+
+  useEffect(() => {
+    if (!addModalOpen) return;
+    const query = debouncedAddSearch.trim();
+    if (!query) {
+      setAddSearchRows([]);
+      setAddSearchLoading(false);
+      setAddSearchError("");
+      return;
+    }
+
+    let cancelled = false;
+    const loadProducts = async () => {
+      setAddSearchLoading(true);
+      setAddSearchError("");
+      setAddSearchRows([]);
+      try {
+        const res = await loadInventoryProducts({
+          q: query,
+          page: 1,
+          limit: 50,
+          sort: "recent",
+        }).unwrap();
+        const rows = Array.isArray(res?.rows) ? res.rows : [];
+        if (!cancelled) setAddSearchRows(rows);
+      } catch (err) {
+        if (!cancelled) {
+          setAddSearchError(
+            err?.data?.message || err?.error || "Unable to load products."
+          );
+        }
+      } finally {
+        if (!cancelled) setAddSearchLoading(false);
+      }
+    };
+
+    loadProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [addModalOpen, debouncedAddSearch, loadInventoryProducts]);
   const updateQtyDisabled =
     !canUpdateQtyAdmin ||
     !isEditingQty ||
-    isUpdatingQuantities ||
+    isUpdatingItems ||
     isCheckingAvailability ||
     isUpdatingOwner ||
     isUpdatingPricing ||
@@ -455,7 +553,7 @@ export default function AdminRequestDetailsPage() {
 
   const isBusy =
     isUpdatingOwner ||
-    isUpdatingQuantities ||
+    isUpdatingItems ||
     isUpdatingPricing ||
     isLoadingUserPrices ||
     isLoadingPriceRules ||
@@ -465,7 +563,7 @@ export default function AdminRequestDetailsPage() {
     isCreatingOrder;
 
   const showOwnerUpdateError = Boolean(updateOwnerError);
-  const showUpdateQtyError = Boolean(updateQuantitiesError);
+  const showUpdateQtyError = Boolean(updateItemsError);
   const showPricingError = Boolean(updatePricingError);
   const showNotesError = Boolean(updateNotesError);
   const showStatusError = Boolean(updateStatusError);
@@ -483,6 +581,34 @@ export default function AdminRequestDetailsPage() {
     if (!message) return fallback;
     if (message.length > 140) return `${message.slice(0, 137)}...`;
     return message;
+  };
+
+  const resolveAvailabilityStatus = (requestedQty, availableNow) => {
+    const requested = Math.max(0, Number(requestedQty) || 0);
+    const available = Math.max(0, Number(availableNow) || 0);
+    if (available <= 0) return "NOT_AVAILABLE";
+    if (available >= requested) return "AVAILABLE";
+    return "SHORTAGE";
+  };
+
+  const buildDraftItemFromInventory = (row, qty) => {
+    const productId = String(row?.id || row?._id || "");
+    const availableNow = Math.max(0, Number(row?.available) || 0);
+    const safeQty = Math.max(1, Number(qty) || 1);
+    const resolvedQty = Math.min(safeQty, availableNow);
+    const shortage = Math.max(0, resolvedQty - availableNow);
+    return {
+      productId,
+      sku: row?.sku || "",
+      name: row?.name || "",
+      priceRule: row?.priceRule || "",
+      requestedQty: resolvedQty,
+      qtyStr: String(resolvedQty),
+      unitPriceStr: "",
+      availabilityStatus: resolveAvailabilityStatus(resolvedQty, availableNow),
+      availableNow,
+      shortage,
+    };
   };
 
   const adjustDraftQty = (key, delta, maxQty, fallbackQty, options = {}) => {
@@ -504,7 +630,8 @@ export default function AdminRequestDetailsPage() {
   const onUpdateQty = async () => {
     if (!quoteId || !canUpdateQtyAdmin || !isEditingQty) return;
 
-    const payloadItems = items.map((it, idx) => {
+    const sourceItems = quantityItems || [];
+    const payloadItems = sourceItems.map((it, idx) => {
       const key = String(it.productId || idx);
       const inputQty = parseNullableNumber(it.qtyStr);
       const baseQty = inputQty == null ? 0 : inputQty;
@@ -529,12 +656,13 @@ export default function AdminRequestDetailsPage() {
     });
 
     try {
-      await updateQuoteQuantitiesByAdmin({
+      await updateQuoteItemsByAdmin({
         id: quoteId,
         requestedItems: payloadItems,
       }).unwrap();
       setEditDraft({});
       setIsEditingQty(false);
+      setEditItems(null);
       await refetchQuote();
       toast.success("Quantities updated.");
     } catch (err) {
@@ -682,13 +810,110 @@ export default function AdminRequestDetailsPage() {
 
   const onToggleEditQty = () => {
     if (!isEditingQty && !canUpdateQtyAdmin) return;
-    setIsEditingQty((prev) => {
-      const next = !prev;
-      if (!next) {
-        setEditDraft({});
+    if (isEditingQty) {
+      setIsEditingQty(false);
+      setEditDraft({});
+      setEditItems(null);
+      setAddModalOpen(false);
+      setAddSearch("");
+      setAddSearchRows([]);
+      setAddSearchError("");
+      setAddSearchLoading(false);
+      setAddSelected({});
+      return;
+    }
+
+    setEditDraft({});
+    setEditItems((items || []).map((item) => ({ ...item })));
+    setIsEditingQty(true);
+  };
+
+  const openAddModal = () => {
+    if (!canEditItemsAdmin || !isEditingQty) return;
+    setAddModalOpen(true);
+    setAddSearch("");
+    setAddSearchRows([]);
+    setAddSearchError("");
+    setAddSearchLoading(false);
+    setAddSelected({});
+  };
+
+  const closeAddModal = () => {
+    setAddModalOpen(false);
+    setAddSearch("");
+    setAddSearchRows([]);
+    setAddSearchError("");
+    setAddSearchLoading(false);
+    setAddSelected({});
+  };
+
+  const handleAddSearchChange = (value) => {
+    setAddSearch(value);
+    setAddSearchError("");
+  };
+
+  const toggleAddProduct = (row) => {
+    const productId = String(row?.id || row?._id || "");
+    if (!productId) return;
+    const availableNow = Math.max(0, Number(row?.available) || 0);
+    if (availableNow <= 0) return;
+    setAddSelected((prev) => {
+      const next = { ...prev };
+      if (next[productId]) {
+        delete next[productId];
+      } else {
+        next[productId] = { product: row, qty: 1 };
       }
       return next;
     });
+  };
+
+  const handleAddQtyChange = (productId, value) => {
+    const key = String(productId);
+    setAddSelected((prev) => {
+      if (!prev[key]) return prev;
+      return { ...prev, [key]: { ...prev[key], qty: value } };
+    });
+  };
+
+  const handleRemoveSelectedAdd = (productId) => {
+    const key = String(productId);
+    setAddSelected((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const handleClearSelectedAdd = () => {
+    setAddSelected({});
+  };
+
+  const handleConfirmAdd = () => {
+    const entries = Object.entries(addSelected || {});
+    if (!entries.length) return;
+    setEditItems((prev) => {
+      const base = Array.isArray(prev) ? prev : items || [];
+      const existingIds = new Set(
+        base.map((item) => String(item.productId))
+      );
+      const additions = entries
+        .map(([productId, entry]) => {
+          if (existingIds.has(productId)) return null;
+          const draftItem = buildDraftItemFromInventory(
+            entry.product,
+            entry.qty
+          );
+          if (!draftItem.productId) return null;
+          if (Number(draftItem.requestedQty) <= 0) return null;
+          return draftItem;
+        })
+        .filter(Boolean);
+      if (!additions.length) return base;
+      return [...base, ...additions];
+    });
+    closeAddModal();
   };
 
   const tabs = [
@@ -727,7 +952,7 @@ export default function AdminRequestDetailsPage() {
       case "quantities":
         return (
           <QuantitiesStep
-            items={items}
+            items={quantityItems}
             showAvailability={showAvailability}
             stockCheckedAt={stockCheckedAt}
             canCheckStock={canCheckStock}
@@ -737,7 +962,7 @@ export default function AdminRequestDetailsPage() {
             stockCheckByProduct={stockCheckByProduct}
             canUpdateQty={canUpdateQtyAdmin}
             updateQtyDisabled={updateQtyDisabled}
-            isUpdatingQty={isUpdatingQuantities}
+            isUpdatingQty={isUpdatingItems}
             onUpdateQty={onUpdateQty}
             isEditingQty={isEditingQty}
             onToggleEditQty={onToggleEditQty}
@@ -746,7 +971,9 @@ export default function AdminRequestDetailsPage() {
             quoteLocked={quoteLocked}
             lockReason={quoteLockReason}
             showUpdateError={showUpdateQtyError}
-            updateError={updateQuantitiesError}
+            updateError={updateItemsError}
+            onAddItem={openAddModal}
+            canAddItem={canEditItemsAdmin}
           />
         );
       case "pricing":
@@ -1065,6 +1292,23 @@ export default function AdminRequestDetailsPage() {
         error={manualCreateError}
         formError={manualError}
         disableUserSelect
+      />
+      <AddQuoteItemsModal
+        open={addModalOpen}
+        search={addSearch}
+        onSearchChange={handleAddSearchChange}
+        isDebouncing={isAddDebouncing}
+        searchLoading={addSearchLoading}
+        searchError={addSearchError}
+        searchRows={addSearchRows}
+        existingProductIds={addExistingProductIds}
+        selectedItems={addSelected}
+        onToggleItem={toggleAddProduct}
+        onQtyChange={handleAddQtyChange}
+        onRemoveSelected={handleRemoveSelectedAdd}
+        onClearSelected={handleClearSelectedAdd}
+        onSubmit={handleConfirmAdd}
+        onClose={closeAddModal}
       />
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <button

@@ -1,5 +1,6 @@
 // src/components/layout/AdminLayout.jsx
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -71,6 +72,7 @@ export default function AdminLayout() {
     setMobileOpen(false);
   }, [location.pathname]);
 
+
   const handleLogout = async () => {
     try {
       await logoutApi().unwrap();
@@ -102,7 +104,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-[calc(100vh-var(--app-header-h,64px))] bg-slate-50">
-      <div className="mx-auto w-full max-w-[1800px] px-0 py-4 md:px-4">
+      <div className="mx-auto w-full max-w-[1800px] px-3 py-4 md:px-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
           {/* Desktop sidebar */}
           <aside className="hidden md:block">
@@ -165,88 +167,93 @@ export default function AdminLayout() {
           </aside>
 
           {/* Main content */}
-          <main className="min-w-0">
-            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+          <main className="min-w-0 max-w-full">
+            <div className="w-full max-w-full rounded-none bg-white p-0 shadow-sm ring-0 sm:rounded-2xl sm:p-4 sm:ring-1 sm:ring-slate-200">
               <Outlet />
             </div>
           </main>
         </div>
       </div>
 
-      {/* Mobile floating menu toggle */}
-      <button
-        type="button"
-        onClick={() => setMobileOpen((open) => !open)}
-        className="fixed right-4 top-4 z-[90] inline-flex items-center justify-center rounded-full bg-slate-900 p-3 text-white shadow-lg shadow-slate-900/30 md:hidden"
-        aria-label="Toggle admin navigation"
-      >
-        {mobileOpen ? (
-          <FiX className="h-5 w-5" />
-        ) : (
-          <FiMenu className="h-5 w-5" />
-        )}
-      </button>
+      {createPortal(
+        <>
+          {/* Mobile floating menu toggle */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen((open) => !open)}
+            className="fixed right-[calc(1rem+env(safe-area-inset-right))] top-[calc(1rem+env(safe-area-inset-top))] z-[90] inline-flex items-center justify-center rounded-full bg-slate-900 p-3 text-white shadow-lg shadow-slate-900/30 md:hidden"
+            aria-label="Toggle admin navigation"
+          >
+            {mobileOpen ? (
+              <FiX className="h-5 w-5" />
+            ) : (
+              <FiMenu className="h-5 w-5" />
+            )}
+          </button>
 
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[80] md:hidden">
-          <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-          <div className="absolute right-4 top-16 w-[85%] max-w-[320px] max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-200">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <FiUser className="h-4 w-4 text-slate-500" />
-              {adminName}
-            </div>
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  navigate("/");
-                  setMobileOpen(false);
-                }}
-                className="inline-flex h-11 basis-2/3 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-sm font-semibold text-white shadow-sm shadow-violet-200/40 transition hover:bg-violet-700"
-              >
-                <FiArrowLeft className="h-4 w-4" />
-                Back to site
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className={[
-                  "inline-flex h-11 basis-1/3 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold",
-                  "bg-rose-50 text-rose-600 ring-1 ring-rose-200",
-                  "hover:bg-rose-100 transition",
-                  isLoggingOut ? "cursor-not-allowed opacity-70" : "",
-                ].join(" ")}
-              >
-                <FiLogOut className="h-4 w-4" />
-                {isLoggingOut ? "Logging out..." : "Logout"}
-              </button>
-            </div>
+          {/* Mobile drawer */}
+          {mobileOpen && (
+            <div className="fixed inset-0 z-[80] md:hidden">
+              <div
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                onClick={() => setMobileOpen(false)}
+              />
+              <div className="absolute right-[calc(1rem+env(safe-area-inset-right))] top-[calc(4rem+env(safe-area-inset-top))] w-[85%] max-w-[320px] max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <FiUser className="h-4 w-4 text-slate-500" />
+                  {adminName}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate("/");
+                      setMobileOpen(false);
+                    }}
+                    className="inline-flex h-11 basis-2/3 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-sm font-semibold text-white shadow-sm shadow-violet-200/40 transition hover:bg-violet-700"
+                  >
+                    <FiArrowLeft className="h-4 w-4" />
+                    Back to site
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className={[
+                      "inline-flex h-11 basis-1/3 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold",
+                      "bg-rose-50 text-rose-600 ring-1 ring-rose-200",
+                      "hover:bg-rose-100 transition",
+                      isLoggingOut ? "cursor-not-allowed opacity-70" : "",
+                    ].join(" ")}
+                  >
+                    <FiLogOut className="h-4 w-4" />
+                    {isLoggingOut ? "Logging out..." : "Logout"}
+                  </button>
+                </div>
 
-            <div className="mt-4 border-t border-slate-200 pt-3">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Navigation
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Navigation
+                  </div>
+                  <nav className="flex flex-col gap-1">
+                    {items.map((it) => (
+                      <NavItem
+                        key={it.to}
+                        to={it.to}
+                        icon={it.icon}
+                        label={it.label}
+                        end={it.end}
+                        onClick={() => setMobileOpen(false)}
+                        className="py-3 text-sm"
+                      />
+                    ))}
+                  </nav>
+                </div>
               </div>
-              <nav className="flex flex-col gap-1">
-                {items.map((it) => (
-                  <NavItem
-                    key={it.to}
-                    to={it.to}
-                    icon={it.icon}
-                    label={it.label}
-                    end={it.end}
-                    onClick={() => setMobileOpen(false)}
-                    className="py-3 text-sm"
-                  />
-                ))}
-              </nav>
             </div>
-          </div>
-        </div>
+          )}
+        </>,
+        document.body,
       )}
     </div>
   );

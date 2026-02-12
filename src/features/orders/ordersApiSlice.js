@@ -122,6 +122,7 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
 
 export const {
   useGetOrderByIdQuery,
+  useLazyGetOrderByIdQuery,
   useGetMyOrdersQuery,
   useGetOrdersAdminQuery,
   useCreateOrderFromQuoteMutation,
@@ -130,3 +131,4 @@ export const {
   useCancelOrderByAdminMutation,
   useDeleteOrderByAdminMutation,
 } = ordersApiSlice;
+
