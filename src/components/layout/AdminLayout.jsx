@@ -104,7 +104,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-[calc(100vh-var(--app-header-h,64px))] bg-slate-50">
-      <div className="mx-auto w-full max-w-[1800px] px-3 py-4 md:px-4">
+      <div className="mx-auto w-full max-w-[1800px] px-0 py-0 md:px-4 md:py-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
           {/* Desktop sidebar */}
           <aside className="hidden md:block">
@@ -168,7 +168,7 @@ export default function AdminLayout() {
 
           {/* Main content */}
           <main className="min-w-0 max-w-full">
-            <div className="w-full max-w-full rounded-none bg-white p-0 shadow-sm ring-0 sm:rounded-2xl sm:p-4 sm:ring-1 sm:ring-slate-200">
+            <div className="w-full max-w-full rounded-none bg-white p-3 shadow-sm ring-0 sm:rounded-2xl sm:p-4 sm:ring-1 sm:ring-slate-200">
               <Outlet />
             </div>
           </main>

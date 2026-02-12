@@ -35,6 +35,12 @@ const money = (amount, currency = "AED") => {
   }
 };
 
+const formatPaymentStatus = (status) => {
+  if (!status) return "-";
+  if (status === "PartiallyPaid") return "Partially paid";
+  return status;
+};
+
 const getLineTotal = (item) => {
   if (!item) return 0;
   if (typeof item.lineTotal === "number") return item.lineTotal;
@@ -68,6 +74,10 @@ export const buildAdminOrderShareText = (order) => {
       ? invoiceValue.invoiceNumber
       : "");
   const invoiceLabel = invoiceNumber || invoiceId || "-";
+  const paymentStatus =
+    invoiceValue && typeof invoiceValue === "object"
+      ? invoiceValue.paymentStatus
+      : "";
   const clientName = order?.user?.name || "Unnamed";
   const clientEmail = order?.user?.email || "-";
   const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
@@ -108,6 +118,7 @@ export const buildAdminOrderShareText = (order) => {
   lines.push(`Extra Fee: ${money(order?.extraFee)}`);
   lines.push(`Total Price: ${money(computeTotal(order))}`);
   lines.push("");
+  lines.push(`Payment Status: ${formatPaymentStatus(paymentStatus)}`);
   lines.push(`Status: ${status}`);
   lines.push(`Stock Status: ${stockStatus}`);
   lines.push(`Delivered By: ${deliveredBy}`);

@@ -95,6 +95,30 @@ function getStatusAccentClass(status) {
   return map[status] || map.Processing;
 }
 
+function getInvoiceLabel(order) {
+  const number = order?.invoice?.invoiceNumber;
+  return number ? String(number) : "No invoice";
+}
+
+function formatPaymentStatus(status) {
+  if (!status) return "—";
+  if (status === "PartiallyPaid") return "Partially paid";
+  return status;
+}
+
+function PaymentBadge({ status }) {
+  const base =
+    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+  const map = {
+    Paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    PartiallyPaid: "bg-amber-50 text-amber-700 ring-amber-200",
+    Unpaid: "bg-slate-100 text-slate-700 ring-slate-200",
+    empty: "bg-slate-50 text-slate-500 ring-slate-200",
+  };
+  const key = status || "empty";
+  return <span className={`${base} ${map[key]}`}>{formatPaymentStatus(status)}</span>;
+}
+
 function StatusBadge({ status, size = "default" }) {
   const base =
     "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
@@ -383,6 +407,10 @@ export default function AdminOrdersPage() {
             <div className="text-xs text-slate-500">
               {formatDateTime(o.createdAt)}
             </div>
+            <div className="mt-1 flex items-center justify-between text-xs">
+              <span className="text-slate-500">{getInvoiceLabel(o)}</span>
+              <PaymentBadge status={o?.invoice?.paymentStatus} />
+            </div>
           </div>
           <StatusBadge status={o.status} />
         </div>
@@ -471,6 +499,7 @@ export default function AdminOrdersPage() {
                   <tr>
                     <th className="px-4 py-3">Order</th>
                     <th className="px-4 py-3">User</th>
+                    <th className="px-4 py-3">Invoice</th>
                     <th className="px-4 py-3 text-center">Status</th>
                     <th className="px-4 py-3 text-center">Stock</th>
                     <th className="px-4 py-3">Total</th>
@@ -508,6 +537,15 @@ export default function AdminOrdersPage() {
                           </div>
                           <div className="text-xs text-slate-500">
                             {o.user?.email || ""}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="text-xs text-slate-500">
+                            {getInvoiceLabel(o)}
+                          </div>
+                          <div className="mt-1">
+                            <PaymentBadge status={o?.invoice?.paymentStatus} />
                           </div>
                         </td>
 
