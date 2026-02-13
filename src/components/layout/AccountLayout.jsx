@@ -21,7 +21,7 @@ export default function AccountLayout() {
         <div className="absolute bottom-[-12%] left-[-12%] h-80 w-80 rounded-full bg-amber-100/60 blur-3xl" />
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pt-6 lg:pb-10">
+      <div className="mx-auto max-w-[1360px] px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pt-6 lg:pb-10">
         <div className="grid items-start gap-6 lg:grid-cols-[300px_1fr]">
           <aside className="hidden lg:block lg:sticky lg:top-[calc(var(--app-header-h,64px)+16px)]">
             <AccountSidebar />

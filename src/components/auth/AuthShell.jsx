@@ -40,7 +40,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
           }}
         />
 
-      <div className="relative mx-auto grid max-w-7xl gap-8 px-4 py-12 lg:grid-cols-[0.9fr_1.1fr] lg:py-16">
+      <div className="relative mx-auto grid max-w-[1360px] gap-8 px-4 py-12 lg:grid-cols-[0.9fr_1.1fr] lg:py-16">
           <section className="order-2 rounded-3xl border border-white/70 bg-white/70 p-7 shadow-sm shadow-violet-200/40 backdrop-blur lg:p-10 motion-safe:animate-rise">
             <div>
               <Link

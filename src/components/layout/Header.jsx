@@ -163,7 +163,7 @@ export default function Header() {
         ref={headerRef}
         className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur"
       >
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        <nav className="mx-auto flex max-w-[1360px] items-center justify-between px-4 py-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
             <span className="text-2xl font-bold tracking-tight text-violet-700">
@@ -284,7 +284,7 @@ export default function Header() {
         {/* Pending approval banner (more informative) */}
         {isPendingApproval ? (
           <div className="border-t border-amber-200 bg-amber-50/80">
-            <div className="mx-auto max-w-7xl px-4 py-2 text-xs">
+            <div className="mx-auto max-w-[1360px] px-4 py-2 text-xs">
               <div className="font-semibold text-amber-800">
                 Account under review
               </div>

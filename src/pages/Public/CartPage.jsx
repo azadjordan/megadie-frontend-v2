@@ -16,6 +16,18 @@ import { useCreateQuoteMutation } from "../../features/quotes/quotesApiSlice";
 
 const placeholder = "/placeholder.jpg";
 
+const resolveProduct = (raw) => {
+  if (!raw || typeof raw !== "object") return raw;
+  if (raw.name || raw.size || raw.packingUnit || raw.variant) return raw;
+  const firstNested = Object.values(raw).find(
+    (value) =>
+      value &&
+      typeof value === "object" &&
+      (value.name || value.size || value.packingUnit || value.variant)
+  );
+  return firstNested || raw;
+};
+
 export default function CartPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -151,17 +163,23 @@ export default function CartPage() {
               </div>
               <div className="mt-4 space-y-4 lg:max-h-[calc(100vh-320px)] lg:overflow-y-auto lg:pr-2">
                 {items.map(({ productId, product, quantity }) => {
+                  const item = resolveProduct(product);
                   const image =
-                    product?.images?.[0] || product?.imageUrl || placeholder;
-                  const name = product?.name || "Untitled product";
-                  const tags = [
-                    product?.size,
-                    product?.packingUnit,
-                    product?.grade,
-                    product?.catalogCode
-                      ? `Code ${product.catalogCode}`
-                      : null,
-                  ].filter(Boolean);
+                    item?.images?.[0] || item?.imageUrl || placeholder;
+                  const name = item?.name || "Untitled product";
+                  const tags = Array.from(
+                    new Set(
+                      [
+                        item?.size,
+                        item?.packingUnit,
+                        item?.variant,
+                        item?.grade,
+                        item?.catalogCode
+                          ? `Code ${item.catalogCode}`
+                          : null,
+                      ].filter(Boolean)
+                    )
+                  );
 
                   return (
                     <div

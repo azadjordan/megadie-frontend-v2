@@ -617,7 +617,7 @@ export default function AdminProductEditPage() {
                 {form.productType &&
                 !productTypes.includes(form.productType) ? (
                   <option value={form.productType}>
-                    Legacy: {form.productType}
+                    {form.productType}
                   </option>
                 ) : null}
                 {productTypes.map((type) => (
@@ -721,7 +721,7 @@ export default function AdminProductEditPage() {
                 >
                   <option value="">Select size</option>
                   {form.size && !sizeOptions.includes(form.size) ? (
-                    <option value={form.size}>Legacy: {form.size}</option>
+                    <option value={form.size}>{form.size}</option>
                   ) : null}
                   {sizeOptions.map((size) => (
                     <option key={size} value={size}>
@@ -761,7 +761,7 @@ export default function AdminProductEditPage() {
                   {form.catalogCode &&
                   !catalogCodes.includes(form.catalogCode) ? (
                     <option value={form.catalogCode}>
-                      Legacy: {form.catalogCode}
+                      {form.catalogCode}
                     </option>
                   ) : null}
                   {catalogCodes.map((code) => (
@@ -789,7 +789,7 @@ export default function AdminProductEditPage() {
                   <option value="">None</option>
                   {form.variant && !variants.includes(form.variant) ? (
                     <option value={form.variant}>
-                      Legacy: {form.variant}
+                      {form.variant}
                     </option>
                   ) : null}
                   {variants.map((variant) => (
@@ -811,7 +811,7 @@ export default function AdminProductEditPage() {
                 >
                   <option value="">None</option>
                   {form.grade && !grades.includes(form.grade) ? (
-                    <option value={form.grade}>Legacy: {form.grade}</option>
+                    <option value={form.grade}>{form.grade}</option>
                   ) : null}
                   {grades.map((grade) => (
                     <option key={grade} value={grade}>
@@ -832,7 +832,7 @@ export default function AdminProductEditPage() {
                 >
                   <option value="">None</option>
                   {form.finish && !finishes.includes(form.finish) ? (
-                    <option value={form.finish}>Legacy: {form.finish}</option>
+                    <option value={form.finish}>{form.finish}</option>
                   ) : null}
                   {finishes.map((finish) => (
                     <option key={finish} value={finish}>
@@ -854,7 +854,7 @@ export default function AdminProductEditPage() {
                   <option value="">Select packing unit</option>
                   {form.packingUnit && !packingUnits.includes(form.packingUnit) ? (
                     <option value={form.packingUnit}>
-                      Legacy: {form.packingUnit}
+                      {form.packingUnit}
                     </option>
                   ) : null}
                   {packingUnits.map((unit) => (
@@ -1005,7 +1005,7 @@ export default function AdminProductEditPage() {
                       onChange={() => toggleTag(tag.value)}
                       className="h-4 w-4 rounded border-slate-300 text-slate-900"
                     />
-                    {tag.isLegacy ? `Legacy: ${tag.value}` : tag.value}
+                    {tag.value}
                   </label>
                 ))}
               </div>

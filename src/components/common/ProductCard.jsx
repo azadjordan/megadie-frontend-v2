@@ -52,11 +52,24 @@ const pickOptimizedImage = (product) => {
   return normalizeImageUrl(raw)
 }
 
+const resolveProduct = (raw) => {
+  if (!raw || typeof raw !== 'object') return raw
+  if (raw.name || raw.size || raw.packingUnit || raw.variant) return raw
+  const firstNested = Object.values(raw).find(
+    (value) =>
+      value &&
+      typeof value === 'object' &&
+      (value.name || value.size || value.packingUnit || value.variant),
+  )
+  return firstNested || raw
+}
+
 export default function ProductCard({ product }) {
   const dispatch = useDispatch()
-  const image = pickOptimizedImage(product)
-  const name = product?.name || 'Untitled product'
-  const productId = product?._id || product?.id || product?.sku
+  const item = useMemo(() => resolveProduct(product), [product])
+  const image = pickOptimizedImage(item)
+  const name = item?.name || 'Untitled product'
+  const productId = item?._id || item?.id || item?.sku
   const detailsPath = productId
     ? `/shop/${encodeURIComponent(productId)}`
     : null
@@ -66,13 +79,18 @@ export default function ProductCard({ product }) {
 
   const tags = useMemo(
     () =>
-      [
-        product.size,
-        product.packingUnit,
-        product.grade,
-        product.catalogCode ? `Code ${product.catalogCode}` : null,
-      ].filter(Boolean),
-    [product],
+      Array.from(
+        new Set(
+          [
+            item?.size,
+            item?.packingUnit,
+            item?.variant,
+            item?.grade,
+            item?.catalogCode ? `Code ${item.catalogCode}` : null,
+          ].filter(Boolean),
+        ),
+      ),
+    [item],
   )
 
   const qtyNum =
@@ -81,7 +99,7 @@ export default function ProductCard({ product }) {
   const handleAddToCart = () => {
     if (isAdded) return
 
-    dispatch(addToCart({ ...product, quantity: qtyNum }))
+    dispatch(addToCart({ ...item, quantity: qtyNum }))
     setIsAdded(true)
     setTimeout(() => setIsAdded(false), 900)
     setQuantity(1)

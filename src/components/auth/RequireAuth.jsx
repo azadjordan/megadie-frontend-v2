@@ -8,7 +8,7 @@ export default function RequireAuth() {
 
   if (!isInitialized) {
     return (
-    <div className="mx-auto max-w-7xl px-4 py-10">
+    <div className="mx-auto max-w-[1360px] px-4 py-10">
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="text-sm font-medium text-slate-900">Checking session…</div>
           <div className="mt-1 text-sm text-slate-600">Please wait.</div>
