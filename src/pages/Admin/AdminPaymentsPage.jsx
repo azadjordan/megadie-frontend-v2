@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { FiChevronDown, FiChevronUp, FiRefreshCw, FiTrash2 } from "react-icons/fi";
 import { toast } from "react-toastify";
 
@@ -76,11 +76,65 @@ function getPaymentRowMeta(payment, state = {}) {
   };
 }
 
+const PAYMENT_METHOD_FILTER_VALUES = new Set([
+  "all",
+  "Cash",
+  "Bank Transfer",
+  "Credit Card",
+  "Cheque",
+  "Other",
+]);
+const PAYMENT_SORT_FILTER_VALUES = new Set([
+  "newest",
+  "oldest",
+  "amountHigh",
+  "amountLow",
+]);
+
+function parsePositiveInt(raw, fallback = 1) {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return n;
+}
+
+function readPaymentListState(searchParams) {
+  const page = parsePositiveInt(searchParams.get("page"), 1);
+  const search = searchParams.get("search") || "";
+  const methodRaw = searchParams.get("method") || "all";
+  const method = PAYMENT_METHOD_FILTER_VALUES.has(methodRaw) ? methodRaw : "all";
+  const sortRaw = searchParams.get("sort") || "newest";
+  const sort = PAYMENT_SORT_FILTER_VALUES.has(sortRaw) ? sortRaw : "newest";
+  return { page, search, method, sort };
+}
+
+function buildPaymentListSearchParams(nextState = {}) {
+  const params = new URLSearchParams();
+  const page = parsePositiveInt(nextState.page, 1);
+  const search = String(nextState.search || "");
+  const method = String(nextState.method || "all");
+  const sort = String(nextState.sort || "newest");
+
+  if (page > 1) params.set("page", String(page));
+  if (search) params.set("search", search);
+  if (method !== "all") params.set("method", method);
+  if (sort !== "newest") params.set("sort", sort);
+
+  return params;
+}
+
 export default function AdminPaymentsPage() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [method, setMethod] = useState("all");
-  const [sort, setSort] = useState("newest");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const listState = readPaymentListState(searchParams);
+  const { page, search, method, sort } = listState;
+  const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
+    const next = {
+      ...listState,
+      ...updates,
+    };
+    if (resetPage) next.page = 1;
+    setSearchParams(buildPaymentListSearchParams(next), { replace });
+  };
+
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const trimmedSearch = search.trim();
@@ -165,8 +219,10 @@ export default function AdminPaymentsPage() {
                 id="payments-search"
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { search: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 placeholder="Search by invoice #, user, payment reference..."
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
@@ -206,8 +262,10 @@ export default function AdminPaymentsPage() {
                 id="payments-method"
                 value={method}
                 onChange={(e) => {
-                  setMethod(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { method: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -231,8 +289,10 @@ export default function AdminPaymentsPage() {
                 id="payments-sort"
                 value={sort}
                 onChange={(e) => {
-                  setSort(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { sort: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -248,10 +308,7 @@ export default function AdminPaymentsPage() {
                 type="button"
                 className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                 onClick={() => {
-                  setSearch("");
-                  setMethod("all");
-                  setSort("newest");
-                  setPage(1);
+                  setSearchParams(new URLSearchParams(), { replace: true });
                 }}
               >
                 <FiRefreshCw
@@ -278,7 +335,9 @@ export default function AdminPaymentsPage() {
           {pagination ? (
             <Pagination
               pagination={pagination}
-              onPageChange={setPage}
+              onPageChange={(nextPage) =>
+                updateListState({ page: nextPage }, { replace: false })
+              }
               variant="compact"
             />
           ) : null}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
 import { toast } from "react-toastify";
 
@@ -158,9 +158,29 @@ function friendlyApiError(err) {
   return String(msg);
 }
 
+const INVOICE_LIST_QUERY_KEYS = ["page", "search", "paymentStatus", "sort", "user"];
+
+function buildInvoicesListHref(rawSearch = "") {
+  const source = new URLSearchParams(rawSearch);
+  const filtered = new URLSearchParams();
+
+  for (const key of INVOICE_LIST_QUERY_KEYS) {
+    const value = source.get(key);
+    if (value) filtered.set(key, value);
+  }
+
+  const qs = filtered.toString();
+  return qs ? `/admin/invoices?${qs}` : "/admin/invoices";
+}
+
 export default function AdminInvoiceEditPage() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const backToInvoicesHref = useMemo(
+    () => buildInvoicesListHref(location.search),
+    [location.search]
+  );
 
   const {
     data: invoiceResult,
@@ -278,7 +298,7 @@ export default function AdminInvoiceEditPage() {
       if (res?.quoteUnlinked) {
         toast.info("Related quote unlocked and can be edited now.");
       }
-      navigate("/admin/invoices");
+      navigate(backToInvoicesHref);
     } catch (err) {
       toast.error(friendlyApiError(err));
     }
@@ -406,7 +426,7 @@ export default function AdminInvoiceEditPage() {
           <div className="min-w-0">
             <button
               type="button"
-              onClick={() => navigate("/admin/invoices")}
+              onClick={() => navigate(backToInvoicesHref)}
               className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
             >
               <FiChevronLeft className="h-4 w-4" />
@@ -549,7 +569,7 @@ export default function AdminInvoiceEditPage() {
               </button>
 
               <Link
-                to="/admin/invoices"
+                to={backToInvoicesHref}
                 className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
               >
                 Cancel

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
 import { toast } from "react-toastify";
 
@@ -26,9 +26,29 @@ const parsePrice = (value) => {
   return num;
 };
 
+const USER_LIST_QUERY_KEYS = ["page", "search", "role", "approvalStatus", "sort"];
+
+function buildUsersListHref(rawSearch = "") {
+  const source = new URLSearchParams(rawSearch);
+  const filtered = new URLSearchParams();
+
+  for (const key of USER_LIST_QUERY_KEYS) {
+    const value = source.get(key);
+    if (value) filtered.set(key, value);
+  }
+
+  const qs = filtered.toString();
+  return qs ? `/admin/users?${qs}` : "/admin/users";
+}
+
 export default function AdminUserDetailsPage() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const backToUsersHref = useMemo(
+    () => buildUsersListHref(location.search),
+    [location.search]
+  );
 
   const {
     data: userResult,
@@ -320,7 +340,7 @@ export default function AdminUserDetailsPage() {
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <button
           type="button"
-          onClick={() => navigate("/admin/users")}
+          onClick={() => navigate(backToUsersHref)}
           className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
         >
           <FiChevronLeft className="h-4 w-4" />

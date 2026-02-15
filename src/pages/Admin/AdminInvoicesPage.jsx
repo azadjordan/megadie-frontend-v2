@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   FiChevronDown,
   FiChevronUp,
@@ -21,22 +21,6 @@ import {
   useCreateManualInvoiceMutation,
 } from "../../features/invoices/invoicesApiSlice";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
-
-function formatDateTime(iso) {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  } catch {
-    return iso;
-  }
-}
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -193,12 +177,63 @@ function getInvoiceRowMeta(inv, state = {}) {
   };
 }
 
+const PAYMENT_STATUS_FILTER_VALUES = new Set([
+  "all",
+  "Paid",
+  "PartiallyPaid",
+  "Unpaid",
+  "overdue",
+]);
+const SORT_FILTER_VALUES = new Set(["newest", "oldest", "amountHigh", "amountLow"]);
+
+function parsePositiveInt(raw, fallback = 1) {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return n;
+}
+
+function readInvoiceListState(searchParams) {
+  const page = parsePositiveInt(searchParams.get("page"), 1);
+  const search = searchParams.get("search") || "";
+
+  const paymentStatusRaw = searchParams.get("paymentStatus") || "all";
+  const paymentStatusFilter = PAYMENT_STATUS_FILTER_VALUES.has(paymentStatusRaw)
+    ? paymentStatusRaw
+    : "all";
+
+  const sortRaw = searchParams.get("sort") || "newest";
+  const sort = SORT_FILTER_VALUES.has(sortRaw) ? sortRaw : "newest";
+
+  const user = searchParams.get("user") || "";
+
+  return {
+    page,
+    search,
+    paymentStatusFilter,
+    sort,
+    user,
+  };
+}
+
+function buildInvoiceListSearchParams(nextState = {}) {
+  const params = new URLSearchParams();
+  const safePage = parsePositiveInt(nextState.page, 1);
+  const search = String(nextState.search || "");
+  const paymentStatus = String(nextState.paymentStatusFilter || "all");
+  const sort = String(nextState.sort || "newest");
+  const user = String(nextState.user || "");
+
+  if (safePage > 1) params.set("page", String(safePage));
+  if (search) params.set("search", search);
+  if (paymentStatus !== "all") params.set("paymentStatus", paymentStatus);
+  if (sort !== "newest") params.set("sort", sort);
+  if (user) params.set("user", user);
+
+  return params;
+}
+
 export default function AdminInvoicesPage() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
-  const [sort, setSort] = useState("newest");
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualError, setManualError] = useState("");
@@ -213,14 +248,25 @@ export default function AdminInvoicesPage() {
     { id: "item-1", description: "", qty: "1", unitPrice: "" },
   ]);
 
+  const listState = readInvoiceListState(searchParams);
+  const { page, search, paymentStatusFilter, sort, user: selectedUserId } =
+    listState;
+
+  const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
+    const next = {
+      ...listState,
+      ...updates,
+    };
+    if (resetPage) next.page = 1;
+    setSearchParams(buildInvoiceListSearchParams(next), { replace });
+  };
+
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const isDebouncing = trimmedSearch !== debouncedSearch;
   const overdueOnly = paymentStatusFilter === "overdue";
   const statusFilter = overdueOnly ? "Issued" : "all";
   const effectivePaymentStatus = overdueOnly ? "all" : paymentStatusFilter;
-
-  const selectedUserId = selectedUser?._id || selectedUser?.id;
   const {
     data,
     isLoading,
@@ -255,6 +301,7 @@ export default function AdminInvoicesPage() {
     useCreateManualInvoiceMutation();
 
   const [pdfId, setPdfId] = useState(null);
+  const listQueryString = buildInvoiceListSearchParams(listState).toString();
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
@@ -269,8 +316,8 @@ export default function AdminInvoicesPage() {
       (user) => String(user?._id || user?.id) === String(selectedUserId)
     );
     if (exists) return users;
-    return selectedUser ? [selectedUser, ...users] : users;
-  }, [users, selectedUser, selectedUserId]);
+    return [{ _id: selectedUserId, email: selectedUserId }, ...users];
+  }, [users, selectedUserId]);
 
   const pagination = useMemo(() => {
     if (!data) return null;
@@ -496,8 +543,10 @@ export default function AdminInvoicesPage() {
                 id="invoices-search"
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { search: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 placeholder="Search by invoice # or order #"
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
@@ -538,15 +587,10 @@ export default function AdminInvoicesPage() {
                 value={selectedUserId ? String(selectedUserId) : ""}
                 onChange={(e) => {
                   const nextId = e.target.value;
-                  setPage(1);
-                  if (!nextId) {
-                    setSelectedUser(null);
-                    return;
-                  }
-                  const nextUser = userOptions.find(
-                    (user) => String(user?._id || user?.id) === nextId
+                  updateListState(
+                    { user: nextId || "" },
+                    { resetPage: true, replace: true }
                   );
-                  setSelectedUser(nextUser || { _id: nextId });
                 }}
                 disabled={usersLoading && userOptions.length === 0}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
@@ -581,8 +625,10 @@ export default function AdminInvoicesPage() {
                 id="invoices-payment-status"
                 value={paymentStatusFilter}
                 onChange={(e) => {
-                  setPaymentStatusFilter(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { paymentStatusFilter: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -605,8 +651,10 @@ export default function AdminInvoicesPage() {
                 id="invoices-sort"
                 value={sort}
                 onChange={(e) => {
-                  setSort(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { sort: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -622,11 +670,7 @@ export default function AdminInvoicesPage() {
                 type="button"
                 className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                 onClick={() => {
-                  setSearch("");
-                  setSelectedUser(null);
-                  setPaymentStatusFilter("all");
-                  setSort("newest");
-                  setPage(1);
+                  setSearchParams(new URLSearchParams(), { replace: true });
                 }}
               >
                 <FiRefreshCw
@@ -658,7 +702,9 @@ export default function AdminInvoicesPage() {
           {pagination ? (
             <Pagination
               pagination={pagination}
-              onPageChange={setPage}
+              onPageChange={(nextPage) =>
+                updateListState({ page: nextPage }, { replace: false })
+              }
               variant="compact"
             />
           ) : null}
@@ -784,7 +830,11 @@ export default function AdminInvoicesPage() {
           </button>
 
           <Link
-            to={`/admin/invoices/${inv._id}/edit`}
+            to={
+              listQueryString
+                ? `/admin/invoices/${inv._id}/edit?${listQueryString}`
+                : `/admin/invoices/${inv._id}/edit`
+            }
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
             title="Edit invoice"
             aria-label="Edit invoice"
@@ -908,7 +958,11 @@ export default function AdminInvoicesPage() {
                             </button>
 
                             <Link
-                              to={`/admin/invoices/${inv._id}/edit`}
+                              to={
+                                listQueryString
+                                  ? `/admin/invoices/${inv._id}/edit?${listQueryString}`
+                                  : `/admin/invoices/${inv._id}/edit`
+                              }
                               className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white ring-1 ring-slate-900 hover:bg-slate-800"
                               title="Edit invoice"
                               aria-label="Edit invoice"

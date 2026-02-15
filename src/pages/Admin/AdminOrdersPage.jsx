@@ -1,6 +1,6 @@
 ﻿// src/pages/Admin/AdminOrdersPage.jsx
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   FiChevronDown,
   FiChevronUp,
@@ -173,15 +173,59 @@ function StockBadge({ finalized, size = "default" }) {
   );
 }
 
+const ORDER_STATUS_FILTER_VALUES = new Set([
+  "all",
+  "Processing",
+  "Shipping",
+  "Delivered",
+  "Cancelled",
+]);
+
+function parsePositiveInt(raw, fallback = 1) {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return n;
+}
+
+function readOrderListState(searchParams) {
+  const page = parsePositiveInt(searchParams.get("page"), 1);
+  const search = searchParams.get("search") || "";
+  const statusRaw = searchParams.get("status") || "all";
+  const status = ORDER_STATUS_FILTER_VALUES.has(statusRaw) ? statusRaw : "all";
+  return { page, search, status };
+}
+
+function buildOrderListSearchParams(nextState = {}) {
+  const params = new URLSearchParams();
+  const page = parsePositiveInt(nextState.page, 1);
+  const search = String(nextState.search || "");
+  const status = String(nextState.status || "all");
+
+  if (page > 1) params.set("page", String(page));
+  if (search) params.set("search", search);
+  if (status !== "all") params.set("status", status);
+
+  return params;
+}
+
 export default function AdminOrdersPage() {
   // Note: Server-side filters (must match backend query params)
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
-  // Note: Pagination (server-side)
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copyId, setCopyId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+
+  const listState = readOrderListState(searchParams);
+  const { page, search, status } = listState;
+  const listQueryString = buildOrderListSearchParams(listState).toString();
+  const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
+    const next = {
+      ...listState,
+      ...updates,
+    };
+    if (resetPage) next.page = 1;
+    setSearchParams(buildOrderListSearchParams(next), { replace });
+  };
 
   const [deleteOrderByAdmin, { isLoading: isDeleting }] =
     useDeleteOrderByAdminMutation();
@@ -214,7 +258,7 @@ export default function AdminOrdersPage() {
       const text = buildAdminOrderShareText(order);
       await copyTextToClipboard(text);
       toast.success("Order copied to clipboard.");
-    } catch (e) {
+    } catch {
       toast.error("Failed to copy order.");
     } finally {
       setCopyId(null);
@@ -268,8 +312,10 @@ export default function AdminOrdersPage() {
                 id="orders-search"
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { search: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 placeholder="Search by user name, email, or order #"
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
@@ -309,8 +355,10 @@ export default function AdminOrdersPage() {
                 id="orders-status"
                 value={status}
                 onChange={(e) => {
-                  setStatus(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { status: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -327,9 +375,7 @@ export default function AdminOrdersPage() {
                 type="button"
                 className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                 onClick={() => {
-                  setSearch("");
-                  setStatus("all");
-                  setPage(1);
+                  setSearchParams(new URLSearchParams(), { replace: true });
                 }}
               >
                 <FiRefreshCw
@@ -356,7 +402,9 @@ export default function AdminOrdersPage() {
 
           <Pagination
             pagination={pagination}
-            onPageChange={setPage}
+            onPageChange={(nextPage) =>
+              updateListState({ page: nextPage }, { replace: false })
+            }
             variant="compact"
           />
         </div>
@@ -462,7 +510,11 @@ export default function AdminOrdersPage() {
             Copy
           </button>
           <Link
-            to={`/admin/orders/${o._id}`}
+            to={
+              listQueryString
+                ? `/admin/orders/${o._id}?${listQueryString}`
+                : `/admin/orders/${o._id}`
+            }
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
             aria-label="Open order"
             title="Open order"
@@ -584,7 +636,11 @@ export default function AdminOrdersPage() {
                               <FiSend className="h-4 w-4" />
                             </button>
                             <Link
-                              to={`/admin/orders/${o._id}`}
+                              to={
+                                listQueryString
+                                  ? `/admin/orders/${o._id}?${listQueryString}`
+                                  : `/admin/orders/${o._id}`
+                              }
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                               aria-label="Open order"
                               title="Open order"

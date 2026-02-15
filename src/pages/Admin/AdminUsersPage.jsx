@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   FiChevronDown,
   FiChevronUp,
@@ -63,14 +63,68 @@ function getUserRowMeta(user, state = {}) {
   };
 }
 
+const USER_ROLE_FILTER_VALUES = new Set(["all", "user", "admin"]);
+const USER_APPROVAL_FILTER_VALUES = new Set([
+  "all",
+  "Approved",
+  "Pending",
+  "Rejected",
+]);
+const USER_SORT_FILTER_VALUES = new Set(["newest", "oldest", "name"]);
+
+function parsePositiveInt(raw, fallback = 1) {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return n;
+}
+
+function readUserListState(searchParams) {
+  const page = parsePositiveInt(searchParams.get("page"), 1);
+  const search = searchParams.get("search") || "";
+  const roleRaw = searchParams.get("role") || "all";
+  const role = USER_ROLE_FILTER_VALUES.has(roleRaw) ? roleRaw : "all";
+  const approvalRaw = searchParams.get("approvalStatus") || "all";
+  const approvalStatus = USER_APPROVAL_FILTER_VALUES.has(approvalRaw)
+    ? approvalRaw
+    : "all";
+  const sortRaw = searchParams.get("sort") || "newest";
+  const sort = USER_SORT_FILTER_VALUES.has(sortRaw) ? sortRaw : "newest";
+  return { page, search, role, approvalStatus, sort };
+}
+
+function buildUserListSearchParams(nextState = {}) {
+  const params = new URLSearchParams();
+  const page = parsePositiveInt(nextState.page, 1);
+  const search = String(nextState.search || "");
+  const role = String(nextState.role || "all");
+  const approvalStatus = String(nextState.approvalStatus || "all");
+  const sort = String(nextState.sort || "newest");
+
+  if (page > 1) params.set("page", String(page));
+  if (search) params.set("search", search);
+  if (role !== "all") params.set("role", role);
+  if (approvalStatus !== "all") params.set("approvalStatus", approvalStatus);
+  if (sort !== "newest") params.set("sort", sort);
+
+  return params;
+}
+
 export default function AdminUsersPage() {
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
   const USERS_PAGE_LIMIT = 100;
-  const [search, setSearch] = useState("");
-  const [role, setRole] = useState("all");
-  const [approvalStatus, setApprovalStatus] = useState("all");
-  const [sort, setSort] = useState("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const listState = readUserListState(searchParams);
+  const { page, search, role, approvalStatus, sort } = listState;
+  const listQueryString = buildUserListSearchParams(listState).toString();
+  const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
+    const next = {
+      ...listState,
+      ...updates,
+    };
+    if (resetPage) next.page = 1;
+    setSearchParams(buildUserListSearchParams(next), { replace });
+  };
+
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
   const isDebouncing = trimmedSearch !== debouncedSearch;
@@ -144,8 +198,10 @@ export default function AdminUsersPage() {
                 id="users-search"
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { search: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 placeholder="Search by name, email, phone..."
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
@@ -185,8 +241,10 @@ export default function AdminUsersPage() {
                 id="users-role"
                 value={role}
                 onChange={(e) => {
-                  setRole(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { role: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -207,8 +265,10 @@ export default function AdminUsersPage() {
                 id="users-approval"
                 value={approvalStatus}
                 onChange={(e) => {
-                  setApprovalStatus(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { approvalStatus: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -230,8 +290,10 @@ export default function AdminUsersPage() {
                 id="users-sort"
                 value={sort}
                 onChange={(e) => {
-                  setSort(e.target.value);
-                  setPage(1);
+                  updateListState(
+                    { sort: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
@@ -246,11 +308,7 @@ export default function AdminUsersPage() {
                 type="button"
                 className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                 onClick={() => {
-                  setSearch("");
-                  setRole("all");
-                  setApprovalStatus("all");
-                  setSort("newest");
-                  setPage(1);
+                  setSearchParams(new URLSearchParams(), { replace: true });
                 }}
               >
                 <FiRefreshCw
@@ -355,7 +413,11 @@ export default function AdminUsersPage() {
                   <div className="mt-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
-                        to={`/admin/users/${row.userId}/edit`}
+                        to={
+                          listQueryString
+                            ? `/admin/users/${row.userId}/edit?${listQueryString}`
+                            : `/admin/users/${row.userId}/edit`
+                        }
                         className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
                         title="Edit user"
                         aria-label="Edit user"
@@ -432,7 +494,11 @@ export default function AdminUsersPage() {
                         <td className="px-4 py-3 text-center">
                           <div className="inline-flex items-center justify-center gap-2">
                             <Link
-                              to={`/admin/users/${row.userId}/edit`}
+                              to={
+                                listQueryString
+                                  ? `/admin/users/${row.userId}/edit?${listQueryString}`
+                                  : `/admin/users/${row.userId}/edit`
+                              }
                               className="inline-flex items-center justify-center rounded-xl bg-slate-900 p-2 text-white hover:bg-slate-800"
                               title="Edit user"
                               aria-label="Edit user"

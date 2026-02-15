@@ -102,10 +102,29 @@ function getDefaultDueDate() {
   return `${year}-${month}-${day}`;
 }
 
+const ORDER_LIST_QUERY_KEYS = ["page", "search", "status"];
+
+function buildOrdersListHref(rawSearch = "") {
+  const source = new URLSearchParams(rawSearch);
+  const filtered = new URLSearchParams();
+
+  for (const key of ORDER_LIST_QUERY_KEYS) {
+    const value = source.get(key);
+    if (value) filtered.set(key, value);
+  }
+
+  const qs = filtered.toString();
+  return qs ? `/admin/orders?${qs}` : "/admin/orders";
+}
+
 export default function AdminOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const backToOrdersHref = useMemo(
+    () => buildOrdersListHref(location.search),
+    [location.search]
+  );
 
   const {
     data: orderResult,
@@ -1074,7 +1093,7 @@ export default function AdminOrderDetailsPage() {
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <button
           type="button"
-          onClick={() => navigate("/admin/orders")}
+          onClick={() => navigate(backToOrdersHref)}
           className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
         >
           <FiChevronLeft className="h-4 w-4" />
