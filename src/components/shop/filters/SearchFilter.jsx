@@ -61,7 +61,7 @@ export default function SearchFilter({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="relative space-y-2">
       <div className="text-sm font-medium text-slate-900">{field.label}</div>
 
       <input
@@ -123,7 +123,7 @@ export default function SearchFilter({
 
       {/* Results dropdown */}
       {openResults && (
-        <div className="max-h-40 overflow-auto rounded-xl bg-white/95 shadow-sm ring-1 ring-slate-200/80">
+        <div className="absolute top-full left-0 right-0 z-20 max-h-52 overflow-y-auto rounded-xl bg-white/95 shadow-lg ring-1 ring-slate-200/80">
           {filteredValues.length === 0 ? (
             <div className="px-3 py-2 text-xs text-slate-500">
               No matching results

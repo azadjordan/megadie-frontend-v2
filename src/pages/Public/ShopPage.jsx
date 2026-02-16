@@ -230,10 +230,17 @@ export default function ShopPage() {
             onClick={() => setFiltersOpen(false)}
           />
           <div
-            className="absolute left-4 w-[85%] max-w-[360px] rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-200"
-            style={{ top: "calc(var(--app-header-h, 64px) + 0.75rem)" }}
+            className="absolute inset-2 flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200"
           >
-            <div className="flex items-center justify-end">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div className="text-sm font-semibold text-slate-900">
+                Filters
+                {activeFilterCount > 0 ? (
+                  <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => setFiltersOpen(false)}
@@ -243,7 +250,7 @@ export default function ShopPage() {
               </button>
             </div>
 
-            <div className="mt-3 space-y-4">
+            <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-4 py-4">
               <ProductTypeNav
                 productTypes={productTypes}
                 value={productType}
@@ -272,6 +279,16 @@ export default function ShopPage() {
                   </p>
                 </div>
               )}
+            </div>
+
+            <div className="shrink-0 border-t border-slate-200 bg-white p-3">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Show Products
+              </button>
             </div>
           </div>
         </div>
