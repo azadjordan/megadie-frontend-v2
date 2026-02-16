@@ -88,6 +88,8 @@ function SlotItemsPanel({
   defaultOpen = false,
   forceOpen = false,
   hideToggle = false,
+  hasInvoice = false,
+  invoiceWarning = "",
 }) {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const isDisabled = !productId || !orderId;
@@ -97,6 +99,10 @@ function SlotItemsPanel({
   const releaseLocked = isReleaseLocked ?? isLocked;
   const showLockedMessage =
     Boolean(lockMessage) && (reserveLocked || releaseLocked);
+  const invoiceActionNotice = hasInvoice
+    ? invoiceWarning ||
+      "Invoice exists for this order. Verify shipment documents after reservation changes."
+    : "";
   const [drafts, setDrafts] = useState({});
   const [localError, setLocalError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -296,7 +302,9 @@ function SlotItemsPanel({
     }
 
     const confirmed = window.confirm(
-      "Reserve all remaining qty across available slots?"
+      hasInvoice
+        ? "Reserve all remaining qty across available slots?\n\nInvoice exists for this order. Verify shipment documents after reservation changes."
+        : "Reserve all remaining qty across available slots?"
     );
     if (!confirmed) return;
 
@@ -382,7 +390,11 @@ function SlotItemsPanel({
 
   const handleUnpickAll = async () => {
     if (!orderId || !hasReservations || releaseLocked) return;
-    const confirmed = window.confirm("Remove all reservations for this item?");
+    const confirmed = window.confirm(
+      hasInvoice
+        ? "Remove all reservations for this item?\n\nInvoice exists for this order. Verify shipment documents after reservation changes."
+        : "Remove all reservations for this item?"
+    );
     if (!confirmed) return;
     setLocalError("");
     setActionError("");
@@ -708,6 +720,11 @@ function SlotItemsPanel({
                   Unreserve all
                 </button>
               </div>
+              {invoiceActionNotice ? (
+                <div className="px-4 pb-2 text-[11px] text-amber-700">
+                  {invoiceActionNotice}
+                </div>
+              ) : null}
               {actionError ? (
                 <div className="px-4 py-2 text-[11px] text-rose-600">
                   {actionError}
@@ -1089,6 +1106,8 @@ function AllocationItemCard({
   showAllocationHistory = false,
   forceOpenSlots = false,
   hideSlotToggle = false,
+  hasInvoice = false,
+  invoiceWarning = "",
 }) {
   const name =
     item?.product?.name ||
@@ -1193,6 +1212,8 @@ function AllocationItemCard({
             buttonWrapperClassName="xl:absolute xl:right-4 xl:top-4"
             forceOpen={forceOpenSlots}
             hideToggle={hideSlotToggle}
+            hasInvoice={hasInvoice}
+            invoiceWarning={invoiceWarning}
           />
         </div>
       ) : null}
@@ -1211,6 +1232,8 @@ export default function AdminOrderAllocation({
   allocationEnabled = true,
   allocationLockReason = "",
   allowRelease = false,
+  hasInvoice = false,
+  invoiceWarning = "",
   mode,
 }) {
   const rows = Array.isArray(items) ? items : [];
@@ -1402,6 +1425,10 @@ export default function AdminOrderAllocation({
     const showAllocationMessage =
       Boolean(allocationMessage) &&
       (allocationNoticeMessage || isAllocationLocked);
+    const showInvoiceWarning = Boolean(hasInvoice && showSlotActions);
+    const invoiceWarningText =
+      invoiceWarning ||
+      "Invoice exists for this order. Verify shipment documents after reservation changes.";
     const slotLockMessage = isAllocationLocked ? "" : allocationMessage;
 
     const activeRow =
@@ -1460,6 +1487,11 @@ export default function AdminOrderAllocation({
           {showAllocationMessage ? (
             <div className="mt-2 text-xs text-amber-700">
               {allocationMessage}
+            </div>
+          ) : null}
+          {showInvoiceWarning ? (
+            <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+              {invoiceWarningText}
             </div>
           ) : null}
         </div>
@@ -1537,6 +1569,8 @@ export default function AdminOrderAllocation({
                   showAllocationHistory={activeRow.hasDeductedForItem}
                   forceOpenSlots
                   hideSlotToggle
+                  hasInvoice={hasInvoice}
+                  invoiceWarning={invoiceWarningText}
                 />
               ) : null}
             </div>
@@ -1640,6 +1674,8 @@ export default function AdminOrderAllocation({
                     showAllocationHistory={activeRow.hasDeductedForItem}
                     forceOpenSlots
                     hideSlotToggle
+                    hasInvoice={hasInvoice}
+                    invoiceWarning={invoiceWarningText}
                   />
                 ) : null}
               </div>

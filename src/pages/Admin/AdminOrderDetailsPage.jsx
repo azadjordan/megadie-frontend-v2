@@ -294,7 +294,6 @@ export default function AdminOrderDetailsPage() {
     Boolean(order?.stockFinalizedAt) || allocationMetrics.isFullyDeducted;
   const releaseAllowed =
     orderStatus === "Shipping" &&
-    !hasInvoice &&
     !isStockFinalized &&
     !hasDeductedAllocations;
   const canAllocate = orderStatus === "Shipping" && !isStockFinalized;
@@ -303,11 +302,12 @@ export default function AdminOrderDetailsPage() {
     : orderStatus === "Cancelled"
     ? "Order is cancelled."
     : orderStatus === "Delivered"
-    ? hasInvoice
-      ? "Remove the invoice before adjusting reservations."
-      : "Reservations are locked once delivered."
+    ? "Reservations are locked once delivered."
     : orderStatus !== "Shipping"
     ? "Order must be Shipping before managing allocations."
+    : "";
+  const allocationInvoiceWarning = hasInvoice
+    ? "Invoice exists for this order. Reservation changes are allowed while Shipping. Verify shipment documents after updates."
     : "";
   const hasPartialDeduction = hasDeductedAllocations && !isFullyDeducted;
 
@@ -953,6 +953,8 @@ export default function AdminOrderDetailsPage() {
             allocationEnabled={canAllocate}
             allocationLockReason={allocationLockReason}
             allowRelease={releaseAllowed}
+            hasInvoice={hasInvoice}
+            invoiceWarning={allocationInvoiceWarning}
             mode="stock"
           />
         );
