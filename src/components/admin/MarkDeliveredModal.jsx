@@ -5,7 +5,12 @@ function modalLabel(id) {
   return `mark-delivered-${id}`;
 }
 
-const DELIVERED_BY_OPTIONS = ["Azad", "Momani", "Ahmad Emad"];
+const DELIVERED_BY_OPTIONS = [
+  "Azad",
+  "Momani",
+  "Ahmad Emad",
+  "Pick Up By Client",
+];
 const DELIVERED_BY_OTHER = "Other";
 
 export default function MarkDeliveredModal({
