@@ -3,10 +3,7 @@ import { Link } from "react-router-dom";
 
 import { useGetAdminQuotesQuery } from "../../features/quotes/quotesApiSlice";
 import { useGetOrdersAdminQuery } from "../../features/orders/ordersApiSlice";
-import {
-  useGetInvoicesAdminQuery,
-  useGetInvoicesAdminSummaryQuery,
-} from "../../features/invoices/invoicesApiSlice";
+import { useGetInvoicesAdminSummaryQuery } from "../../features/invoices/invoicesApiSlice";
 import { useGetPaymentsAdminQuery } from "../../features/payments/paymentsApiSlice";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 
@@ -72,12 +69,6 @@ const formatMoneyMinor = (amountMinor, currency = "AED", factor = 100) => {
   }
 };
 
-const formatPaymentStatusLabel = (status) => {
-  if (status === "PartiallyPaid") return "Partially paid";
-  if (status === "Paid") return "Paid";
-  return "Unpaid";
-};
-
 const getRowTimestamp = (row) => {
   const raw = row?.createdAt || row?.updatedAt || row?.created || row?.date;
   if (!raw) return 0;
@@ -87,22 +78,6 @@ const getRowTimestamp = (row) => {
 
 const sortByNewest = (rows) =>
   [...rows].sort((a, b) => getRowTimestamp(b) - getRowTimestamp(a));
-
-const isInvoiceOverdue = (inv) => {
-  if (!inv || inv.status === "Cancelled") return false;
-  if (inv.paymentStatus === "Paid") return false;
-  const due = inv.dueDate ? Date.parse(inv.dueDate) : NaN;
-  if (!Number.isFinite(due)) return false;
-  const balance =
-    typeof inv.balanceDueMinor === "number"
-      ? inv.balanceDueMinor
-      : Math.max(
-          (typeof inv.amountMinor === "number" ? inv.amountMinor : 0) -
-            (typeof inv.paidTotalMinor === "number" ? inv.paidTotalMinor : 0),
-          0,
-        );
-  return balance > 0 && due < Date.now();
-};
 
 const QUOTE_STATUS_STYLES = {
   Processing: "bg-slate-50 text-slate-700 ring-slate-200",
@@ -117,14 +92,6 @@ const ORDER_STATUS_STYLES = {
   Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
 };
-
-const PAYMENT_STATUS_STYLES = {
-  Paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  PartiallyPaid: "bg-amber-50 text-amber-800 ring-amber-200",
-  Unpaid: "bg-rose-50 text-rose-800 ring-rose-200",
-};
-
-const OVERDUE_STATUS_STYLE = "bg-rose-50 text-rose-800 ring-rose-200";
 
 function StatCard({ title, value, hint, to }) {
   const content = (
@@ -176,19 +143,6 @@ function StatusBadge({ status, styles, label }) {
   );
 }
 
-function OverdueBadge() {
-  return (
-    <span
-      className={[
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
-        OVERDUE_STATUS_STYLE,
-      ].join(" ")}
-    >
-      Overdue
-    </span>
-  );
-}
-
 export default function AdminDashboardPage() {
   const {
     data: processingQuotesData,
@@ -217,12 +171,6 @@ export default function AdminDashboardPage() {
     isLoading: invoiceSummaryLoading,
     isError: invoiceSummaryError,
   } = useGetInvoicesAdminSummaryQuery();
-  const {
-    data: actionableInvoicesData,
-    isLoading: actionableInvoicesLoading,
-    isError: actionableInvoicesError,
-  } = useGetInvoicesAdminQuery({ page: 1, unpaid: true, sort: "newest" });
-
   const {
     data: paymentsData,
     isLoading: paymentsLoading,
@@ -291,8 +239,6 @@ export default function AdminDashboardPage() {
       ]).slice(0, 6),
     [processingOrdersData, shippingOrdersData]
   );
-
-  const actionableInvoices = getRowsFromData(actionableInvoicesData).slice(0, 6);
 
   return (
     <div className="space-y-5">
@@ -368,7 +314,7 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <ListCard title="Requests to review" to="/admin/requests">
           {actionableQuotesLoading ? (
             <div className="text-xs text-slate-500">Loading requests...</div>
@@ -451,67 +397,6 @@ export default function AdminDashboardPage() {
                         status={order?.status}
                         styles={ORDER_STATUS_STYLES}
                       />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </ListCard>
-
-        <ListCard title="Invoices to collect" to="/admin/invoices">
-          {actionableInvoicesLoading ? (
-            <div className="text-xs text-slate-500">Loading invoices...</div>
-          ) : actionableInvoicesError ? (
-            <div className="text-xs font-semibold text-rose-600">
-              Unable to load invoices.
-            </div>
-          ) : actionableInvoices.length === 0 ? (
-            <div className="text-xs text-slate-500">
-              No unpaid invoices right now.
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {actionableInvoices.map((inv) => {
-                const invoiceId = inv?._id;
-                const invoiceNumber =
-                  inv?.invoiceNumber ||
-                  (invoiceId ? invoiceId.slice(-6).toUpperCase() : "Invoice");
-                const userName = inv?.user?.name || "Unknown user";
-                const currency = inv?.currency || "AED";
-                const factor = inv?.minorUnitFactor || 100;
-                const showCancelled = inv?.status === "Cancelled";
-                const overdue = isInvoiceOverdue(inv);
-                return (
-                  <li key={invoiceId}>
-                    <Link
-                      to={`/admin/invoices/${invoiceId}/edit`}
-                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:bg-slate-50"
-                    >
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          {invoiceNumber}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {userName} -{" "}
-                          {formatMoneyMinor(inv?.amountMinor, currency, factor)}
-                        </div>
-                      </div>
-                      {showCancelled ? (
-                        <StatusBadge
-                          status="Cancelled"
-                          styles={{ Cancelled: QUOTE_STATUS_STYLES.Cancelled }}
-                        />
-                      ) : (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <StatusBadge
-                            status={inv?.paymentStatus || "Unpaid"}
-                            label={formatPaymentStatusLabel(inv?.paymentStatus)}
-                            styles={PAYMENT_STATUS_STYLES}
-                          />
-                          {overdue ? <OverdueBadge /> : null}
-                        </div>
-                      )}
                     </Link>
                   </li>
                 );
