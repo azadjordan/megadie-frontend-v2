@@ -225,7 +225,7 @@ export default function AdminDashboardPage() {
       sortByNewest([
         ...getRowsFromData(processingQuotesData),
         ...getRowsFromData(quotedQuotesData),
-      ]).slice(0, 6),
+      ]).slice(0, 10),
     [processingQuotesData, quotedQuotesData]
   );
 
@@ -236,7 +236,7 @@ export default function AdminDashboardPage() {
       sortByNewest([
         ...getRowsFromData(processingOrdersData),
         ...getRowsFromData(shippingOrdersData),
-      ]).slice(0, 6),
+      ]).slice(0, 10),
     [processingOrdersData, shippingOrdersData]
   );
 
