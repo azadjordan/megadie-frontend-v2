@@ -11,6 +11,7 @@ import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
 import StepCard from "./request-details/StepCard";
 import OrderSummaryPanel from "./order-details/SummaryPanel";
 import { StatusBadge, StockBadge } from "./order-details/Badges";
+import { getOrderTotals } from "../../utils/orderTotals";
 
 import {
   useGetOrderByIdQuery,
@@ -65,14 +66,6 @@ function moneyPlain(amount) {
   } catch {
     return n.toFixed(2);
   }
-}
-
-function lineTotal(item) {
-  if (!item) return 0;
-  if (typeof item.lineTotal === "number") return item.lineTotal;
-  const qty = Number(item.qty) || 0;
-  const unit = Number(item.unitPrice) || 0;
-  return qty * unit;
 }
 
 function parseNumberInput(value) {
@@ -152,12 +145,12 @@ export default function AdminOrderDetailsPage() {
   const user =
     order?.user && typeof order.user === "object" ? order.user : null;
 
-  const itemsTotal = items.reduce((sum, it) => sum + lineTotal(it), 0);
+  const savedOrderTotals = getOrderTotals(order);
+  const itemsTotal = savedOrderTotals.itemsTotal;
   const itemsCount = items.length;
   const totalQty = items.reduce((sum, it) => sum + (Number(it?.qty) || 0), 0);
-  const delivery = Number(order?.deliveryCharge) || 0;
-  const extra = Number(order?.extraFee) || 0;
-  const total = Number(order?.totalPrice) || itemsTotal + delivery + extra;
+  const delivery = savedOrderTotals.deliveryCharge;
+  const extra = savedOrderTotals.extraFee;
 
   const orderId = order?._id || order?.id || "";
   const orderStatus = order?.status || "Processing";
@@ -463,6 +456,17 @@ export default function AdminOrderDetailsPage() {
     setDeliverFormError("");
     setSaved(false);
   }, [order?._id, order?.id, order?.updatedAt]);
+
+  const summaryDeliveryCharge = canEditFees
+    ? parseNumberInput(deliveryCharge) ?? delivery
+    : delivery;
+  const summaryExtraFee = canEditFees
+    ? parseNumberInput(extraFee) ?? extra
+    : extra;
+  const summaryTotals = getOrderTotals(order, {
+    deliveryCharge: summaryDeliveryCharge,
+    extraFee: summaryExtraFee,
+  });
 
   const openCreateModal = () => {
     if (!order) return;
@@ -1081,9 +1085,9 @@ export default function AdminOrderDetailsPage() {
       itemsCount={itemsCount}
       totalQty={totalQty}
       itemsTotal={itemsTotal}
-      deliveryCharge={delivery}
-      extraFee={extra}
-      total={total}
+      deliveryCharge={summaryTotals.deliveryCharge}
+      extraFee={summaryTotals.extraFee}
+      total={summaryTotals.total}
       status={orderStatus}
       formatMoney={money}
       isStockFinalized={isStockFinalized}

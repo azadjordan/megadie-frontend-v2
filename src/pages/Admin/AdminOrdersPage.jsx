@@ -16,6 +16,7 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
 import { copyTextToClipboard } from "../../utils/clipboard";
 import { buildAdminOrderShareText } from "../../utils/orderShare";
+import { getOrderTotals } from "../../utils/orderTotals";
 import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
@@ -58,24 +59,7 @@ function formatItemCount(items) {
 }
 
 function getOrderTotal(order) {
-  const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
-  const itemsTotal = items.reduce((sum, it) => {
-    const line =
-      typeof it?.lineTotal === "number"
-        ? it.lineTotal
-        : (Number(it?.qty) || 0) * (Number(it?.unitPrice) || 0);
-    return sum + (Number.isFinite(line) ? line : 0);
-  }, 0);
-  const delivery = Number(order?.deliveryCharge) || 0;
-  const extra = Number(order?.extraFee) || 0;
-  const computed = itemsTotal + delivery + extra;
-  const stored = Number(order?.totalPrice);
-
-  if (items.length > 0 || delivery > 0 || extra > 0) {
-    return Number.isFinite(computed) ? computed : 0;
-  }
-
-  return Number.isFinite(stored) ? stored : 0;
+  return getOrderTotals(order).total;
 }
 
 function getOrderRowMeta(order) {

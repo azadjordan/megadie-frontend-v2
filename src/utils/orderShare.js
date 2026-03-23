@@ -1,3 +1,5 @@
+import { getOrderLineTotal, getOrderTotals } from "./orderTotals";
+
 const ZWSP = "\u200B";
 
 const preventAutoLink = (text) => {
@@ -39,27 +41,6 @@ const formatPaymentStatus = (status) => {
   if (!status) return "-";
   if (status === "PartiallyPaid") return "Partially paid";
   return status;
-};
-
-const getLineTotal = (item) => {
-  if (!item) return 0;
-  if (typeof item.lineTotal === "number") return item.lineTotal;
-  const qty = Number(item.qty) || 0;
-  const unit = Number(item.unitPrice) || 0;
-  return qty * unit;
-};
-
-const computeTotal = (order) => {
-  const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
-  const itemsTotal = items.reduce((sum, it) => sum + getLineTotal(it), 0);
-  const delivery = Number(order?.deliveryCharge) || 0;
-  const extra = Number(order?.extraFee) || 0;
-  const computed = itemsTotal + delivery + extra;
-  const stored = Number(order?.totalPrice);
-  if (items.length > 0 || delivery > 0 || extra > 0) {
-    return Number.isFinite(computed) ? computed : 0;
-  }
-  return Number.isFinite(stored) ? stored : 0;
 };
 
 export const buildAdminOrderShareText = (order) => {
@@ -106,7 +87,7 @@ export const buildAdminOrderShareText = (order) => {
     items.forEach((item, idx) => {
       const qty = Number(item?.qty) || 0;
       const label = item?.productName || item?.product?.name || "Unnamed";
-      const lineTotal = getLineTotal(item);
+      const lineTotal = getOrderLineTotal(item);
       lines.push(`${idx + 1}. *${label}* Qty: ${qty}, ${money(lineTotal)}`);
       if (idx < items.length - 1) {
         lines.push("");
@@ -116,7 +97,7 @@ export const buildAdminOrderShareText = (order) => {
   lines.push("");
   lines.push(`Delivery Charge: ${money(order?.deliveryCharge)}`);
   lines.push(`Extra Fee: ${money(order?.extraFee)}`);
-  lines.push(`Total Price: ${money(computeTotal(order))}`);
+  lines.push(`Total Price: ${money(getOrderTotals(order).total)}`);
   lines.push("");
   lines.push(`Payment Status: ${formatPaymentStatus(paymentStatus)}`);
   lines.push(`Status: ${status}`);
