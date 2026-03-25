@@ -41,12 +41,22 @@ function friendlyApiError(err) {
   return String(msg);
 }
 
+function getTodayInputValue() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function AdminFinancePage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [soaUserId, setSoaUserId] = useState(null);
+  const [soaCutoffDate, setSoaCutoffDate] = useState(() => getTodayInputValue());
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const dropdownRef = useRef(null);
+  const todayInputValue = getTodayInputValue();
 
   const trimmedSearch = userSearch.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 600);
@@ -110,20 +120,23 @@ export default function AdminFinancePage() {
   }, [users, selectedUser, selectedUserId]);
 
   const handleSoa = async () => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || !soaCutoffDate) return;
     const user = userOptions.find(
       (u) => String(u._id || u.id) === String(selectedUserId)
     );
 
     try {
       setSoaUserId(selectedUserId);
-      const blob = await getStatementOfAccountPdf(selectedUserId).unwrap();
+      const soaRequestArg = soaCutoffDate
+        ? `${selectedUserId}?to=${encodeURIComponent(soaCutoffDate)}`
+        : selectedUserId;
+      const blob = await getStatementOfAccountPdf(soaRequestArg).unwrap();
       const safeName = String(user?.name || selectedUserId)
         .trim()
         .replace(/[^A-Za-z0-9_-]+/g, "-")
         .replace(/-+/g, "-")
         .replace(/^-+|-+$/g, "");
-      const dateTag = new Date().toISOString().slice(0, 10);
+      const dateTag = soaCutoffDate || todayInputValue;
       const fileName = `soa-${safeName || selectedUserId}-${dateTag}.pdf`;
       const url = window.URL.createObjectURL(blob);
       const newTab = window.open(url, "_blank", "noopener,noreferrer");
@@ -338,21 +351,44 @@ export default function AdminFinancePage() {
             Statement of Account (SOA)
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            Generate a PDF statement for the selected client.
+            Generate a PDF for invoices issued up to a selected date that still remain unpaid.
+          </div>
+          <div className="mt-4">
+            <label
+              htmlFor="finance-soa-cutoff"
+              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Up To Date
+            </label>
+            <input
+              id="finance-soa-cutoff"
+              type="date"
+              value={soaCutoffDate}
+              max={todayInputValue}
+              onChange={(e) => setSoaCutoffDate(e.target.value)}
+              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            />
           </div>
           <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
             {selectedUserId
-              ? `Ready for ${selectedUserLabel}.`
+              ? `Ready for ${selectedUserLabel}. Includes invoices issued on or before ${soaCutoffDate}.`
               : "Select a client to enable SOA."}
+          </div>
+          <div className="mt-2 text-xs text-slate-500">
+            Cutoff applies only to the generated SOA. Balance cards above remain current.
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleSoa}
-              disabled={!selectedUserId || (isSoaLoading && soaUserId === selectedUserId)}
+              disabled={
+                !selectedUserId ||
+                !soaCutoffDate ||
+                (isSoaLoading && soaUserId === selectedUserId)
+              }
               className={[
                 "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
-                selectedUserId
+                selectedUserId && soaCutoffDate
                   ? "bg-violet-600 text-white hover:bg-violet-500"
                   : "cursor-not-allowed bg-slate-100 text-slate-400",
               ].join(" ")}
@@ -365,6 +401,10 @@ export default function AdminFinancePage() {
             {!selectedUserId ? (
               <span className="text-xs text-slate-500">
                 Select a client first.
+              </span>
+            ) : !soaCutoffDate ? (
+              <span className="text-xs text-slate-500">
+                Choose a cutoff date.
               </span>
             ) : null}
           </div>

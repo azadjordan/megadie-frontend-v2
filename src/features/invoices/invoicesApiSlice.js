@@ -5,6 +5,7 @@ const ADMIN_PAYMENT_STATUSES = ["Unpaid", "PartiallyPaid", "Paid"];
 const ADMIN_INVOICE_SORTS = ["newest", "oldest", "amountHigh", "amountLow"];
 
 export const invoicesApiSlice = apiSlice.injectEndpoints({
+  overrideExisting: import.meta.env.DEV,
   endpoints: (builder) => ({
     // Admin: list invoices (paginated)
     getInvoicesAdmin: builder.query({
@@ -101,11 +102,21 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       keepUnusedDataFor: 0,
     }),
     getStatementOfAccountPdf: builder.query({
-      query: (userId) => ({
-        url: `/invoices/soa/${userId}`,
-        method: "GET",
-        responseHandler: (response) => response.blob(),
-      }),
+      query: (arg) => {
+        const payload =
+          arg && typeof arg === "object" ? arg : { userId: arg };
+        const userId = payload?.userId;
+        const to = payload?.to || payload?.cutoffDate || "";
+        const params = new URLSearchParams();
+        if (to) params.set("to", to);
+        const qs = params.toString();
+
+        return {
+          url: qs ? `/invoices/soa/${userId}?${qs}` : `/invoices/soa/${userId}`,
+          method: "GET",
+          responseHandler: (response) => response.blob(),
+        };
+      },
       keepUnusedDataFor: 0,
     }),
 
