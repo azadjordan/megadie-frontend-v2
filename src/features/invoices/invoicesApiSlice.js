@@ -103,11 +103,21 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
     }),
     getStatementOfAccountPdf: builder.query({
       query: (arg) => {
+        if (typeof arg === "string") {
+          return {
+            url: `/invoices/soa/${arg}`,
+            method: "GET",
+            responseHandler: (response) => response.blob(),
+          };
+        }
+
         const payload =
           arg && typeof arg === "object" ? arg : { userId: arg };
         const userId = payload?.userId;
+        const from = payload?.from || payload?.startDate || "";
         const to = payload?.to || payload?.cutoffDate || "";
         const params = new URLSearchParams();
+        if (from) params.set("from", from);
         if (to) params.set("to", to);
         const qs = params.toString();
 

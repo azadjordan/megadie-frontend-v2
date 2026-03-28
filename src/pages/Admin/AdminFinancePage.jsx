@@ -52,6 +52,7 @@ function getTodayInputValue() {
 export default function AdminFinancePage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [soaUserId, setSoaUserId] = useState(null);
+  const [soaStartDate, setSoaStartDate] = useState("");
   const [soaCutoffDate, setSoaCutoffDate] = useState(() => getTodayInputValue());
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
@@ -119,25 +120,37 @@ export default function AdminFinancePage() {
     return selectedUser ? [selectedUser, ...users] : users;
   }, [users, selectedUser, selectedUserId]);
 
+  const soaScopeLabel = soaStartDate
+    ? `Includes invoices issued between ${soaStartDate} and ${soaCutoffDate}.`
+    : `Includes invoices issued on or before ${soaCutoffDate}.`;
+
   const handleSoa = async () => {
     if (!selectedUserId || !soaCutoffDate) return;
+    if (soaStartDate && soaStartDate > soaCutoffDate) {
+      toast.error("From date must be before or equal to the up to date.");
+      return;
+    }
+
     const user = userOptions.find(
       (u) => String(u._id || u.id) === String(selectedUserId)
     );
 
     try {
       setSoaUserId(selectedUserId);
-      const soaRequestArg = soaCutoffDate
-        ? `${selectedUserId}?to=${encodeURIComponent(soaCutoffDate)}`
-        : selectedUserId;
-      const blob = await getStatementOfAccountPdf(soaRequestArg).unwrap();
+      const blob = await getStatementOfAccountPdf({
+        userId: selectedUserId,
+        from: soaStartDate,
+        to: soaCutoffDate,
+      }).unwrap();
       const safeName = String(user?.name || selectedUserId)
         .trim()
         .replace(/[^A-Za-z0-9_-]+/g, "-")
         .replace(/-+/g, "-")
         .replace(/^-+|-+$/g, "");
       const dateTag = soaCutoffDate || todayInputValue;
-      const fileName = `soa-${safeName || selectedUserId}-${dateTag}.pdf`;
+      const fileName = soaStartDate
+        ? `soa-${safeName || selectedUserId}-${soaStartDate}-to-${dateTag}.pdf`
+        : `soa-${safeName || selectedUserId}-${dateTag}.pdf`;
       const url = window.URL.createObjectURL(blob);
       const newTab = window.open(url, "_blank", "noopener,noreferrer");
 
@@ -351,27 +364,49 @@ export default function AdminFinancePage() {
             Statement of Account (SOA)
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            Generate a PDF for invoices issued up to a selected date that still remain unpaid.
+            Generate a PDF for invoices issued up to a selected date, or within a chosen date range, that still remain unpaid.
           </div>
-          <div className="mt-4">
-            <label
-              htmlFor="finance-soa-cutoff"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Up To Date
-            </label>
-            <input
-              id="finance-soa-cutoff"
-              type="date"
-              value={soaCutoffDate}
-              max={todayInputValue}
-              onChange={(e) => setSoaCutoffDate(e.target.value)}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            />
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="finance-soa-start"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                From Date
+              </label>
+              <input
+                id="finance-soa-start"
+                type="date"
+                value={soaStartDate}
+                max={soaCutoffDate || todayInputValue}
+                onChange={(e) => setSoaStartDate(e.target.value)}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              />
+              <div className="mt-1 text-[11px] text-slate-500">
+                Optional. Leave blank to include all older invoices.
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="finance-soa-cutoff"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Up To Date
+              </label>
+              <input
+                id="finance-soa-cutoff"
+                type="date"
+                value={soaCutoffDate}
+                min={soaStartDate || undefined}
+                max={todayInputValue}
+                onChange={(e) => setSoaCutoffDate(e.target.value)}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              />
+            </div>
           </div>
           <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
             {selectedUserId
-              ? `Ready for ${selectedUserLabel}. Includes invoices issued on or before ${soaCutoffDate}.`
+              ? `Ready for ${selectedUserLabel}. ${soaScopeLabel}`
               : "Select a client to enable SOA."}
           </div>
           <div className="mt-2 text-xs text-slate-500">
