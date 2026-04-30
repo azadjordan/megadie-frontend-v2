@@ -57,6 +57,11 @@ function StatusBadge({ status }) {
   );
 }
 
+const getQuoteId = (quote) => {
+  const id = quote?._id || quote?.id;
+  return id ? String(id) : "";
+};
+
 export default function AccountRequestCard({
   quote,
   isOpen,
@@ -76,7 +81,8 @@ export default function AccountRequestCard({
   onConfirmQty,
   onAdjustDraftQty,
 }) {
-  const status = quote.status;
+  const quoteId = getQuoteId(quote);
+  const status = quote?.status;
   const isProcessing = status === "Processing";
   const isQuoted = status === "Quoted";
   const isConfirmed = status === "Confirmed";
@@ -85,7 +91,7 @@ export default function AccountRequestCard({
   const isLocked = Boolean(quote?.order) || manualInvoiceLocked;
   const isQtyEditLocked = Boolean(quote?.clientQtyEditLocked);
 
-  const requestedItems = Array.isArray(quote.requestedItems)
+  const requestedItems = Array.isArray(quote?.requestedItems)
     ? quote.requestedItems
     : [];
   const hasShortage = requestedItems.some((it) => Number(it?.shortage) > 0);
@@ -111,9 +117,10 @@ export default function AccountRequestCard({
     : availableCount === totalAvailabilityCount
     ? "AVAILABLE"
     : "SHORTAGE";
-  const canCancel = (isProcessing || isQuoted) && !isLocked;
-  const canConfirm = isQuoted && !hasShortage && !isLocked;
+  const canCancel = Boolean(quoteId) && (isProcessing || isQuoted) && !isLocked;
+  const canConfirm = Boolean(quoteId) && isQuoted && !hasShortage && !isLocked;
   const canEditQty =
+    Boolean(quoteId) &&
     !isLocked &&
     !isCancelled &&
     !isQtyEditLocked &&
@@ -123,7 +130,11 @@ export default function AccountRequestCard({
   const confirmDisabled =
     !canConfirm || isConfirming || isCancelling || isEditingActive;
   const showConfirmButton =
-    !isLocked && !isConfirmed && !isCancelled && !(isProcessing && allNotAvailable);
+    Boolean(quoteId) &&
+    !isLocked &&
+    !isConfirmed &&
+    !isCancelled &&
+    !(isProcessing && allNotAvailable);
   const showConfirmButtonFinal = showConfirmButton;
   const showEditQtyAction = canEditQty && !isEditing;
   const showConfirmQtyFinal = canEditQty && isEditing;
@@ -139,8 +150,8 @@ export default function AccountRequestCard({
   const showNoPricing = status === "Processing" || isCancelled;
   const showPricingColumn =
     !isCancelled && !hasShortage && (showFullPricing || showNoPricing);
-  const deliveryCharge = Number(quote.deliveryCharge) || 0;
-  const extraFee = Number(quote.extraFee) || 0;
+  const deliveryCharge = Number(quote?.deliveryCharge) || 0;
+  const extraFee = Number(quote?.extraFee) || 0;
   const adjustedSubtotal = showFullPricing
     ? requestedItems.reduce((sum, it) => {
         const unitPrice = Number(it?.unitPrice);
@@ -151,7 +162,7 @@ export default function AccountRequestCard({
         const hasItemShortage =
           Number.isFinite(shortage) && shortage > 0 && Number.isFinite(availableNow);
         const productId = it?.product?._id || it?.product;
-        const draftQty = Number(editDraft?.[quote._id]?.[String(productId)]);
+        const draftQty = Number(editDraft?.[quoteId]?.[String(productId)]);
         const fallbackQty = hasItemShortage ? availableNow : requestedQty;
         const nextQty = Number.isFinite(draftQty) ? draftQty : fallbackQty;
         return sum + unitPrice * nextQty;
@@ -162,14 +173,15 @@ export default function AccountRequestCard({
   const summaryTotal =
     showFullPricing && hasShortage && adjustedTotal != null
       ? adjustedTotal
-      : quote.totalPrice;
+      : quote?.totalPrice;
 
   return (
     <div className="relative rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="absolute right-5 top-5 z-10 lg:hidden">
         <button
           type="button"
-          onClick={() => onToggle(quote._id)}
+          onClick={() => onToggle(quoteId)}
+          disabled={!quoteId}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           {isOpen ? "Hide" : "Details"}
@@ -184,7 +196,8 @@ export default function AccountRequestCard({
                 Quote no
               </div>
               <div className="mt-1 text-lg font-semibold text-slate-900">
-                {quote.quoteNumber || quote._id.slice(-6).toUpperCase()}
+                {quote?.quoteNumber ||
+                  (quoteId ? quoteId.slice(-6).toUpperCase() : "-")}
               </div>
             </div>
           </div>
@@ -217,7 +230,7 @@ export default function AccountRequestCard({
                 Date
               </div>
               <div className="mt-1 text-sm font-semibold text-slate-900">
-                {formatDate(quote.createdAt)}
+                {formatDate(quote?.createdAt)}
               </div>
             </div>
           </div>
@@ -226,7 +239,8 @@ export default function AccountRequestCard({
         <div className="hidden lg:flex lg:flex-col lg:items-stretch lg:gap-2">
           <button
             type="button"
-            onClick={() => onToggle(quote._id)}
+            onClick={() => onToggle(quoteId)}
+            disabled={!quoteId}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             {isOpen ? "Hide" : "Details"}
@@ -247,7 +261,8 @@ export default function AccountRequestCard({
                   {showEditQtyAction ? (
                     <button
                       type="button"
-                      onClick={() => onStartEdit(quote._id)}
+                      onClick={() => onStartEdit(quoteId)}
+                      disabled={!quoteId}
                       className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-violet-100 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 shadow-sm shadow-violet-100/40 transition hover:bg-violet-100"
                     >
                       Edit Qty
@@ -266,8 +281,8 @@ export default function AccountRequestCard({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onCancelEdit(quote._id)}
-                        disabled={confirmQtyDisabled}
+                        onClick={() => onCancelEdit(quoteId)}
+                        disabled={confirmQtyDisabled || !quoteId}
                         className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-100/60 transition enabled:hover:bg-slate-50 disabled:opacity-50"
                       >
                         Cancel Edit
@@ -277,7 +292,7 @@ export default function AccountRequestCard({
                 </div>
               ) : null}
             </div>
-            {!isCancelled && quote.availabilityCheckedAt ? (
+            {!isCancelled && quote?.availabilityCheckedAt ? (
               <div className="mt-1 text-xs text-slate-500">
                 Availability as of{" "}
                 <span className="font-semibold text-slate-700">
@@ -302,13 +317,13 @@ export default function AccountRequestCard({
             ) : null}
 
             <RequestedItemsTable
-              quoteId={quote._id}
+              quoteId={quoteId}
               requestedItems={requestedItems}
               isEditing={isEditingActive}
               isCancelled={isCancelled}
               showFullPricing={showFullPricing}
               showPricingColumn={showPricingColumn}
-              editDraft={editDraft?.[quote._id]}
+              editDraft={editDraft?.[quoteId]}
               editMaxHit={editMaxHit}
               onAdjustDraftQty={onAdjustDraftQty}
             />
@@ -329,9 +344,9 @@ export default function AccountRequestCard({
 
           </div>
 
-          {(quote.clientToAdminNote || quote.adminToClientNote) && (
+          {(quote?.clientToAdminNote || quote?.adminToClientNote) && (
             <div className="grid gap-3 md:grid-cols-2">
-              {quote.clientToAdminNote ? (
+              {quote?.clientToAdminNote ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="text-xs font-semibold text-slate-500">
                     Your note
@@ -341,7 +356,7 @@ export default function AccountRequestCard({
                   </div>
                 </div>
               ) : null}
-              {quote.adminToClientNote ? (
+              {quote?.adminToClientNote ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="text-xs font-semibold text-slate-500">
                     Seller note
@@ -395,8 +410,8 @@ export default function AccountRequestCard({
               {showFinalDecisionCancel ? (
                 <button
                   type="button"
-                  onClick={() => onCancel(quote._id)}
-                  disabled={isEditingActive || isCancelling || isConfirming}
+                  onClick={() => onCancel(quoteId)}
+                  disabled={isEditingActive || isCancelling || isConfirming || !quoteId}
                   className={[
                     "inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-rose-100 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm shadow-rose-100/40 transition enabled:hover:bg-rose-100 disabled:opacity-50 disabled:cursor-default disabled:pointer-events-none sm:w-auto",
                     actionButtonsCount === 1 ? "col-span-2" : "",
@@ -411,7 +426,7 @@ export default function AccountRequestCard({
               {showConfirmButtonFinal ? (
                 <button
                   type="button"
-                  onClick={() => onConfirm(quote._id)}
+                  onClick={() => onConfirm(quoteId)}
                   disabled={confirmDisabled}
                   className={[
                     "inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm shadow-emerald-100/40 transition enabled:hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-default disabled:pointer-events-none sm:w-auto",
@@ -439,7 +454,8 @@ export default function AccountRequestCard({
             {showEditQtyAction ? (
               <button
                 type="button"
-                onClick={() => onStartEdit(quote._id)}
+                onClick={() => onStartEdit(quoteId)}
+                disabled={!quoteId}
                 className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-violet-100 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 shadow-sm shadow-violet-100/40 transition hover:bg-violet-100"
               >
                 Edit Qty
@@ -458,8 +474,8 @@ export default function AccountRequestCard({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onCancelEdit(quote._id)}
-                  disabled={confirmQtyDisabled}
+                  onClick={() => onCancelEdit(quoteId)}
+                  disabled={confirmQtyDisabled || !quoteId}
                   className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-100/60 transition enabled:hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel Edit

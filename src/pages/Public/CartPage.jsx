@@ -92,10 +92,16 @@ export default function CartPage() {
     }
 
     try {
-      await request.unwrap();
+      const result = await request.unwrap();
+      const quoteId = result?.data?._id || result?.data?.id;
       dispatch(clearCart());
       setNote("");
-      navigate("/account/requests", { replace: true });
+      navigate(
+        quoteId
+          ? `/account/requests?quote=${encodeURIComponent(quoteId)}`
+          : "/account/requests",
+        { replace: true }
+      );
     } catch (err) {
       const isTimeout =
         err?.name === "AbortError" || err?.error?.name === "AbortError";

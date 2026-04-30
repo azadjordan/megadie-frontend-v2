@@ -14,6 +14,10 @@ import {
   useUpdateQuoteQuantitiesMutation,
 } from "../../features/quotes/quotesApiSlice";
 
+const getQuoteId = (quote) => {
+  const id = quote?._id || quote?.id;
+  return id ? String(id) : "";
+};
 
 export default function AccountRequestsPage() {
   const [page, setPage] = useState(1);
@@ -51,20 +55,23 @@ export default function AccountRequestsPage() {
   const [cancelPromptError, setCancelPromptError] = useState("");
   const maxHitTimers = useRef({});
 
-  const quotes = useMemo(() => data?.data || [], [data]);
+  const quotes = useMemo(
+    () => (Array.isArray(data?.data) ? data.data : []),
+    [data]
+  );
   const deepLinkQuote = deepLinkResult?.data;
   const displayQuotes = useMemo(() => {
     if (!deepLinkQuote) return quotes;
-    const exists = quotes.some(
-      (q) => String(q?._id || q?.id) === String(deepLinkQuote?._id || deepLinkQuote?.id)
-    );
+    const deepLinkQuoteId = getQuoteId(deepLinkQuote);
+    const exists = quotes.some((q) => getQuoteId(q) === deepLinkQuoteId);
     return exists ? quotes : [deepLinkQuote, ...quotes];
   }, [quotes, deepLinkQuote]);
   const pagination = data?.pagination;
   const showPagination = Boolean(pagination) && quotes.length > 0;
   const showControls = displayQuotes.length > 0;
-  const autoOpenRef = useRef(false);
-  useEffect(() => {
+  const autoOpenQuoteId = getQuoteId(deepLinkQuote);
+
+  const resetRequestInteraction = () => {
     setOpen({});
     setEditingQuoteId(null);
     setEditDraft({});
@@ -72,20 +79,14 @@ export default function AccountRequestsPage() {
     setEditMaxHit({});
     setCancelPrompt(null);
     setCancelPromptError("");
-  }, [page, filterStatus]);
-  useEffect(() => {
-    autoOpenRef.current = false;
-  }, [deepLinkId]);
-
-  useEffect(() => {
-    if (!deepLinkQuote?._id || autoOpenRef.current) return;
-    setOpen((prev) => ({ ...prev, [deepLinkQuote._id]: true }));
-    autoOpenRef.current = true;
-  }, [deepLinkQuote?._id]);
+  };
 
   const toggle = (id) =>
     setOpen((prev) => {
-      const nextOpen = !prev[id];
+      if (!id) return prev;
+      const currentOpen =
+        prev[id] ?? (autoOpenQuoteId ? id === autoOpenQuoteId : false);
+      const nextOpen = !currentOpen;
       if (!nextOpen) {
         setEditingQuoteId((current) => (current === id ? null : current));
         setEditDraft((current) => {
@@ -159,7 +160,8 @@ export default function AccountRequestsPage() {
       : [];
     return items.map((it) => {
       const productId = it?.product?._id || it?.product;
-      const draftQty = Number(editDraft?.[quote._id]?.[String(productId)]);
+      const quoteId = getQuoteId(quote);
+      const draftQty = Number(editDraft?.[quoteId]?.[String(productId)]);
       const requestedQty = Math.max(0, Number(it?.qty) || 0);
       const availableNow = Math.max(0, Number(it?.availableNow) || 0);
       const shortage = Number(it?.shortage);
@@ -175,8 +177,9 @@ export default function AccountRequestsPage() {
   };
 
   const applyQuantityUpdate = async (quote, { refetchAfter = true } = {}) => {
-    if (!quote?._id) return false;
-    setEditingQuoteId(quote._id);
+    const quoteId = getQuoteId(quote);
+    if (!quoteId) return false;
+    setEditingQuoteId(quoteId);
     const payloadItems = buildQuantityPayload(quote);
 
     const hasAnyQty = payloadItems.some((item) => Number(item.qty) > 0);
@@ -187,14 +190,14 @@ export default function AccountRequestsPage() {
 
     try {
       await updateQuoteQuantities({
-        id: quote._id,
+        id: quoteId,
         requestedItems: payloadItems,
       }).unwrap();
       setEditingQuoteId(null);
       setEditDraft((current) => {
-        if (!current[quote._id]) return current;
+        if (!current[quoteId]) return current;
         const next = { ...current };
-        delete next[quote._id];
+        delete next[quoteId];
         return next;
       });
       setEditLocalError("");
@@ -243,7 +246,7 @@ export default function AccountRequestsPage() {
 
   const onCancel = (id) => {
     if (!id) return;
-    const target = displayQuotes.find((quote) => quote?._id === id);
+    const target = displayQuotes.find((quote) => getQuoteId(quote) === id);
     const requestedItems = Array.isArray(target?.requestedItems)
       ? target.requestedItems
       : [];
@@ -254,7 +257,7 @@ export default function AccountRequestsPage() {
         : "Cancel quote";
     const quoteNumber =
       target?.quoteNumber ||
-      (target?._id ? target._id.slice(-6).toUpperCase() : "");
+      (getQuoteId(target) ? getQuoteId(target).slice(-6).toUpperCase() : "");
     setCancelPrompt({
       quoteId: id,
       quoteNumber,
@@ -339,6 +342,7 @@ export default function AccountRequestsPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    resetRequestInteraction();
                     setPage(1);
                     setFilterStatus("all");
                   }}
@@ -354,6 +358,7 @@ export default function AccountRequestsPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    resetRequestInteraction();
                     setPage(1);
                     setFilterStatus("Quoted");
                   }}
@@ -371,7 +376,10 @@ export default function AccountRequestsPage() {
             {showPagination ? (
               <Pagination
                 pagination={pagination}
-                onPageChange={(next) => setPage(next)}
+                onPageChange={(next) => {
+                  resetRequestInteraction();
+                  setPage(next);
+                }}
                 variant="compact"
                 showSummary={false}
                 showNumbers={false}
@@ -411,28 +419,34 @@ export default function AccountRequestsPage() {
             </div>
           ) : null}
           <div className="space-y-4">
-            {displayQuotes.map((quote) => (
-              <AccountRequestCard
-                key={quote._id}
-                quote={quote}
-                isOpen={!!open[quote._id]}
-                isEditing={editingQuoteId === quote._id}
-                editDraft={editDraft}
-                editMaxHit={editMaxHit}
-                editLocalError={editLocalError}
-                updateQuantitiesError={updateQuantitiesError}
-                isCancelling={isCancelling}
-                isConfirming={isConfirming}
-                isUpdatingQuantities={isUpdatingQuantities}
-                onToggle={toggle}
-                onStartEdit={setEditingQuoteId}
-                onCancel={onCancel}
-                onCancelEdit={onCancelEdit}
-                onConfirm={onConfirm}
-                onConfirmQty={onConfirmQty}
-                onAdjustDraftQty={adjustDraftQty}
-              />
-            ))}
+            {displayQuotes.map((quote, index) => {
+              const quoteId = getQuoteId(quote);
+              return (
+                <AccountRequestCard
+                  key={quoteId || `quote-${index}`}
+                  quote={quote}
+                  isOpen={
+                    open[quoteId] ??
+                    (Boolean(autoOpenQuoteId) && quoteId === autoOpenQuoteId)
+                  }
+                  isEditing={editingQuoteId === quoteId}
+                  editDraft={editDraft}
+                  editMaxHit={editMaxHit}
+                  editLocalError={editLocalError}
+                  updateQuantitiesError={updateQuantitiesError}
+                  isCancelling={isCancelling}
+                  isConfirming={isConfirming}
+                  isUpdatingQuantities={isUpdatingQuantities}
+                  onToggle={toggle}
+                  onStartEdit={setEditingQuoteId}
+                  onCancel={onCancel}
+                  onCancelEdit={onCancelEdit}
+                  onConfirm={onConfirm}
+                  onConfirmQty={onConfirmQty}
+                  onAdjustDraftQty={adjustDraftQty}
+                />
+              );
+            })}
           </div>
 
         </>
