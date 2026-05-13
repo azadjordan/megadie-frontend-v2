@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
+import ApproveUserModal from "../../components/admin/ApproveUserModal";
 
 import {
   useGetUserByIdQuery,
@@ -26,6 +27,7 @@ const parsePrice = (value) => {
   return num;
 };
 
+const MAX_ADMIN_NOTE_LENGTH = 2000;
 const USER_LIST_QUERY_KEYS = ["page", "search", "role", "approvalStatus", "sort"];
 
 function buildUsersListHref(rawSearch = "") {
@@ -64,6 +66,10 @@ export default function AdminUserDetailsPage() {
   const [updateUser, { isLoading: isSaving, error: saveError }] =
     useUpdateUserMutation();
   const [
+    updateUserAdminNote,
+    { isLoading: isSavingAdminNote, error: adminNoteError },
+  ] = useUpdateUserMutation();
+  const [
     updateUserApprovalStatus,
     { isLoading: isUpdatingApproval, error: approvalError },
   ] = useUpdateUserApprovalStatusMutation();
@@ -84,8 +90,13 @@ export default function AdminUserDetailsPage() {
   const [address, setAddress] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState("Approved");
+  const [adminNote, setAdminNote] = useState("");
+  const [adminNoteBase, setAdminNoteBase] = useState("");
   const [saved, setSaved] = useState(false);
   const [approvalSaved, setApprovalSaved] = useState(false);
+  const [adminNoteSaved, setAdminNoteSaved] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [approvalModalNote, setApprovalModalNote] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -102,8 +113,13 @@ export default function AdminUserDetailsPage() {
     setAddress(user.address || "");
     setIsAdmin(Boolean(user.isAdmin));
     setApprovalStatus(user.approvalStatus || "Approved");
+    setAdminNote(user.adminNote || "");
+    setAdminNoteBase(String(user.adminNote || "").trim());
     setSaved(false);
     setApprovalSaved(false);
+    setAdminNoteSaved(false);
+    setApprovalModalOpen(false);
+    setApprovalModalNote("");
     setPassword("");
     setConfirmPassword("");
   }, [user?._id, user?.id]);
@@ -169,6 +185,9 @@ export default function AdminUserDetailsPage() {
   const hasApprovalChanges = approvalStatus !== approvalBase;
   const canUpdateApproval =
     Boolean(userId) && hasApprovalChanges && !isUpdatingApproval && !isAdmin;
+  const hasAdminNoteChanges = String(adminNote || "").trim() !== adminNoteBase;
+  const canSaveAdminNote =
+    Boolean(userId) && hasAdminNoteChanges && !isSavingAdminNote;
 
   useEffect(() => {
     if (newRule && !availableRules.some((rule) => rule.code === newRule)) {
@@ -217,17 +236,76 @@ export default function AdminUserDetailsPage() {
     }
   };
 
-  const onUpdateApproval = async () => {
-    if (!userId || !canUpdateApproval) return;
+  const submitApprovalStatus = async (nextStatus, nextAdminNote) => {
+    if (!userId) return;
     setApprovalSaved(false);
 
+    const payload = {
+      id: userId,
+      approvalStatus: nextStatus,
+    };
+
+    if (nextAdminNote !== undefined) {
+      payload.adminNote = nextAdminNote;
+    }
+
+    const res = await updateUserApprovalStatus(payload).unwrap();
+    if (nextAdminNote !== undefined) {
+      const savedNote = res?.data?.adminNote ?? nextAdminNote;
+      setAdminNote(savedNote);
+      setAdminNoteBase(String(savedNote || "").trim());
+      setAdminNoteSaved(false);
+    }
+    setApprovalSaved(true);
+    toast.success(nextStatus === "Approved" ? "User approved." : "Approval status updated.");
+  };
+
+  const onUpdateApproval = async () => {
+    if (!userId || !canUpdateApproval) return;
+
+    if (approvalStatus === "Approved" && approvalBase !== "Approved") {
+      setApprovalModalNote(adminNote);
+      setApprovalModalOpen(true);
+      return;
+    }
+
     try {
-      await updateUserApprovalStatus({
+      await submitApprovalStatus(approvalStatus);
+    } catch {
+      // ErrorMessage handles it
+    }
+  };
+
+  const onConfirmApproval = async () => {
+    try {
+      await submitApprovalStatus("Approved", approvalModalNote);
+      setApprovalModalOpen(false);
+      setApprovalModalNote("");
+    } catch {
+      // ErrorMessage inside the modal handles it
+    }
+  };
+
+  const closeApprovalModal = () => {
+    if (isUpdatingApproval) return;
+    setApprovalModalOpen(false);
+    setApprovalModalNote("");
+  };
+
+  const onSaveAdminNote = async () => {
+    if (!userId || !canSaveAdminNote) return;
+    setAdminNoteSaved(false);
+
+    try {
+      const res = await updateUserAdminNote({
         id: userId,
-        approvalStatus,
+        adminNote,
       }).unwrap();
-      setApprovalSaved(true);
-      toast.success("Approval status updated.");
+      const savedNote = res?.data?.adminNote ?? adminNote;
+      setAdminNote(savedNote);
+      setAdminNoteBase(String(savedNote || "").trim());
+      setAdminNoteSaved(true);
+      toast.success("Internal note updated.");
     } catch {
       // ErrorMessage handles it
     }
@@ -294,7 +372,6 @@ export default function AdminUserDetailsPage() {
 
   const onDeletePrice = async (row) => {
     if (!row?._id || !userId) return;
-    // eslint-disable-next-line no-restricted-globals
     const ok = confirm(`Delete?`);
     if (!ok) return;
 
@@ -585,6 +662,58 @@ export default function AdminUserDetailsPage() {
             ) : null}
           </div>
 
+          <div className="mt-4 max-w-2xl">
+            <label
+              htmlFor="user-admin-note"
+              className="mb-1 block text-xs font-semibold text-slate-600"
+            >
+              Internal note
+            </label>
+            <textarea
+              id="user-admin-note"
+              rows={5}
+              maxLength={MAX_ADMIN_NOTE_LENGTH}
+              value={adminNote}
+              onChange={(e) => {
+                setAdminNote(e.target.value);
+                setAdminNoteSaved(false);
+              }}
+              placeholder="Referred by Sarah, verified by phone, approved for beta access..."
+              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            />
+            <div className="mt-1 text-right text-[11px] text-slate-400">
+              {Math.max(0, MAX_ADMIN_NOTE_LENGTH - String(adminNote || "").length)} characters left
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onSaveAdminNote}
+                disabled={!canSaveAdminNote}
+                className={[
+                  "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white",
+                  canSaveAdminNote
+                    ? "hover:bg-slate-800"
+                    : "cursor-not-allowed opacity-50",
+                ].join(" ")}
+              >
+                {isSavingAdminNote ? "Saving..." : "Save Note"}
+              </button>
+
+              {adminNoteSaved ? (
+                <span className="text-xs font-semibold text-emerald-700">
+                  Saved.
+                </span>
+              ) : null}
+            </div>
+
+            {adminNoteError ? (
+              <div className="mt-3">
+                <ErrorMessage error={adminNoteError} />
+              </div>
+            ) : null}
+          </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -803,6 +932,17 @@ export default function AdminUserDetailsPage() {
           </div>
         </div>
       )}
+
+      <ApproveUserModal
+        open={approvalModalOpen}
+        user={user}
+        note={approvalModalNote}
+        onNoteChange={setApprovalModalNote}
+        onClose={closeApprovalModal}
+        onSubmit={onConfirmApproval}
+        isSaving={isUpdatingApproval}
+        error={approvalError}
+      />
     </div>
   );
 }

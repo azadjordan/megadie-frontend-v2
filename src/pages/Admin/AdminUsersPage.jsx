@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  FiCheck,
   FiChevronDown,
   FiChevronUp,
   FiRefreshCw,
@@ -11,9 +12,14 @@ import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
+import ApproveUserModal from "../../components/admin/ApproveUserModal";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
-import { useDeleteUserMutation, useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
+import {
+  useDeleteUserMutation,
+  useGetUsersAdminQuery,
+  useUpdateUserApprovalStatusMutation,
+} from "../../features/users/usersApiSlice";
 
 function getApprovalBadgeClasses(approval) {
   if (approval === "Approved") {
@@ -144,16 +150,50 @@ export default function AdminUsersPage() {
     approvalStatus,
   });
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
+  const [
+    updateUserApprovalStatus,
+    { isLoading: isApproving, error: approvalError },
+  ] = useUpdateUserApprovalStatusMutation();
   const [deletingId, setDeletingId] = useState(null);
+  const [approvingUser, setApprovingUser] = useState(null);
+  const [approvalNote, setApprovalNote] = useState("");
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
+
+  const openApproveModal = (user) => {
+    setApprovingUser(user);
+    setApprovalNote(user?.adminNote || "");
+  };
+
+  const closeApproveModal = () => {
+    if (isApproving) return;
+    setApprovingUser(null);
+    setApprovalNote("");
+  };
+
+  const onApproveUser = async () => {
+    const userId = approvingUser?._id || approvingUser?.id;
+    if (!userId) return;
+
+    try {
+      const res = await updateUserApprovalStatus({
+        id: userId,
+        approvalStatus: "Approved",
+        adminNote: approvalNote,
+      }).unwrap();
+      toast.success(res?.message || "User approved.");
+      setApprovingUser(null);
+      setApprovalNote("");
+    } catch {
+      // ErrorMessage inside the modal handles it.
+    }
+  };
 
   const onDeleteUser = async (user) => {
     const userId = user?._id || user?.id;
     if (!userId) return;
     const name = user?.name || user?.email || userId;
-    // eslint-disable-next-line no-restricted-globals
     const ok = confirm(`Delete user "${name}"?`);
     if (!ok) return;
     try {
@@ -401,6 +441,17 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
+                  {u.adminNote ? (
+                    <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 ring-1 ring-amber-100">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-600">
+                        Internal note
+                      </div>
+                      <div className="mt-1 whitespace-pre-wrap text-xs text-slate-700">
+                        {u.adminNote}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="mt-3 text-xs text-slate-600">
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                       Role
@@ -425,6 +476,22 @@ export default function AdminUsersPage() {
                         <FiSettings className="h-3.5 w-3.5" />
                         Edit user
                       </Link>
+                      {row.approval === "Pending" ? (
+                        <button
+                          type="button"
+                          onClick={() => openApproveModal(u)}
+                          disabled={isApproving}
+                          className={[
+                            "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider",
+                            isApproving
+                              ? "cursor-not-allowed border-slate-200 text-slate-300"
+                              : "border-emerald-200 text-emerald-700 hover:bg-emerald-50",
+                          ].join(" ")}
+                        >
+                          <FiCheck className="h-3.5 w-3.5" />
+                          Approve
+                        </button>
+                      ) : null}
                       {row.approval === "Rejected" ? (
                         <button
                           type="button"
@@ -458,6 +525,7 @@ export default function AdminUsersPage() {
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Approval</th>
                     <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Internal Note</th>
                     <th className="px-4 py-3 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -491,6 +559,18 @@ export default function AdminUsersPage() {
                         <td className="px-4 py-3 text-slate-700">
                           {row.roleLabel}
                         </td>
+                        <td className="px-4 py-3">
+                          {u.adminNote ? (
+                            <div
+                              className="max-w-[18rem] truncate text-xs text-slate-500"
+                              title={u.adminNote}
+                            >
+                              {u.adminNote}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-center">
                           <div className="inline-flex items-center justify-center gap-2">
                             <Link
@@ -505,6 +585,23 @@ export default function AdminUsersPage() {
                             >
                               <FiSettings className="h-3.5 w-3.5" />
                             </Link>
+                            {row.approval === "Pending" ? (
+                              <button
+                                type="button"
+                                onClick={() => openApproveModal(u)}
+                                disabled={isApproving}
+                                className={[
+                                  "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
+                                  isApproving
+                                    ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+                                    : "bg-white text-emerald-700 ring-emerald-200 hover:bg-emerald-50",
+                                ].join(" ")}
+                                aria-label="Approve user"
+                                title="Approve user"
+                              >
+                                <FiCheck className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
                             {row.approval === "Rejected" ? (
                               <button
                                 type="button"
@@ -538,6 +635,17 @@ export default function AdminUsersPage() {
         Tip: users page is mainly for search and quick navigation. Refine filters
         to find users beyond the first {USERS_PAGE_LIMIT}.
       </div>
+
+      <ApproveUserModal
+        open={Boolean(approvingUser)}
+        user={approvingUser}
+        note={approvalNote}
+        onNoteChange={setApprovalNote}
+        onClose={closeApproveModal}
+        onSubmit={onApproveUser}
+        isSaving={isApproving}
+        error={approvalError}
+      />
     </div>
   );
 }

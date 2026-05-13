@@ -46,10 +46,13 @@ export const usersApiSlice = apiSlice.injectEndpoints({
       ],
     }),
     updateUserApprovalStatus: builder.mutation({
-      query: ({ id, approvalStatus }) => ({
+      query: ({ id, approvalStatus, adminNote }) => ({
         url: `/users/${id}/approval`,
         method: "PUT",
-        body: { approvalStatus },
+        body: {
+          approvalStatus,
+          ...(adminNote !== undefined ? { adminNote } : {}),
+        },
       }),
       invalidatesTags: (_result, _error, arg) => [
         { type: "User", id: "LIST" },
