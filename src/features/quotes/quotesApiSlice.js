@@ -202,6 +202,23 @@ export const quotesApiSlice = apiSlice.injectEndpoints({
       ],
     }),
 
+    mergeQuotesByAdmin: builder.mutation({
+      query: ({ quoteIds, targetQuoteId }) => ({
+        url: "/quotes/admin/merge",
+        method: "POST",
+        body: { quoteIds, targetQuoteId },
+      }),
+      invalidatesTags: (result, _error, arg) => {
+        const ids = Array.isArray(arg?.quoteIds) ? arg.quoteIds : [];
+        const targetId = result?.data?._id || result?.data?.id || arg?.targetQuoteId;
+        return [
+          { type: "Quote", id: "LIST" },
+          ...ids.map((id) => ({ type: "Quote", id })),
+          ...(targetId ? [{ type: "Quote", id: targetId }] : []),
+        ];
+      },
+    }),
+
     /* =========================
        GET /api/quotes/my
        Private
@@ -305,6 +322,7 @@ export const {
   useRecheckQuoteAvailabilityByAdminMutation,
   useLazyGetQuoteStockCheckByAdminQuery,
   useDeleteQuoteByAdminMutation,
+  useMergeQuotesByAdminMutation,
 
   // User
   useGetMyQuotesQuery,

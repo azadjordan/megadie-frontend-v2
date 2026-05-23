@@ -1,13 +1,15 @@
-﻿// src/pages/Admin/AdminRequestsPage.jsx
+// src/pages/Admin/AdminRequestsPage.jsx
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FiAlertTriangle,
   FiEdit2,
   FiFileText,
+  FiGitMerge,
   FiRefreshCw,
   FiSend,
   FiTrash2,
+  FiX,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 
@@ -21,6 +23,7 @@ import {
   useGetAdminQuotesQuery,
   useLazyGetQuoteShareQuery,
   useLazyGetQuotePdfQuery,
+  useMergeQuotesByAdminMutation,
 } from "../../features/quotes/quotesApiSlice";
 
 function formatDateTime(iso) {
@@ -112,6 +115,129 @@ function friendlyApiError(err) {
   return String(msg);
 }
 
+function getId(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return String(value._id || value.id || "");
+}
+
+function getQuoteNumber(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(-6).toUpperCase();
+  const id = getId(value);
+  return value.quoteNumber || (id ? id.slice(-6).toUpperCase() : "");
+}
+
+function isMergeEligible(q) {
+  return (
+    Boolean(q?._id) &&
+    (q.status === "Processing" || q.status === "Quoted") &&
+    !q.order &&
+    !q.manualInvoiceId &&
+    !q.mergedIntoQuote
+  );
+}
+
+function getMergeDisabledReason(q) {
+  if (!q) return "Request cannot be selected.";
+  if (q.mergedIntoQuote) return "This request was already merged.";
+  if (q.order) return "Requests with orders cannot be merged.";
+  if (q.manualInvoiceId) return "Requests with manual invoices cannot be merged.";
+  if (q.status !== "Processing" && q.status !== "Quoted") {
+    return "Only Processing or Quoted requests can be merged.";
+  }
+  return "";
+}
+
+function resolveDefaultMergeTarget(quotes = []) {
+  const timestamp = (q) => {
+    const value = new Date(q?.updatedAt || q?.createdAt || 0).getTime();
+    return Number.isFinite(value) ? value : 0;
+  };
+  const quoted = quotes.filter((q) => q.status === "Quoted");
+  if (quoted.length === 1) return quoted[0]._id;
+  if (quoted.length > 1) {
+    return [...quoted].sort((a, b) => timestamp(b) - timestamp(a))[0]?._id || "";
+  }
+  return [...quotes].sort((a, b) => timestamp(b) - timestamp(a))[0]?._id || "";
+}
+
+function getItemProductId(item) {
+  return getId(item?.product) || String(item?.productId || "");
+}
+
+function getItemProductName(item, productId = "") {
+  return (
+    item?.productName ||
+    item?.product?.name ||
+    (productId ? `Product ${productId.slice(-6).toUpperCase()}` : "Product")
+  );
+}
+
+function buildMergePreview(quotes = [], targetId = "") {
+  const productMap = new Map();
+  const targetQuote =
+    quotes.find((quote) => String(quote?._id) === String(targetId)) || null;
+  const sourceQuotes = quotes.filter(
+    (quote) => String(quote?._id) !== String(targetId)
+  );
+
+  for (const quote of quotes) {
+    const quoteNumber = quote?.quoteNumber || getQuoteNumber(quote) || "Request";
+    const requestedItems = Array.isArray(quote?.requestedItems)
+      ? quote.requestedItems
+      : [];
+
+    for (const item of requestedItems) {
+      const productId = getItemProductId(item);
+      if (!productId) continue;
+
+      const qty = Math.max(0, Number(item?.qty) || 0);
+      if (qty <= 0) continue;
+
+      const current =
+        productMap.get(productId) || {
+          productId,
+          productName: getItemProductName(item, productId),
+          sku: item?.product?.sku || "",
+          totalQty: 0,
+          sources: [],
+        };
+
+      current.totalQty += qty;
+      current.productName =
+        current.productName || getItemProductName(item, productId);
+      current.sku = current.sku || item?.product?.sku || "";
+      current.sources.push({
+        quoteId: quote?._id,
+        quoteNumber,
+        qty,
+      });
+      productMap.set(productId, current);
+    }
+  }
+
+  const products = Array.from(productMap.values()).sort((a, b) =>
+    String(a.productName || a.productId).localeCompare(
+      String(b.productName || b.productId)
+    )
+  );
+  const duplicates = products.filter((item) => item.sources.length > 1);
+  const totalUnits = products.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.totalQty) || 0),
+    0
+  );
+
+  return {
+    targetQuote,
+    sourceQuotes,
+    products,
+    duplicates,
+    uniqueItemCount: products.length,
+    totalUnits,
+  };
+}
+
 function getAvailabilityTotal(q) {
   const items = Array.isArray(q?.requestedItems) ? q.requestedItems : [];
   let subtotal = 0;
@@ -150,6 +276,14 @@ function getRowMeta(q, state = {}) {
   const canPdf = q.status === "Quoted";
   const canCopy = q.status === "Quoted" || q.status === "Confirmed";
   const isCancelled = q.status === "Cancelled";
+  const isMergedSource = Boolean(q.mergedIntoQuote);
+  const mergedFromSnapshots = Array.isArray(q.mergedFromQuoteSnapshots)
+    ? q.mergedFromQuoteSnapshots
+    : [];
+  const mergedFromCount =
+    mergedFromSnapshots.length ||
+    (Array.isArray(q.mergedFromQuotes) ? q.mergedFromQuotes.length : 0);
+  const canDelete = isCancelled || isMergedSource;
 
   const requestedItems = Array.isArray(q.requestedItems) ? q.requestedItems : [];
   const itemsCount = requestedItems.length;
@@ -192,6 +326,9 @@ function getRowMeta(q, state = {}) {
     canPdf,
     canCopy,
     isCancelled,
+    isMergedSource,
+    mergedFromCount,
+    canDelete,
     itemsCount,
     unitsCount,
     showAvailability,
@@ -203,14 +340,268 @@ function getRowMeta(q, state = {}) {
   };
 }
 
+function MergeRequestsModal({
+  open,
+  quotes,
+  targetId,
+  onTargetChange,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}) {
+  if (!open) return null;
+
+  const customer = quotes[0]?.user || null;
+  const preview = buildMergePreview(quotes, targetId);
+  const targetLabel =
+    preview.targetQuote?.quoteNumber ||
+    getQuoteNumber(preview.targetQuote) ||
+    "Selected final quote";
+  const sourceLabels = preview.sourceQuotes
+    .map((quote) => quote?.quoteNumber || getQuoteNumber(quote))
+    .filter(Boolean);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-3 py-3 sm:px-4 sm:py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="merge-requests-title"
+    >
+      <div className="flex max-h-[calc(100vh-1.5rem)] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 sm:max-h-[calc(100vh-3rem)]">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
+          <div className="min-w-0">
+            <div
+              id="merge-requests-title"
+              className="text-base font-semibold text-slate-900"
+            >
+              Merge requests
+            </div>
+            <div className="mt-1 break-words text-sm text-slate-500">
+              {customer?.name || "Customer"}{" "}
+              {customer?.email ? `- ${customer.email}` : ""}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+            aria-label="Close"
+            title="Close"
+          >
+            <FiX className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
+          <section>
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Selected requests
+            </div>
+            <div className="mt-2 divide-y divide-slate-200 rounded-xl border border-slate-200">
+              {quotes.map((q) => {
+                const row = getRowMeta(q);
+                return (
+                  <div
+                    key={q._id}
+                    className="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-900">
+                        {q.quoteNumber || "Request"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {formatDateTime(q.createdAt)}
+                      </div>
+                    </div>
+                    <StatusBadge status={q.status} size="compact" />
+                    <div className="text-xs font-semibold text-slate-600 sm:text-right">
+                      {row.itemsCount} items - {row.unitsCount} units
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Final quote
+            </div>
+            <div className="mt-2 space-y-2">
+              {quotes.map((q) => {
+                const checked = String(targetId) === String(q._id);
+                return (
+                  <label
+                    key={q._id}
+                    className={[
+                      "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition",
+                      checked
+                        ? "border-violet-300 bg-violet-50"
+                        : "border-slate-200 bg-white hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="radio"
+                      name="mergeTarget"
+                      checked={checked}
+                      onChange={() => onTargetChange(q._id)}
+                      className="mt-1 h-4 w-4 border-slate-300 text-violet-600 focus:ring-violet-500"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-900">
+                        {q.quoteNumber || "Request"}
+                      </span>
+                      <span className="block text-xs text-slate-500">
+                        Use this as the final quote
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Merge preview
+            </div>
+
+            <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+              <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Final quote
+                </div>
+                <div className="mt-1 break-words font-semibold text-slate-900">
+                  {targetLabel}
+                </div>
+              </div>
+              <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Result
+                </div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {preview.uniqueItemCount} unique item
+                  {preview.uniqueItemCount === 1 ? "" : "s"},{" "}
+                  {preview.totalUnits} unit
+                  {preview.totalUnits === 1 ? "" : "s"}
+                </div>
+              </div>
+              <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Duplicates
+                </div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {preview.duplicates.length} product
+                  {preview.duplicates.length === 1 ? "" : "s"} combined
+                </div>
+              </div>
+              <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Source requests
+                </div>
+                <div className="mt-1 break-words font-semibold text-slate-900">
+                  {sourceLabels.length > 0 ? sourceLabels.join(", ") : "-"}
+                </div>
+              </div>
+            </div>
+
+            {preview.duplicates.length > 0 ? (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Duplicate products
+                </div>
+                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto pr-1">
+                  {preview.duplicates.slice(0, 5).map((item) => (
+                    <div
+                      key={item.productId}
+                      className="rounded-lg bg-white p-3 text-sm ring-1 ring-slate-200"
+                    >
+                      <div className="break-words font-semibold text-slate-900">
+                        {item.sku || item.productId.slice(-6).toUpperCase()}
+                      </div>
+                      <div className="mt-1 break-words text-xs text-slate-600">
+                        {item.sources
+                          .map(
+                            (source) =>
+                              `${source.quoteNumber}: ${source.qty} unit${
+                                source.qty === 1 ? "" : "s"
+                              }`
+                          )
+                          .join(" + ")}{" "}
+                        ={" "}
+                        <span className="font-semibold text-slate-900">
+                          {item.totalQty} unit{item.totalQty === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {preview.duplicates.length > 5 ? (
+                    <div className="text-xs font-semibold text-slate-500">
+                      +{preview.duplicates.length - 5} more duplicate product
+                      {preview.duplicates.length - 5 === 1 ? "" : "s"}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-white p-3 text-sm text-slate-700 ring-1 ring-slate-200">
+                No duplicate products found. All selected products will be
+                added as separate lines.
+              </div>
+            )}
+
+            <div className="rounded-lg bg-white p-3 text-sm text-slate-700 ring-1 ring-slate-200">
+              <span className="font-semibold text-slate-900">{targetLabel}</span>{" "}
+              will return to Processing, availability will be recalculated, and{" "}
+              {sourceLabels.length > 0 ? sourceLabels.join(", ") : "the source requests"}{" "}
+              will be marked as merged/cancelled.
+            </div>
+          </section>
+        </div>
+
+        <div className="sticky bottom-0 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={isSubmitting || !targetId}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            <FiGitMerge className="h-4 w-4" />
+            {isSubmitting ? (
+              "Merging..."
+            ) : (
+              <>
+                <span className="sm:hidden">Merge</span>
+                <span className="hidden sm:inline">Merge requests</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminRequestsPage() {
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError, error, isFetching } =
+  const { data, isLoading, isError, error, isFetching, refetch } =
     useGetAdminQuotesQuery({ page });
 
   const [deleteQuoteByAdmin, { isLoading: isDeleting }] =
     useDeleteQuoteByAdminMutation();
+  const [mergeQuotesByAdmin, { isLoading: isMerging }] =
+    useMergeQuotesByAdminMutation();
 
   const [getQuoteShare] = useLazyGetQuoteShareQuery();
   const [getQuotePdf, { isFetching: isPdfLoading }] = useLazyGetQuotePdfQuery();
@@ -218,8 +609,29 @@ export default function AdminRequestsPage() {
   const [deletingId, setDeletingId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [copyId, setCopyId] = useState(null);
-  const rows = data?.data || [];
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState("");
+  const rows = useMemo(() => data?.data || [], [data?.data]);
   const total = data?.total ?? rows.length;
+
+  const selectedRows = useMemo(() => {
+    const byId = new Map(rows.map((row) => [String(row._id), row]));
+    return selectedIds.map((id) => byId.get(String(id))).filter(Boolean);
+  }, [rows, selectedIds]);
+
+  const selectedUserIds = useMemo(
+    () =>
+      new Set(
+        selectedRows.map((row) => getId(row.user)).filter(Boolean)
+      ),
+    [selectedRows]
+  );
+  const selectedSameCustomer =
+    selectedRows.length > 0 && selectedUserIds.size === 1;
+  const selectedCustomer = selectedRows[0]?.user || null;
+  const canOpenMerge = selectedRows.length >= 2 && selectedSameCustomer;
 
   const pagination = useMemo(() => {
     if (data?.pagination) return data.pagination;
@@ -233,8 +645,67 @@ export default function AdminRequestsPage() {
     };
   }, [data, page]);
 
+  function onPageChange(nextPage) {
+    setSelectedIds([]);
+    setMergeModalOpen(false);
+    setMergeTargetId("");
+    setPage(nextPage);
+  }
+
+  function clearSelection() {
+    setSelectedIds([]);
+    setMergeModalOpen(false);
+    setMergeTargetId("");
+  }
+
+  function startMergeMode() {
+    setSelectionMode(true);
+  }
+
+  function cancelMergeMode() {
+    setSelectionMode(false);
+    clearSelection();
+  }
+
+  function toggleSelected(q) {
+    if (!selectionMode) return;
+    if (!isMergeEligible(q)) return;
+    const id = String(q._id);
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }
+
+  function openMergeModal() {
+    if (!canOpenMerge) return;
+    setMergeTargetId(resolveDefaultMergeTarget(selectedRows));
+    setMergeModalOpen(true);
+  }
+
+  function closeMergeModal() {
+    if (isMerging) return;
+    setMergeModalOpen(false);
+  }
+
+  async function onMergeSelected() {
+    if (!canOpenMerge || !mergeTargetId) return;
+
+    try {
+      const res = await mergeQuotesByAdmin({
+        quoteIds: selectedRows.map((row) => row._id),
+        targetQuoteId: mergeTargetId,
+      }).unwrap();
+      toast.success(res?.message || "Requests merged.");
+      clearSelection();
+      setSelectionMode(false);
+      await refetch();
+    } catch (e) {
+      toast.error(friendlyApiError(e));
+    }
+  }
+
   async function onDelete(q) {
-    if (q.status !== "Cancelled") return;
+    if (q.status !== "Cancelled" && !q.mergedIntoQuote) return;
 
     const ok = window.confirm(
       `Delete this quote?`
@@ -272,7 +743,7 @@ export default function AdminRequestsPage() {
       }
 
       window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-    } catch (e) {
+    } catch {
       toast.error("Failed to download PDF.");
     } finally {
       setPdfId(null);
@@ -288,7 +759,7 @@ export default function AdminRequestsPage() {
       const text = buildAdminQuoteShareText(quote);
       await copyTextToClipboard(text);
       toast.success("Quote copied to clipboard.");
-    } catch (e) {
+    } catch {
       toast.error("Failed to copy quote.");
     } finally {
       setCopyId(null);
@@ -297,6 +768,16 @@ export default function AdminRequestsPage() {
 
   return (
     <div className="space-y-4">
+      <MergeRequestsModal
+        open={mergeModalOpen}
+        quotes={selectedRows}
+        targetId={mergeTargetId}
+        onTargetChange={setMergeTargetId}
+        onClose={closeMergeModal}
+        onSubmit={onMergeSelected}
+        isSubmitting={isMerging}
+      />
+
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -305,6 +786,28 @@ export default function AdminRequestsPage() {
             Newest first - Review, quote, confirm, then create an order.
           </div>
         </div>
+        {selectionMode ? (
+          <button
+            type="button"
+            onClick={cancelMergeMode}
+            disabled={isMerging}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <FiX className="h-3.5 w-3.5" />
+            <span className="sm:hidden">Cancel</span>
+            <span className="hidden sm:inline">Cancel merge</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={startMergeMode}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+          >
+            <FiGitMerge className="h-3.5 w-3.5" />
+            <span className="sm:hidden">Merge</span>
+            <span className="hidden sm:inline">Merge requests</span>
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -315,7 +818,7 @@ export default function AdminRequestsPage() {
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-              onClick={() => setPage(1)}
+              onClick={() => onPageChange(1)}
             >
               <FiRefreshCw className="h-3.5 w-3.5 mr-1 text-slate-400" aria-hidden="true" />
               Reset filters
@@ -323,6 +826,67 @@ export default function AdminRequestsPage() {
           </div>
         </div>
       </div>
+
+      {selectionMode ? (
+        <div className="sticky top-2 z-20 rounded-2xl bg-white p-3 shadow-lg shadow-slate-200/60 ring-1 ring-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900">
+                {selectedRows.length > 0
+                  ? `${selectedRows.length} request${selectedRows.length === 1 ? "" : "s"} selected`
+                  : "Select requests to merge"}
+              </div>
+              <div className="mt-0.5 text-xs text-slate-500">
+                {selectedRows.length < 2
+                  ? "Select at least 2 requests to merge."
+                  : selectedSameCustomer
+                  ? selectedCustomer?.name || selectedCustomer?.email || "Same customer"
+                  : "Requests must belong to the same customer."}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={clearSelection}
+                disabled={isMerging || selectedRows.length === 0}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <FiX className="h-3.5 w-3.5" />
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={cancelMergeMode}
+                disabled={isMerging}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={openMergeModal}
+                disabled={!canOpenMerge || isMerging}
+                title={
+                  canOpenMerge
+                    ? "Merge selected requests"
+                    : "Select at least 2 requests from the same customer"
+                }
+                className={[
+                  "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition",
+                  canOpenMerge && !isMerging
+                    ? "bg-slate-900 text-white hover:bg-slate-800"
+                    : "cursor-not-allowed bg-slate-100 text-slate-400",
+                ].join(" ")}
+              >
+                <FiGitMerge className="h-3.5 w-3.5" />
+                <span className="sm:hidden">Merge</span>
+                <span className="hidden sm:inline">Merge requests</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Pagination */}
       <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
@@ -336,7 +900,7 @@ export default function AdminRequestsPage() {
 
           <Pagination
             pagination={pagination}
-            onPageChange={setPage}
+            onPageChange={onPageChange}
             variant="compact"
           />
         </div>
@@ -365,19 +929,64 @@ export default function AdminRequestsPage() {
           <div className="space-y-3 md:hidden">
             {rows.map((q) => {
               const row = getRowMeta(q, { deletingId, pdfId, copyId });
+              const rowSelected = selectedIds.includes(String(q._id));
+              const mergeEligible = isMergeEligible(q);
+              const mergeDisabledReason = getMergeDisabledReason(q);
 
               return (
                 <div
                   key={q._id}
-                  className="rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+                  className={[
+                    "rounded-2xl p-4 ring-1 transition",
+                    rowSelected
+                      ? "bg-violet-50 ring-2 ring-violet-400"
+                      : "bg-white ring-slate-200",
+                  ].join(" ")}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900">
-                        {q.quoteNumber || "—"}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {formatDateTime(q.createdAt)}
+                    <div className="flex min-w-0 items-start gap-3">
+                      {selectionMode ? (
+                        <input
+                          type="checkbox"
+                          checked={rowSelected}
+                          disabled={!mergeEligible}
+                          onChange={() => toggleSelected(q)}
+                          title={
+                            mergeEligible
+                              ? "Select request"
+                              : mergeDisabledReason
+                          }
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label={`Select ${q.quoteNumber || "request"}`}
+                        />
+                      ) : null}
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {q.quoteNumber || "—"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {formatDateTime(q.createdAt)}
+                        </div>
+                        {row.isMergedSource ? (
+                          <div className="mt-1 text-[11px] font-semibold text-violet-700">
+                            Merged into {getQuoteNumber(q.mergedIntoQuote)}
+                          </div>
+                        ) : row.mergedFromCount > 0 ? (
+                          <div className="mt-1 text-[11px] font-semibold text-slate-500">
+                            Merged from {row.mergedFromCount} request
+                            {row.mergedFromCount === 1 ? "" : "s"}
+                          </div>
+                        ) : null}
+                        {selectionMode && rowSelected ? (
+                          <div className="mt-1 inline-flex rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                            Selected
+                          </div>
+                        ) : null}
+                        {selectionMode && !mergeEligible ? (
+                          <div className="mt-1 text-[11px] font-semibold text-slate-500">
+                            Cannot merge: {mergeDisabledReason}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <StatusBadge status={q.status} />
@@ -482,11 +1091,11 @@ export default function AdminRequestsPage() {
                       type="button"
                       className={[
                         "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset",
-                        !row.isCancelled || row.rowDeleting || isDeleting
+                        !row.canDelete || row.rowDeleting || isDeleting
                           ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                           : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
                       ].join(" ")}
-                      disabled={!row.isCancelled || row.rowDeleting || isDeleting}
+                      disabled={!row.canDelete || row.rowDeleting || isDeleting}
                       onClick={() => onDelete(q)}
                       title="Delete"
                     >
@@ -504,6 +1113,11 @@ export default function AdminRequestsPage() {
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                   <tr>
+                    {selectionMode ? (
+                      <th className="w-10 px-4 py-3">
+                        <span className="sr-only">Select</span>
+                      </th>
+                    ) : null}
                     <th className="px-4 py-3">Quote</th>
                     <th className="px-4 py-3">User</th>
                     <th className="px-4 py-3">Status</th>
@@ -521,9 +1135,33 @@ export default function AdminRequestsPage() {
                       pdfId,
                       copyId,
                     });
+                    const rowSelected = selectedIds.includes(String(q._id));
+                    const mergeEligible = isMergeEligible(q);
 
                     return (
-                      <tr key={q._id} className="hover:bg-slate-50">
+                      <tr
+                        key={q._id}
+                        className={
+                          rowSelected ? "bg-violet-50/60" : "hover:bg-slate-50"
+                        }
+                      >
+                        {selectionMode ? (
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={rowSelected}
+                              disabled={!mergeEligible}
+                              onChange={() => toggleSelected(q)}
+                              title={
+                                mergeEligible
+                                  ? "Select request"
+                                  : getMergeDisabledReason(q)
+                              }
+                              className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+                              aria-label={`Select ${q.quoteNumber || "request"}`}
+                            />
+                          </td>
+                        ) : null}
                         {/* Quote: quoteNumber + createdAt */}
                         <td className="px-4 py-3">
                           <div className="font-semibold text-slate-900">
@@ -532,6 +1170,16 @@ export default function AdminRequestsPage() {
                           <div className="text-xs text-slate-500">
                             {formatDateTime(q.createdAt)}
                           </div>
+                          {row.isMergedSource ? (
+                            <div className="mt-1 text-[11px] font-semibold text-violet-700">
+                              Merged into {getQuoteNumber(q.mergedIntoQuote)}
+                            </div>
+                          ) : row.mergedFromCount > 0 ? (
+                            <div className="mt-1 text-[11px] font-semibold text-slate-500">
+                              Merged from {row.mergedFromCount} request
+                              {row.mergedFromCount === 1 ? "" : "s"}
+                            </div>
+                          ) : null}
                         </td>
 
                         {/* User */}
@@ -632,12 +1280,12 @@ export default function AdminRequestsPage() {
                               type="button"
                               className={[
                                 "inline-flex items-center justify-center rounded-xl p-2 ring-1 ring-inset",
-                                !row.isCancelled || row.rowDeleting || isDeleting
+                                !row.canDelete || row.rowDeleting || isDeleting
                                   ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                                   : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
                               ].join(" ")}
                               disabled={
-                                !row.isCancelled || row.rowDeleting || isDeleting
+                                !row.canDelete || row.rowDeleting || isDeleting
                               }
                               onClick={() => onDelete(q)}
                               title="Delete"
@@ -658,4 +1306,3 @@ export default function AdminRequestsPage() {
     </div>
   );
 }
-

@@ -251,11 +251,32 @@ export default function AdminRequestDetailsPage() {
   const orderCreated = Boolean(quote?.order);
   const manualInvoiceId = quote?.manualInvoiceId;
   const manualInvoiceLocked = Boolean(manualInvoiceId);
-  const quoteLocked = orderCreated || manualInvoiceLocked;
+  const mergedIntoQuote = quote?.mergedIntoQuote;
+  const mergedIntoQuoteId = getId(mergedIntoQuote);
+  const mergedFromQuotes = Array.isArray(quote?.mergedFromQuotes)
+    ? quote.mergedFromQuotes
+    : [];
+  const mergedFromQuoteSnapshots = Array.isArray(quote?.mergedFromQuoteSnapshots)
+    ? quote.mergedFromQuoteSnapshots
+    : [];
+  const mergedFromDisplay =
+    mergedFromQuoteSnapshots.length > 0
+      ? mergedFromQuoteSnapshots
+      : mergedFromQuotes.map((source) => ({
+          quote: getId(source),
+          quoteNumber: source?.quoteNumber || "",
+        }));
+  const isMergedSource = Boolean(mergedIntoQuoteId);
+  const mergedIntoQuoteLabel =
+    mergedIntoQuote?.quoteNumber ||
+    (mergedIntoQuoteId ? mergedIntoQuoteId.slice(-6).toUpperCase() : "");
+  const quoteLocked = orderCreated || manualInvoiceLocked || isMergedSource;
   const quoteLockReason = manualInvoiceLocked
     ? "Manual invoice created — quote locked."
     : orderCreated
     ? "Order created — quote locked."
+    : isMergedSource
+    ? "Merged into another quote — quote locked."
     : "";
 
   const stockCheckItems = Array.isArray(stockCheckData?.items)
@@ -301,20 +322,6 @@ export default function AdminRequestDetailsPage() {
     [quantityItems]
   );
 
-  const hasShortage = useMemo(
-    () => (items || []).some((it) => Number(it.shortage) > 0),
-    [items]
-  );
-
-  const hasAnyAvailable = useMemo(
-    () =>
-      (items || []).some((it) => {
-        const status = normalizeAvailabilityStatus(it.availabilityStatus);
-        if (status === "AVAILABLE" || status === "SHORTAGE") return true;
-        return Number(it.availableNow) > 0;
-      }),
-    [items]
-  );
   const hasAnyAvailableForQty = useMemo(
     () =>
       (quantityItems || []).some((it) => {
@@ -1365,6 +1372,64 @@ export default function AdminRequestDetailsPage() {
           {formatDateTime(quote.updatedAt)}
         </div>
 
+        {isMergedSource ? (
+          <div className="mt-3 rounded-xl bg-violet-50 p-3 ring-1 ring-violet-200">
+            <div className="text-xs font-semibold text-violet-900">
+              Merged request
+            </div>
+            <div className="mt-1 text-xs text-violet-900/80">
+              This request was merged into{" "}
+              <span className="font-semibold">
+                {mergedIntoQuoteLabel || "another quote"}
+              </span>
+              .
+            </div>
+            {mergedIntoQuoteId ? (
+              <div className="mt-2">
+                <Link
+                  to={`/admin/requests/${mergedIntoQuoteId}`}
+                  className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-50"
+                >
+                  Open merged quote
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {mergedFromDisplay.length > 0 ? (
+          <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <div className="text-xs font-semibold text-slate-900">
+              Merged from {mergedFromDisplay.length} request
+              {mergedFromDisplay.length === 1 ? "" : "s"}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {mergedFromDisplay.map((source, idx) => {
+                const sourceId = getId(source?.quote || source);
+                const sourceLabel =
+                  source?.quoteNumber ||
+                  (sourceId ? sourceId.slice(-6).toUpperCase() : "Request");
+                return sourceId ? (
+                  <Link
+                    key={`${sourceId}-${idx}`}
+                    to={`/admin/requests/${sourceId}`}
+                    className="inline-flex items-center rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                  >
+                    {sourceLabel}
+                  </Link>
+                ) : (
+                  <span
+                    key={`source-${idx}`}
+                    className="inline-flex items-center rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200"
+                  >
+                    {sourceLabel}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {manualInvoiceLocked ? (
           <div className="mt-3 rounded-xl bg-violet-50 p-3 ring-1 ring-violet-200">
             <div className="text-xs font-semibold text-violet-900">
@@ -1388,7 +1453,7 @@ export default function AdminRequestDetailsPage() {
           <div className="mt-3 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
             <div className="text-xs font-semibold text-amber-900">Locked</div>
             <div className="mt-1 text-xs text-amber-900/80">
-              This quote already has an order, so editing is disabled.
+              {quoteLockReason || "Editing is disabled for this quote."}
             </div>
           </div>
         ) : null}
