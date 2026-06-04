@@ -56,12 +56,13 @@ export default function Header() {
 
     apply();
 
-    const ro = new ResizeObserver(() => apply());
-    ro.observe(el);
-
+    const canObserveResize = typeof window.ResizeObserver === "function";
+    const ro = canObserveResize ? new window.ResizeObserver(() => apply()) : null;
+    ro?.observe(el);
     window.addEventListener("resize", apply);
+
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
       window.removeEventListener("resize", apply);
     };
   }, []);
@@ -120,6 +121,7 @@ export default function Header() {
 
     // Save last focused element (best-effort)
     lastFocusRef.current = document.activeElement;
+    const fallbackFocus = menuButtonRef.current;
 
     // Move focus into the drawer
     const t = window.setTimeout(() => {
@@ -136,10 +138,9 @@ export default function Header() {
       document.body.style.overflow = "";
 
       // Restore focus to the menu button (or the last focused element)
-      const fallback = menuButtonRef.current;
       const last = lastFocusRef.current;
       if (last && typeof last.focus === "function") last.focus();
-      else fallback?.focus?.();
+      else fallbackFocus?.focus?.();
     };
   }, [menuOpen]);
 

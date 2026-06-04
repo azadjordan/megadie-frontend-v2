@@ -1,10 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import AuthShell from '../../components/auth/AuthShell'
 import { useLoginMutation } from '../../features/auth/usersApiSlice'
 import { setCredentials } from '../../features/auth/authSlice'
+
+const RECENT_EMAILS_KEY = 'megadie.recentEmails'
+const RECENT_EMAILS_MAX = 8
+
+const loadRecentEmails = () => {
+  try {
+    if (typeof window === 'undefined') return []
+    const raw = window.localStorage.getItem(RECENT_EMAILS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
 
 export default function LoginPage() {
   const dispatch = useDispatch()
@@ -15,44 +33,45 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [recentEmails, setRecentEmails] = useState([])
+  const [recentEmails, setRecentEmails] = useState(loadRecentEmails)
   const [submitError, setSubmitError] = useState('')
 
   const [login, { isLoading }] = useLoginMutation()
 
-  const RECENT_EMAILS_KEY = 'megadie.recentEmails'
-  const RECENT_EMAILS_MAX = 8
+  const getSafeFromPath = useCallback(() => {
+    const from = location.state?.from
+    const pathname = typeof from === 'string' ? from : from?.pathname
+    const search = typeof from === 'string' ? '' : from?.search || ''
 
-  const getLandingPath = (user) => {
-    if (user?.isAdmin) return '/admin'
+    if (!pathname || !pathname.startsWith('/') || pathname.startsWith('//')) {
+      return ''
+    }
+    if (pathname === '/login' || pathname === '/register') return ''
+
+    return `${pathname}${search}`
+  }, [location.state])
+
+  const getLandingPath = useCallback((user) => {
+    const intendedPath = getSafeFromPath()
+
+    if (user?.isAdmin) {
+      return intendedPath.startsWith('/admin') ? intendedPath : '/admin'
+    }
+
     const status = user?.approvalStatus
     if (status && status !== 'Approved') return '/'
+
+    if (intendedPath) return intendedPath
+
     return '/account/overview'
-  }
+  }, [getSafeFromPath])
 
   useEffect(() => {
     if (!isInitialized) return
     if (!userInfo) return
 
     navigate(getLandingPath(userInfo), { replace: true })
-  }, [isInitialized, userInfo, navigate])
-
-  useEffect(() => {
-    try {
-      if (typeof window === 'undefined') return
-      const raw = window.localStorage.getItem(RECENT_EMAILS_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        const cleaned = parsed
-          .map((value) => String(value || '').trim())
-          .filter(Boolean)
-        setRecentEmails(cleaned)
-      }
-    } catch (_err) {
-      // Ignore localStorage failures and fall back to browser autofill.
-    }
-  }, [])
+  }, [isInitialized, userInfo, navigate, getLandingPath])
 
   const submitHandler = async (e) => {
     e.preventDefault()
@@ -75,7 +94,7 @@ export default function LoginPage() {
           window.localStorage.setItem(RECENT_EMAILS_KEY, JSON.stringify(capped))
           setRecentEmails(capped)
         }
-      } catch (_err) {
+      } catch {
         // Ignore localStorage failures and fall back to browser autofill.
       }
 

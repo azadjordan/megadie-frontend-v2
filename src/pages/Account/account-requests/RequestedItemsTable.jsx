@@ -115,6 +115,7 @@ export default function RequestedItemsTable({
       {items.map((it, idx) => {
         const name =
           it?.product?.name ||
+          it?.productName ||
           (typeof it?.product === "string" ? it.product : "") ||
           "Unnamed item";
         const productId = it?.product?._id || it?.product;

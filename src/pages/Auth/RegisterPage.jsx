@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -29,12 +29,33 @@ export default function RegisterPage() {
   const [login, { isLoading: isLoggingIn }] = useLoginMutation()
   const isSubmitting = isRegistering || isLoggingIn
 
-  const getLandingPath = (user) => {
-    if (user?.isAdmin) return '/admin'
+  const getSafeFromPath = useCallback(() => {
+    const from = location.state?.from
+    const pathname = typeof from === 'string' ? from : from?.pathname
+    const search = typeof from === 'string' ? '' : from?.search || ''
+
+    if (!pathname || !pathname.startsWith('/') || pathname.startsWith('//')) {
+      return ''
+    }
+    if (pathname === '/login' || pathname === '/register') return ''
+
+    return `${pathname}${search}`
+  }, [location.state])
+
+  const getLandingPath = useCallback((user) => {
+    const intendedPath = getSafeFromPath()
+
+    if (user?.isAdmin) {
+      return intendedPath.startsWith('/admin') ? intendedPath : '/admin'
+    }
+
     const status = user?.approvalStatus
     if (status && status !== 'Approved') return '/'
+
+    if (intendedPath) return intendedPath
+
     return '/account/overview'
-  }
+  }, [getSafeFromPath])
 
   const normalizePhoneNumber = (value) =>
     String(value || '').replace(/[^\d+]/g, '')
@@ -44,7 +65,7 @@ export default function RegisterPage() {
     if (!userInfo) return
 
     navigate(getLandingPath(userInfo), { replace: true })
-  }, [isInitialized, userInfo, navigate])
+  }, [isInitialized, userInfo, navigate, getLandingPath])
 
   const submitHandler = async (e) => {
     e.preventDefault()

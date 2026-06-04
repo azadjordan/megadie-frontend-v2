@@ -43,6 +43,7 @@ import AdminOrderDetailsPage from "../pages/Admin/AdminOrderDetailsPage";
 import AdminPriceRulesPage from "../pages/Admin/AdminPriceRulesPage";
 import AdminFilterConfigsPage from "../pages/Admin/AdminFilterConfigsPage";
 import AdminFilterConfigEditPage from "../pages/Admin/AdminFilterConfigEditPage";
+import AdminNotFoundPage from "../pages/Admin/AdminNotFoundPage";
 
 
 
@@ -59,6 +60,7 @@ import AccountOverviewPage from "../pages/Account/AccountOverviewPage";
 import AccountProfilePage from "../pages/Account/AccountProfilePage";
 import AccountRequestsPage from "../pages/Account/AccountRequestsPage";
 import AccountOrdersPage from "../pages/Account/AccountOrdersPage";
+import AccountNotFoundPage from "../pages/Account/AccountNotFoundPage";
 
 // ✅ Billing (Invoices list + Invoice details + Order details)
 import AccountInvoicesReceiptPage from "../pages/Account/AccountInvoicesReceiptPage";
@@ -125,9 +127,8 @@ export default function AppRoutes() {
                 path="/account/billing/orders/:id"
                 element={<OrderRedirect />}
               />
+              <Route path="/account/*" element={<AccountNotFoundPage />} />
             </Route>
-
-
           </Route>
         </Route>
 
@@ -148,57 +149,58 @@ export default function AppRoutes() {
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
       {/* Admin routes (protected) */}
-<Route element={<RequireAdmin />}>
-  <Route path="/admin" element={<AdminLayout />}>
-    <Route index element={<AdminDashboardPage />} />
+      <Route element={<RequireAdmin />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboardPage />} />
 
-    <Route path="requests" element={<AdminRequestsPage />} />
-    <Route path="requests/:id" element={<AdminRequestDetailsPage />} />
+          <Route path="requests" element={<AdminRequestsPage />} />
+          <Route path="requests/:id" element={<AdminRequestDetailsPage />} />
 
-    <Route path="orders" element={<AdminOrdersPage />} />
-    <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
-    <Route path="invoices" element={<AdminInvoicesPage />} />
-    <Route path="finance" element={<AdminFinancePage />} />
-    <Route path="invoices/:id/edit" element={<AdminInvoiceEditPage />} />
-    <Route path="payments" element={<AdminPaymentsPage />} />
-    <Route path="users" element={<AdminUsersPage />} />
-    <Route path="users/:id/edit" element={<AdminUserDetailsPage />} />
-    <Route
-      path="inventory"
-      element={<Navigate to="/admin/inventory/slots" replace />}
-    />
-    <Route path="inventory/products" element={<AdminInventoryPage />} />
-    <Route path="inventory/slots" element={<AdminInventorySlotsPage />} />
-    <Route
-      path="inventory/categories"
-      element={<Navigate to="/admin/categories" replace />}
-    />
-    <Route
-      path="inventory/allocations"
-      element={<AdminInventoryAllocationsPage />}
-    />
-    <Route
-      path="inventory/movements"
-      element={<AdminInventoryMovementsPage />}
-    />
-    <Route path="inventory/slots/:id" element={<AdminSlotDetailsPage />} />
-    <Route path="inventory/products/new" element={<AdminProductCreatePage />} />
-    <Route
-      path="inventory/products/:id/edit"
-      element={<AdminProductEditPage />}
-    />
-    <Route path="price-rules" element={<AdminPriceRulesPage />} />
-    <Route path="categories" element={<AdminInventoryCategoriesPage />} />
-    <Route path="filter-configs" element={<AdminFilterConfigsPage />} />
-    <Route
-      path="filter-configs/:productType/edit"
-      element={<AdminFilterConfigEditPage />}
-    />
-  </Route>
-</Route>
-
-
+          <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
+          <Route path="invoices" element={<AdminInvoicesPage />} />
+          <Route path="finance" element={<AdminFinancePage />} />
+          <Route path="invoices/:id/edit" element={<AdminInvoiceEditPage />} />
+          <Route path="payments" element={<AdminPaymentsPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="users/:id/edit" element={<AdminUserDetailsPage />} />
+          <Route
+            path="inventory"
+            element={<Navigate to="/admin/inventory/slots" replace />}
+          />
+          <Route path="inventory/products" element={<AdminInventoryPage />} />
+          <Route path="inventory/slots" element={<AdminInventorySlotsPage />} />
+          <Route
+            path="inventory/categories"
+            element={<Navigate to="/admin/categories" replace />}
+          />
+          <Route
+            path="inventory/allocations"
+            element={<AdminInventoryAllocationsPage />}
+          />
+          <Route
+            path="inventory/movements"
+            element={<AdminInventoryMovementsPage />}
+          />
+          <Route path="inventory/slots/:id" element={<AdminSlotDetailsPage />} />
+          <Route
+            path="inventory/products/new"
+            element={<AdminProductCreatePage />}
+          />
+          <Route
+            path="inventory/products/:id/edit"
+            element={<AdminProductEditPage />}
+          />
+          <Route path="price-rules" element={<AdminPriceRulesPage />} />
+          <Route path="categories" element={<AdminInventoryCategoriesPage />} />
+          <Route path="filter-configs" element={<AdminFilterConfigsPage />} />
+          <Route
+            path="filter-configs/:productType/edit"
+            element={<AdminFilterConfigEditPage />}
+          />
+          <Route path="*" element={<AdminNotFoundPage />} />
+        </Route>
+      </Route>
     </Routes>
   );
 }
-

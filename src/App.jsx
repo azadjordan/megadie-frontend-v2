@@ -5,14 +5,17 @@ import { store } from "./app/store";
 import AppRoutes from "./routes/AppRoutes";
 import AuthBootstrap from "./components/auth/AuthBootstrap";
 import ScrollToTopButton from "./components/common/ScrollToTopButton";
+import AppErrorBoundary from "./components/common/AppErrorBoundary";
 
 export default function App() {
   return (
     <Provider store={store}>
       <BrowserRouter>
         <AuthBootstrap>
-          <AppRoutes />
-          <ScrollToTopButton />
+          <AppErrorBoundary>
+            <AppRoutes />
+            <ScrollToTopButton />
+          </AppErrorBoundary>
           <ToastContainer position="top-right" autoClose={2500} />
         </AuthBootstrap>
       </BrowserRouter>

@@ -1,29 +1,26 @@
-// src/pages/Public/NotFoundPage.jsx
-import { Link } from 'react-router-dom'
+import { useNavigate } from "react-router-dom";
+import { FiCompass } from "react-icons/fi";
+
+import RouteStatePage from "../../components/common/RouteStatePage";
 
 export default function NotFoundPage() {
+  const navigate = useNavigate();
+
   return (
-    <div className="mx-auto max-w-2xl rounded-2xl bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold text-slate-900">Page not found</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        The page you’re looking for doesn’t exist or was moved.
-      </p>
-
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Link
-          to="/"
-          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-        >
-          Go home
-        </Link>
-
-        <Link
-          to="/shop"
-          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-        >
-          Go to shop
-        </Link>
-      </div>
+    <div className="py-8 sm:py-12">
+      <RouteStatePage
+        eyebrow="404"
+        title="This page is not on the map"
+        message="The address may be mistyped, expired, or moved. Use one of the shortcuts below to get back to Megadie."
+        icon={FiCompass}
+        tone="violet"
+        actions={[
+          { label: "Go home", to: "/", variant: "primary" },
+          { label: "Shop products", to: "/shop" },
+          { label: "Contact support", to: "/contact" },
+          { label: "Go back", onClick: () => navigate(-1) },
+        ]}
+      />
     </div>
-  )
+  );
 }
