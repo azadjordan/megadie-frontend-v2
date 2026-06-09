@@ -14,6 +14,9 @@ import { toast } from "react-toastify";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
+import AddPaymentModal from "../../components/admin/AddPaymentModal";
+import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
+import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
 import { copyTextToClipboard } from "../../utils/clipboard";
 import { buildAdminOrderShareText } from "../../utils/orderShare";
 import { getOrderTotals } from "../../utils/orderTotals";
@@ -25,10 +28,16 @@ import {
   formatInvoiceMoneyMinor,
   getInvoicePaymentStatusLabel,
 } from "../../utils/invoiceMoney";
+import { buildPaymentDefaults } from "../../utils/paymentFormDefaults";
 import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
+  useMarkOrderDeliveredMutation,
+  useUpdateOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
+import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
+import { useFinalizeOrderAllocationsMutation } from "../../features/orderAllocations/orderAllocationsApiSlice";
+import { useAddPaymentToInvoiceMutation } from "../../features/payments/paymentsApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 function formatDateTime(iso) {
@@ -45,6 +54,19 @@ function formatDateTime(iso) {
   } catch {
     return iso;
   }
+}
+
+function getDefaultDueDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 35);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function friendlyApiError(err, fallback = "Something went wrong.") {
+  return String(err?.data?.message || err?.error || err?.message || fallback);
 }
 
 function formatMoney(amount) {
@@ -210,7 +232,15 @@ function formatBillingBalance(billing) {
   )}`;
 }
 
-function PrimaryActionControl({ action, orderId, listQueryString, compact = false }) {
+function PrimaryActionControl({
+  action,
+  order,
+  orderId,
+  listQueryString,
+  compact = false,
+  isBusy = false,
+  onAction,
+}) {
   if (!action) return null;
 
   const isLinkAction =
@@ -233,11 +263,25 @@ function PrimaryActionControl({ action, orderId, listQueryString, compact = fals
     );
   }
 
+  const enabled = action.enabled !== false && !isBusy;
+  if (enabled) {
+    return (
+      <button
+        type="button"
+        onClick={() => onAction?.(order, action)}
+        title={action.reason || action.label}
+        className={className}
+      >
+        {isBusy ? "Working..." : action.label}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
       disabled
-      title={`${action.label} will be wired in the next phase.`}
+      title={action.reason || action.label}
       className={[
         compact
           ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
@@ -250,13 +294,39 @@ function PrimaryActionControl({ action, orderId, listQueryString, compact = fals
   );
 }
 
-function PaymentActionControl({ paymentAction, compact = false }) {
+function PaymentActionControl({
+  paymentAction,
+  order,
+  compact = false,
+  isBusy = false,
+  onAction,
+}) {
   if (!paymentAction?.visible) return null;
+  const enabled = paymentAction.enabled !== false && !isBusy;
+
+  if (enabled) {
+    return (
+      <button
+        type="button"
+        onClick={() => onAction?.(order)}
+        title={paymentAction.reason || paymentAction.label}
+        className={[
+          compact
+            ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
+            : "inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px]",
+          "bg-white font-semibold uppercase tracking-wider text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50",
+        ].join(" ")}
+      >
+        {isBusy ? "Saving..." : paymentAction.label}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
       disabled
-      title={paymentAction.reason || "Payment quick action will be wired in the next phase."}
+      title={paymentAction.reason || paymentAction.label}
       className={[
         compact
           ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
@@ -310,6 +380,21 @@ export default function AdminOrdersPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copyId, setCopyId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [busyOrderId, setBusyOrderId] = useState("");
+  const [deliverTarget, setDeliverTarget] = useState(null);
+  const [deliveredBy, setDeliveredBy] = useState("");
+  const [deliverFormError, setDeliverFormError] = useState("");
+  const [createTarget, setCreateTarget] = useState(null);
+  const [createForm, setCreateForm] = useState({
+    dueDate: getDefaultDueDate(),
+    adminNote: "",
+    currency: "AED",
+    minorUnitFactor: "100",
+  });
+  const [createFormError, setCreateFormError] = useState("");
+  const [paymentTarget, setPaymentTarget] = useState(null);
+  const [paymentForm, setPaymentForm] = useState(() => buildPaymentDefaults(null));
+  const [paymentFieldErrors, setPaymentFieldErrors] = useState({});
 
   const listState = readOrderListState(searchParams);
   const { page, search, status } = listState;
@@ -325,6 +410,18 @@ export default function AdminOrdersPage() {
 
   const [deleteOrderByAdmin, { isLoading: isDeleting }] =
     useDeleteOrderByAdminMutation();
+  const [updateOrderStatus, { isLoading: isUpdatingStatus }] =
+    useUpdateOrderByAdminMutation();
+  const [
+    markOrderDelivered,
+    { isLoading: isDelivering, error: deliverError },
+  ] = useMarkOrderDeliveredMutation();
+  const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
+    useCreateInvoiceFromOrderMutation();
+  const [finalizeAllocations, { isLoading: isFinalizing }] =
+    useFinalizeOrderAllocationsMutation();
+  const [addPaymentToInvoice, { isLoading: isAddingPayment, error: addPaymentError }] =
+    useAddPaymentToInvoiceMutation();
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -380,6 +477,248 @@ export default function AdminOrdersPage() {
       toast.error(friendly);
     } finally {
       setDeleteId(null);
+    }
+  }
+
+  async function onMarkShipping(order) {
+    if (!order?._id || busyOrderId || isUpdatingStatus) return;
+    setBusyOrderId(order._id);
+    try {
+      await updateOrderStatus({
+        id: order._id,
+        status: "Shipping",
+      }).unwrap();
+      toast.success("Order moved to Shipping.");
+    } catch (err) {
+      toast.error(friendlyApiError(err, "Failed to update shipping status."));
+    } finally {
+      setBusyOrderId("");
+    }
+  }
+
+  function openDeliverModal(order) {
+    if (!order?._id || isDelivering) return;
+    setDeliverTarget(order);
+    setDeliveredBy(order.deliveredBy || "");
+    setDeliverFormError("");
+  }
+
+  function closeDeliverModal() {
+    if (isDelivering) return;
+    setDeliverTarget(null);
+    setDeliveredBy("");
+    setDeliverFormError("");
+  }
+
+  async function submitDeliver() {
+    if (!deliverTarget?._id || isDelivering) return;
+    const name = deliveredBy.trim();
+    if (!name) {
+      setDeliverFormError("Delivered by is required.");
+      return;
+    }
+
+    setDeliverFormError("");
+    try {
+      await markOrderDelivered({
+        id: deliverTarget._id,
+        deliveredBy: name,
+      }).unwrap();
+      toast.success("Order marked delivered.");
+      closeDeliverModal();
+    } catch {
+      // ErrorMessage in the modal displays the API error.
+    }
+  }
+
+  function openCreateModal(order) {
+    if (!order?._id || isCreating) return;
+    setCreateTarget(order);
+    setCreateForm({
+      dueDate: getDefaultDueDate(),
+      adminNote: "",
+      currency: "AED",
+      minorUnitFactor: "100",
+    });
+    setCreateFormError("");
+  }
+
+  function closeCreateModal() {
+    if (isCreating) return;
+    setCreateTarget(null);
+    setCreateFormError("");
+  }
+
+  function handleCreateField(key, value) {
+    setCreateForm((prev) => ({ ...prev, [key]: value }));
+    if (createFormError) setCreateFormError("");
+  }
+
+  async function submitCreateInvoice() {
+    if (!createTarget?._id || isCreating) return;
+
+    const dueDate = String(createForm.dueDate || "").trim();
+    if (!dueDate) {
+      setCreateFormError("Due date is required.");
+      return;
+    }
+
+    const minorRaw = String(createForm.minorUnitFactor || "").trim();
+    if (minorRaw) {
+      const minorValue = Number(minorRaw);
+      if (!Number.isInteger(minorValue) || minorValue <= 0) {
+        setCreateFormError("Minor unit factor must be a positive integer.");
+        return;
+      }
+    }
+
+    const payload = {
+      orderId: createTarget._id,
+      dueDate,
+    };
+
+    const adminNote = String(createForm.adminNote || "").trim();
+    if (adminNote) payload.adminNote = adminNote;
+
+    const currency = String(createForm.currency || "").trim();
+    if (currency) payload.currency = currency;
+
+    if (minorRaw) payload.minorUnitFactor = Number(minorRaw);
+
+    try {
+      await createInvoiceFromOrder(payload).unwrap();
+      toast.success("Invoice created.");
+      closeCreateModal();
+    } catch {
+      // ErrorMessage in the modal displays the API error.
+    }
+  }
+
+  async function onFinalizeStock(order) {
+    if (!order?._id || busyOrderId || isFinalizing) return;
+    const confirmed = window.confirm(
+      "Finalize stock for this order? This will deduct reserved qty and lock allocations."
+    );
+    if (!confirmed) return;
+
+    setBusyOrderId(order._id);
+    try {
+      const res = await finalizeAllocations(order._id).unwrap();
+      toast.success(res?.message || "Stock finalized.");
+    } catch (err) {
+      toast.error(friendlyApiError(err, "Failed to finalize stock."));
+    } finally {
+      setBusyOrderId("");
+    }
+  }
+
+  function openAddPayment(order) {
+    const invoice =
+      order?.invoice && typeof order.invoice === "object" ? order.invoice : null;
+    if (!order?._id || !invoice?._id) {
+      toast.error("Invoice details are missing for this order.");
+      return;
+    }
+    if (invoice.status === "Cancelled") {
+      toast.error("Cancelled invoices cannot receive payments.");
+      return;
+    }
+    if (invoice.paymentStatus === "Paid") {
+      toast.info("Invoice is already paid.");
+      return;
+    }
+
+    setPaymentTarget({ order, invoice });
+    setPaymentForm(buildPaymentDefaults(invoice));
+    setPaymentFieldErrors({});
+  }
+
+  function closeAddPayment() {
+    if (isAddingPayment) return;
+    setPaymentTarget(null);
+    setPaymentFieldErrors({});
+  }
+
+  function updatePaymentForm(field, value) {
+    setPaymentForm((prev) => ({ ...prev, [field]: value }));
+    setPaymentFieldErrors((prev) => {
+      if (!prev?.[field]) return prev;
+      const { [field]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }
+
+  async function submitAddPayment() {
+    const invoiceId = paymentTarget?.invoice?._id;
+    const orderId = paymentTarget?.order?._id;
+    if (!invoiceId || !orderId || isAddingPayment) return;
+
+    const nextErrors = {};
+    const amountValue = Number(paymentForm.amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      nextErrors.amount = "Enter a positive amount.";
+    }
+
+    if (!paymentForm.method) {
+      nextErrors.method = "Required";
+    }
+
+    if (!paymentForm.receivedBy.trim()) {
+      nextErrors.receivedBy = "Required";
+    }
+
+    let paymentDateValue;
+    if (paymentForm.date) {
+      const parsed = new Date(paymentForm.date);
+      if (Number.isNaN(parsed.getTime())) {
+        nextErrors.date = "Invalid date.";
+      } else {
+        paymentDateValue = parsed.toISOString();
+      }
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setPaymentFieldErrors(nextErrors);
+      return;
+    }
+
+    setPaymentFieldErrors({});
+    try {
+      await addPaymentToInvoice({
+        invoiceId,
+        orderId,
+        amount: amountValue,
+        paymentMethod: paymentForm.method,
+        receivedBy: paymentForm.receivedBy.trim(),
+        paymentDate: paymentDateValue,
+        reference: paymentForm.reference.trim() || undefined,
+        note: paymentForm.note.trim() || undefined,
+      }).unwrap();
+
+      toast.success("Payment recorded.");
+      closeAddPayment();
+    } catch {
+      // ErrorMessage in the modal displays the API error.
+    }
+  }
+
+  function onPrimaryAction(order, action) {
+    if (!order?._id || !action?.id) return;
+    switch (action.id) {
+      case ADMIN_ORDER_ACTION_IDS.MARK_SHIPPING:
+        onMarkShipping(order);
+        break;
+      case ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED:
+        openDeliverModal(order);
+        break;
+      case ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE:
+        openCreateModal(order);
+        break;
+      case ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK:
+        onFinalizeStock(order);
+        break;
+      default:
+        break;
     }
   }
 
@@ -618,10 +957,18 @@ export default function AdminOrdersPage() {
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
           <PrimaryActionControl
             action={state.primaryAction}
+            order={o}
             orderId={o._id}
             listQueryString={listQueryString}
+            isBusy={busyOrderId === o._id}
+            onAction={onPrimaryAction}
           />
-          <PaymentActionControl paymentAction={state.paymentAction} />
+          <PaymentActionControl
+            paymentAction={state.paymentAction}
+            order={o}
+            isBusy={isAddingPayment && paymentTarget?.order?._id === o._id}
+            onAction={openAddPayment}
+          />
           <button
             type="button"
             className={[
@@ -762,12 +1109,18 @@ export default function AdminOrdersPage() {
                           <div className="flex flex-wrap items-center justify-center gap-2">
                             <PrimaryActionControl
                               action={state.primaryAction}
+                              order={o}
                               orderId={o._id}
                               listQueryString={listQueryString}
+                              isBusy={busyOrderId === o._id}
+                              onAction={onPrimaryAction}
                               compact
                             />
                             <PaymentActionControl
                               paymentAction={state.paymentAction}
+                              order={o}
+                              isBusy={isAddingPayment && paymentTarget?.order?._id === o._id}
+                              onAction={openAddPayment}
                               compact
                             />
                             <button
@@ -817,6 +1170,41 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       )}
+
+      <CreateInvoiceModal
+        open={Boolean(createTarget)}
+        order={createTarget}
+        form={createForm}
+        onFieldChange={handleCreateField}
+        onClose={closeCreateModal}
+        onSubmit={submitCreateInvoice}
+        isSaving={isCreating}
+        error={createError}
+        formError={createFormError}
+      />
+
+      <MarkDeliveredModal
+        open={Boolean(deliverTarget)}
+        order={deliverTarget}
+        deliveredBy={deliveredBy}
+        onDeliveredByChange={setDeliveredBy}
+        onClose={closeDeliverModal}
+        onSubmit={submitDeliver}
+        isSaving={isDelivering}
+        error={deliverError}
+        formError={deliverFormError}
+      />
+
+      <AddPaymentModal
+        open={Boolean(paymentTarget)}
+        onClose={closeAddPayment}
+        onSubmit={submitAddPayment}
+        isSaving={isAddingPayment}
+        error={addPaymentError}
+        form={paymentForm}
+        onFieldChange={updatePaymentForm}
+        fieldErrors={paymentFieldErrors}
+      />
     </div>
   );
 }

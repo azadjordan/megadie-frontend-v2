@@ -15,8 +15,8 @@ export default function AddPaymentModal({
   onFieldChange,
   fieldErrors,
 }) {
-  if (!open) return null;
   const backdropMouseDown = useRef(false);
+  if (!open) return null;
 
   const receivedByOptions = [
     "Azad",

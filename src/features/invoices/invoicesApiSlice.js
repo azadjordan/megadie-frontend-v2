@@ -161,6 +161,8 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, arg) => [
         { type: "Invoice", id: "LIST" },
+        { type: "Invoice", id: "SUMMARY" },
+        { type: "Order", id: "LIST" },
         { type: "Order", id: arg?.orderId },
       ],
     }),
