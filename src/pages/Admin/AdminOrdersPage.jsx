@@ -18,6 +18,14 @@ import { copyTextToClipboard } from "../../utils/clipboard";
 import { buildAdminOrderShareText } from "../../utils/orderShare";
 import { getOrderTotals } from "../../utils/orderTotals";
 import {
+  ADMIN_ORDER_ACTION_IDS,
+  getAdminOrderActionState,
+} from "../../utils/adminOrderActions";
+import {
+  formatInvoiceMoneyMinor,
+  getInvoicePaymentStatusLabel,
+} from "../../utils/invoiceMoney";
+import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
 } from "../../features/orders/ordersApiSlice";
@@ -63,10 +71,12 @@ function getOrderTotal(order) {
 }
 
 function getOrderRowMeta(order) {
+  const actionState = getAdminOrderActionState(order);
   const isFinalized = Boolean(order?.stockFinalizedAt);
   const orderNumber = order?.orderNumber || order?._id || "-";
   const itemCountLabel = formatItemCount(order?.orderItems);
-  return { isFinalized, orderNumber, itemCountLabel };
+  const total = getOrderTotal(order);
+  return { actionState, isFinalized, orderNumber, itemCountLabel, total };
 }
 
 function getStatusAccentClass(status) {
@@ -79,28 +89,26 @@ function getStatusAccentClass(status) {
   return map[status] || map.Processing;
 }
 
-function getInvoiceLabel(order) {
-  const number = order?.invoice?.invoiceNumber;
-  return number ? String(number) : "No invoice";
-}
-
-function formatPaymentStatus(status) {
-  if (!status) return "—";
-  if (status === "PartiallyPaid") return "Partially paid";
-  return status;
-}
-
-function PaymentBadge({ status }) {
+function PaymentBadge({ status, hasInvoice = true, size = "default" }) {
   const base =
-    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+    "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
   const map = {
     Paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     PartiallyPaid: "bg-amber-50 text-amber-700 ring-amber-200",
-    Unpaid: "bg-slate-100 text-slate-700 ring-slate-200",
+    Unpaid: "bg-rose-50 text-rose-700 ring-rose-200",
     empty: "bg-slate-50 text-slate-500 ring-slate-200",
   };
-  const key = status || "empty";
-  return <span className={`${base} ${map[key]}`}>{formatPaymentStatus(status)}</span>;
+  const key = hasInvoice && status ? status : "empty";
+  const label = hasInvoice ? getInvoicePaymentStatusLabel(status) : "No invoice";
+  return (
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[key] || map.empty}`}>
+      {label}
+    </span>
+  );
 }
 
 function StatusBadge({ status, size = "default" }) {
@@ -154,6 +162,110 @@ function StockBadge({ finalized, size = "default" }) {
     >
       Finalized
     </span>
+  );
+}
+
+function AllocationBadge({ status, size = "default" }) {
+  const base =
+    "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
+  const map = {
+    Allocated: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    PartiallyAllocated: "bg-amber-50 text-amber-700 ring-amber-200",
+    Unallocated: "bg-slate-50 text-slate-600 ring-slate-200",
+  };
+  const labels = {
+    Allocated: "Allocated",
+    PartiallyAllocated: "Partially allocated",
+    Unallocated: "Unallocated",
+  };
+
+  return (
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[status] || map.Unallocated}`}>
+      {labels[status] || status || "Unallocated"}
+    </span>
+  );
+}
+
+function buildOrderDetailsHref(orderId, listQueryString = "", tab = "") {
+  const params = new URLSearchParams(listQueryString);
+  if (tab) params.set("tab", tab);
+  const qs = params.toString();
+  return qs ? `/admin/orders/${orderId}?${qs}` : `/admin/orders/${orderId}`;
+}
+
+function formatBillingBalance(billing) {
+  if (!billing?.hasInvoice) return "No invoice yet";
+  if (!billing.hasBalanceData) return "Balance unavailable";
+  if (billing.balanceDueMinor <= 0) return "Paid in full";
+
+  const invoice = billing.invoice || {};
+  return `Bal: ${formatInvoiceMoneyMinor(
+    billing.balanceDueMinor,
+    invoice.currency || "AED",
+    invoice.minorUnitFactor || 100
+  )}`;
+}
+
+function PrimaryActionControl({ action, orderId, listQueryString, compact = false }) {
+  if (!action) return null;
+
+  const isLinkAction =
+    action.id === ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK ||
+    action.id === ADMIN_ORDER_ACTION_IDS.OPEN_ORDER;
+  const href = buildOrderDetailsHref(
+    orderId,
+    listQueryString,
+    action.tab || (action.id === ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK ? "stock" : "")
+  );
+  const className = compact
+    ? "inline-flex h-8 items-center justify-center rounded-lg bg-slate-900 px-3 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+    : "inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800";
+
+  if (isLinkAction) {
+    return (
+      <Link to={href} className={className} title={action.reason || action.label}>
+        {action.label}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled
+      title={`${action.label} will be wired in the next phase.`}
+      className={[
+        compact
+          ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
+          : "inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px]",
+        "cursor-not-allowed bg-slate-100 font-semibold uppercase tracking-wider text-slate-400 ring-1 ring-inset ring-slate-200",
+      ].join(" ")}
+    >
+      {action.label}
+    </button>
+  );
+}
+
+function PaymentActionControl({ paymentAction, compact = false }) {
+  if (!paymentAction?.visible) return null;
+  return (
+    <button
+      type="button"
+      disabled
+      title={paymentAction.reason || "Payment quick action will be wired in the next phase."}
+      className={[
+        compact
+          ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
+          : "inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px]",
+        "cursor-not-allowed bg-white font-semibold uppercase tracking-wider text-slate-400 ring-1 ring-inset ring-slate-200",
+      ].join(" ")}
+    >
+      {paymentAction.label}
+    </button>
   );
 }
 
@@ -413,6 +525,9 @@ export default function AdminOrdersPage() {
     const row = getOrderRowMeta(o);
     const rowCopy = copyId === o._id;
     const rowDelete = deleteId === o._id;
+    const state = row.actionState;
+    const fulfillment = state.fulfillment;
+    const billing = state.billing;
     const canDelete = o.status === "Cancelled" && !row.isFinalized;
     const deleteHint =
       o.status !== "Cancelled"
@@ -439,15 +554,11 @@ export default function AdminOrdersPage() {
             <div className="text-xs text-slate-500">
               {formatDateTime(o.createdAt)}
             </div>
-            <div className="mt-1 flex items-center justify-between text-xs">
-              <span className="text-slate-500">{getInvoiceLabel(o)}</span>
-              <PaymentBadge status={o?.invoice?.paymentStatus} />
-            </div>
           </div>
           <StatusBadge status={o.status} />
         </div>
 
-        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-center">
+        <div className="mt-3 border-y border-slate-100 py-3 text-center">
           <div className="truncate text-sm font-semibold text-slate-900">
             {o.user?.name || "-"}
           </div>
@@ -456,20 +567,47 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+        <div className="mt-3 grid grid-cols-1 gap-3 text-xs">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              Stock
+              Fulfillment
             </div>
-            <StockBadge finalized={row.isFinalized} />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <StatusBadge status={fulfillment.status} size="compact" />
+              <AllocationBadge status={fulfillment.allocationStatus} size="compact" />
+              <StockBadge finalized={fulfillment.stockFinalized} size="compact" />
+            </div>
           </div>
 
-          <div className="text-right">
+          <div className="border-t border-slate-100 pt-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Billing
+                </div>
+                <div className="mt-1 truncate text-xs font-semibold text-slate-900">
+                  {billing.invoiceLabel}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {formatBillingBalance(billing)}
+                </div>
+              </div>
+              <PaymentBadge
+                status={billing.paymentStatus}
+                hasInvoice={billing.hasInvoice}
+                size="compact"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-end justify-between gap-3 text-xs">
+          <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Total
             </div>
             <div className="mt-1 text-sm font-semibold text-slate-900">
-              {formatMoney(getOrderTotal(o))}
+              {formatMoney(row.total)}
             </div>
             <div className="text-xs text-slate-600">
               {row.itemCountLabel}
@@ -478,6 +616,12 @@ export default function AdminOrdersPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <PrimaryActionControl
+            action={state.primaryAction}
+            orderId={o._id}
+            listQueryString={listQueryString}
+          />
+          <PaymentActionControl paymentAction={state.paymentAction} />
           <button
             type="button"
             className={[
@@ -494,12 +638,8 @@ export default function AdminOrdersPage() {
             Copy
           </button>
           <Link
-            to={
-              listQueryString
-                ? `/admin/orders/${o._id}?${listQueryString}`
-                : `/admin/orders/${o._id}`
-            }
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+            to={buildOrderDetailsHref(o._id, listQueryString)}
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
             aria-label="Open order"
             title="Open order"
           >
@@ -534,12 +674,11 @@ export default function AdminOrdersPage() {
                 <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Order</th>
-                    <th className="px-4 py-3">User</th>
-                    <th className="px-4 py-3">Invoice</th>
-                    <th className="px-4 py-3 text-center">Status</th>
-                    <th className="px-4 py-3 text-center">Stock</th>
+                    <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Fulfillment</th>
+                    <th className="px-4 py-3">Billing</th>
                     <th className="px-4 py-3">Total</th>
-                    <th className="px-4 py-3 text-center">Open</th>
+                    <th className="px-4 py-3 text-center">Actions</th>
                   </tr>
                 </thead>
 
@@ -548,6 +687,9 @@ export default function AdminOrdersPage() {
                     const row = getOrderRowMeta(o);
                     const rowCopy = copyId === o._id;
                     const rowDelete = deleteId === o._id;
+                    const state = row.actionState;
+                    const fulfillment = state.fulfillment;
+                    const billing = state.billing;
                     const canDelete =
                       o.status === "Cancelled" && !row.isFinalized;
                     const deleteHint =
@@ -577,35 +719,57 @@ export default function AdminOrdersPage() {
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="text-xs text-slate-500">
-                            {getInvoiceLabel(o)}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <StatusBadge status={fulfillment.status} size="compact" />
+                            <AllocationBadge
+                              status={fulfillment.allocationStatus}
+                              size="compact"
+                            />
+                            <StockBadge
+                              finalized={fulfillment.stockFinalized}
+                              size="compact"
+                            />
                           </div>
-                          <div className="mt-1">
-                            <PaymentBadge status={o?.invoice?.paymentStatus} />
+                          <div className="mt-1 text-xs text-slate-500">
+                            {fulfillment.stockLabel}
                           </div>
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <StatusBadge status={o.status} size="compact" />
+                          <div className="text-xs font-semibold text-slate-900">
+                            {billing.invoiceLabel}
                           </div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <StockBadge finalized={row.isFinalized} size="compact" />
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <PaymentBadge
+                              status={billing.paymentStatus}
+                              hasInvoice={billing.hasInvoice}
+                              size="compact"
+                            />
+                            <span className="text-xs text-slate-500">
+                              {formatBillingBalance(billing)}
+                            </span>
                           </div>
                         </td>
 
                         <td className="px-4 py-3 font-semibold text-slate-900">
-                          {formatMoney(getOrderTotal(o))}
+                          {formatMoney(row.total)}
                           <div className="mt-0.5 text-xs font-normal text-slate-500">
                             {row.itemCountLabel}
                           </div>
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            <PrimaryActionControl
+                              action={state.primaryAction}
+                              orderId={o._id}
+                              listQueryString={listQueryString}
+                              compact
+                            />
+                            <PaymentActionControl
+                              paymentAction={state.paymentAction}
+                              compact
+                            />
                             <button
                               type="button"
                               className={[
@@ -620,11 +784,7 @@ export default function AdminOrdersPage() {
                               <FiSend className="h-4 w-4" />
                             </button>
                             <Link
-                              to={
-                                listQueryString
-                                  ? `/admin/orders/${o._id}?${listQueryString}`
-                                  : `/admin/orders/${o._id}`
-                              }
+                              to={buildOrderDetailsHref(o._id, listQueryString)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                               aria-label="Open order"
                               title="Open order"
