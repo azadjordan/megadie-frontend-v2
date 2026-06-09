@@ -29,16 +29,29 @@ export const paymentsApiSlice = apiSlice.injectEndpoints({
     }),
 
     addPaymentToInvoice: builder.mutation({
-      query: ({ invoiceId, ...body }) => ({
-        url: `/payments/from-invoice/${invoiceId}`,
-        method: "POST",
-        body,
-      }),
-      invalidatesTags: (_result, _error, arg) => [
-        { type: "Invoice", id: arg?.invoiceId },
-        { type: "Invoice", id: "LIST" },
-        { type: "Payment", id: "LIST" },
-      ],
+      query: (arg) => {
+        const body = { ...(arg || {}) };
+        delete body.invoiceId;
+        delete body.orderId;
+        return {
+          url: `/payments/from-invoice/${arg?.invoiceId}`,
+          method: "POST",
+          body,
+        };
+      },
+      invalidatesTags: (_result, _error, arg) => {
+        const tags = [
+          { type: "Invoice", id: arg?.invoiceId },
+          { type: "Invoice", id: "LIST" },
+          { type: "Invoice", id: "SUMMARY" },
+          { type: "Payment", id: "LIST" },
+        ];
+        if (arg?.orderId) {
+          tags.push({ type: "Order", id: arg.orderId });
+          tags.push({ type: "Order", id: "LIST" });
+        }
+        return tags;
+      },
     }),
 
     deletePaymentByAdmin: builder.mutation({

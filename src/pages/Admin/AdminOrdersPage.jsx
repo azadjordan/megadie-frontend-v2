@@ -14,13 +14,30 @@ import { toast } from "react-toastify";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
+import AddPaymentModal from "../../components/admin/AddPaymentModal";
+import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
+import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
 import { copyTextToClipboard } from "../../utils/clipboard";
 import { buildAdminOrderShareText } from "../../utils/orderShare";
 import { getOrderTotals } from "../../utils/orderTotals";
 import {
+  ADMIN_ORDER_ACTION_IDS,
+  getAdminOrderActionState,
+} from "../../utils/adminOrderActions";
+import {
+  formatInvoiceMoneyMinor,
+  getInvoicePaymentStatusLabel,
+} from "../../utils/invoiceMoney";
+import { buildPaymentDefaults } from "../../utils/paymentFormDefaults";
+import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
+  useMarkOrderDeliveredMutation,
+  useUpdateOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
+import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
+import { useFinalizeOrderAllocationsMutation } from "../../features/orderAllocations/orderAllocationsApiSlice";
+import { useAddPaymentToInvoiceMutation } from "../../features/payments/paymentsApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 function formatDateTime(iso) {
@@ -39,6 +56,19 @@ function formatDateTime(iso) {
   }
 }
 
+function getDefaultDueDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 35);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function friendlyApiError(err, fallback = "Something went wrong.") {
+  return String(err?.data?.message || err?.error || err?.message || fallback);
+}
+
 function formatMoney(amount) {
   const n = Number(amount || 0);
   try {
@@ -52,10 +82,17 @@ function formatMoney(amount) {
   }
 }
 
-function formatItemCount(items) {
-  const count = Array.isArray(items) ? items.length : null;
-  if (count == null) return "-";
-  return `${count} item${count === 1 ? "" : "s"}`;
+function formatOrderItemSummary(items) {
+  if (!Array.isArray(items)) return "-";
+  const lineCount = items.length;
+  const unitCount = items.reduce((sum, item) => {
+    const qty = Number(item?.qty);
+    return sum + (Number.isFinite(qty) ? Math.max(0, qty) : 0);
+  }, 0);
+
+  return `${lineCount} line${lineCount === 1 ? "" : "s"}, ${unitCount} unit${
+    unitCount === 1 ? "" : "s"
+  }`;
 }
 
 function getOrderTotal(order) {
@@ -63,10 +100,12 @@ function getOrderTotal(order) {
 }
 
 function getOrderRowMeta(order) {
+  const actionState = getAdminOrderActionState(order);
   const isFinalized = Boolean(order?.stockFinalizedAt);
   const orderNumber = order?.orderNumber || order?._id || "-";
-  const itemCountLabel = formatItemCount(order?.orderItems);
-  return { isFinalized, orderNumber, itemCountLabel };
+  const itemCountLabel = formatOrderItemSummary(order?.orderItems);
+  const total = getOrderTotal(order);
+  return { actionState, isFinalized, orderNumber, itemCountLabel, total };
 }
 
 function getStatusAccentClass(status) {
@@ -79,28 +118,26 @@ function getStatusAccentClass(status) {
   return map[status] || map.Processing;
 }
 
-function getInvoiceLabel(order) {
-  const number = order?.invoice?.invoiceNumber;
-  return number ? String(number) : "No invoice";
-}
-
-function formatPaymentStatus(status) {
-  if (!status) return "—";
-  if (status === "PartiallyPaid") return "Partially paid";
-  return status;
-}
-
-function PaymentBadge({ status }) {
+function PaymentBadge({ status, hasInvoice = true, size = "default" }) {
   const base =
-    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset";
+    "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
   const map = {
     Paid: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     PartiallyPaid: "bg-amber-50 text-amber-700 ring-amber-200",
-    Unpaid: "bg-slate-100 text-slate-700 ring-slate-200",
+    Unpaid: "bg-rose-50 text-rose-700 ring-rose-200",
     empty: "bg-slate-50 text-slate-500 ring-slate-200",
   };
-  const key = status || "empty";
-  return <span className={`${base} ${map[key]}`}>{formatPaymentStatus(status)}</span>;
+  const key = hasInvoice && status ? status : "empty";
+  const label = hasInvoice ? getInvoicePaymentStatusLabel(status) : "No invoice";
+  return (
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[key] || map.empty}`}>
+      {label}
+    </span>
+  );
 }
 
 function StatusBadge({ status, size = "default" }) {
@@ -144,7 +181,7 @@ function StockBadge({ finalized, size = "default" }) {
           sizes[size] || sizes.default
         } bg-amber-50 text-amber-700 ring-amber-200`}
       >
-        Not Finalized
+        Not deducted
       </span>
     );
   }
@@ -152,8 +189,160 @@ function StockBadge({ finalized, size = "default" }) {
     <span
       className={`${base} ${sizes[size] || sizes.default} bg-emerald-50 text-emerald-700 ring-emerald-200`}
     >
-      Finalized
+      Deducted
     </span>
+  );
+}
+
+function AllocationBadge({ status, size = "default" }) {
+  const base =
+    "inline-flex items-center rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
+  const map = {
+    Allocated: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    PartiallyAllocated: "bg-amber-50 text-amber-700 ring-amber-200",
+    Unallocated: "bg-slate-50 text-slate-600 ring-slate-200",
+  };
+  const labels = {
+    Allocated: "Reserved",
+    PartiallyAllocated: "Partially reserved",
+    Unallocated: "Not reserved",
+  };
+
+  return (
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[status] || map.Unallocated}`}>
+      {labels[status] || status || "Not reserved"}
+    </span>
+  );
+}
+
+function buildOrderDetailsHref(orderId, listQueryString = "", tab = "") {
+  const params = new URLSearchParams(listQueryString);
+  if (tab) params.set("tab", tab);
+  const qs = params.toString();
+  return qs ? `/admin/orders/${orderId}?${qs}` : `/admin/orders/${orderId}`;
+}
+
+function formatBillingBalance(billing) {
+  if (!billing?.hasInvoice) return "No invoice yet";
+  if (!billing.hasBalanceData) return "Balance unavailable";
+  if (billing.balanceDueMinor <= 0) return "Paid in full";
+
+  const invoice = billing.invoice || {};
+  return `Bal: ${formatInvoiceMoneyMinor(
+    billing.balanceDueMinor,
+    invoice.currency || "AED",
+    invoice.minorUnitFactor || 100
+  )}`;
+}
+
+function PrimaryActionControl({
+  action,
+  order,
+  orderId,
+  listQueryString,
+  compact = false,
+  isBusy = false,
+  onAction,
+}) {
+  if (!action) return null;
+
+  const isLinkAction =
+    action.id === ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK ||
+    action.id === ADMIN_ORDER_ACTION_IDS.OPEN_ORDER;
+  const href = buildOrderDetailsHref(
+    orderId,
+    listQueryString,
+    action.tab || (action.id === ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK ? "stock" : "")
+  );
+  const className = compact
+    ? "inline-flex h-8 items-center justify-center rounded-lg bg-slate-900 px-3 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+    : "inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800";
+
+  if (isLinkAction) {
+    return (
+      <Link to={href} className={className} title={action.reason || action.label}>
+        {action.label}
+      </Link>
+    );
+  }
+
+  const enabled = action.enabled !== false && !isBusy;
+  if (enabled) {
+    return (
+      <button
+        type="button"
+        onClick={() => onAction?.(order, action)}
+        title={action.reason || action.label}
+        className={className}
+      >
+        {isBusy ? "Working..." : action.label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled
+      title={action.reason || action.label}
+      className={[
+        compact
+          ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
+          : "inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px]",
+        "cursor-not-allowed bg-slate-100 font-semibold uppercase tracking-wider text-slate-400 ring-1 ring-inset ring-slate-200",
+      ].join(" ")}
+    >
+      {action.label}
+    </button>
+  );
+}
+
+function PaymentActionControl({
+  paymentAction,
+  order,
+  compact = false,
+  isBusy = false,
+  onAction,
+}) {
+  if (!paymentAction?.visible) return null;
+  const enabled = paymentAction.enabled !== false && !isBusy;
+
+  if (enabled) {
+    return (
+      <button
+        type="button"
+        onClick={() => onAction?.(order)}
+        title={paymentAction.reason || paymentAction.label}
+        className={[
+          compact
+            ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
+            : "inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px]",
+          "bg-white font-semibold uppercase tracking-wider text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50",
+        ].join(" ")}
+      >
+        {isBusy ? "Saving..." : paymentAction.label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled
+      title={paymentAction.reason || paymentAction.label}
+      className={[
+        compact
+          ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
+          : "inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px]",
+        "cursor-not-allowed bg-white font-semibold uppercase tracking-wider text-slate-400 ring-1 ring-inset ring-slate-200",
+      ].join(" ")}
+    >
+      {paymentAction.label}
+    </button>
   );
 }
 
@@ -198,6 +387,21 @@ export default function AdminOrdersPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copyId, setCopyId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [busyOrderId, setBusyOrderId] = useState("");
+  const [deliverTarget, setDeliverTarget] = useState(null);
+  const [deliveredBy, setDeliveredBy] = useState("");
+  const [deliverFormError, setDeliverFormError] = useState("");
+  const [createTarget, setCreateTarget] = useState(null);
+  const [createForm, setCreateForm] = useState({
+    dueDate: getDefaultDueDate(),
+    adminNote: "",
+    currency: "AED",
+    minorUnitFactor: "100",
+  });
+  const [createFormError, setCreateFormError] = useState("");
+  const [paymentTarget, setPaymentTarget] = useState(null);
+  const [paymentForm, setPaymentForm] = useState(() => buildPaymentDefaults(null));
+  const [paymentFieldErrors, setPaymentFieldErrors] = useState({});
 
   const listState = readOrderListState(searchParams);
   const { page, search, status } = listState;
@@ -213,6 +417,18 @@ export default function AdminOrdersPage() {
 
   const [deleteOrderByAdmin, { isLoading: isDeleting }] =
     useDeleteOrderByAdminMutation();
+  const [updateOrderStatus, { isLoading: isUpdatingStatus }] =
+    useUpdateOrderByAdminMutation();
+  const [
+    markOrderDelivered,
+    { isLoading: isDelivering, error: deliverError },
+  ] = useMarkOrderDeliveredMutation();
+  const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
+    useCreateInvoiceFromOrderMutation();
+  const [finalizeAllocations, { isLoading: isFinalizing }] =
+    useFinalizeOrderAllocationsMutation();
+  const [addPaymentToInvoice, { isLoading: isAddingPayment, error: addPaymentError }] =
+    useAddPaymentToInvoiceMutation();
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -268,6 +484,248 @@ export default function AdminOrdersPage() {
       toast.error(friendly);
     } finally {
       setDeleteId(null);
+    }
+  }
+
+  async function onMarkShipping(order) {
+    if (!order?._id || busyOrderId || isUpdatingStatus) return;
+    setBusyOrderId(order._id);
+    try {
+      await updateOrderStatus({
+        id: order._id,
+        status: "Shipping",
+      }).unwrap();
+      toast.success("Order moved to Shipping.");
+    } catch (err) {
+      toast.error(friendlyApiError(err, "Failed to update shipping status."));
+    } finally {
+      setBusyOrderId("");
+    }
+  }
+
+  function openDeliverModal(order) {
+    if (!order?._id || isDelivering) return;
+    setDeliverTarget(order);
+    setDeliveredBy(order.deliveredBy || "");
+    setDeliverFormError("");
+  }
+
+  function closeDeliverModal() {
+    if (isDelivering) return;
+    setDeliverTarget(null);
+    setDeliveredBy("");
+    setDeliverFormError("");
+  }
+
+  async function submitDeliver() {
+    if (!deliverTarget?._id || isDelivering) return;
+    const name = deliveredBy.trim();
+    if (!name) {
+      setDeliverFormError("Delivered by is required.");
+      return;
+    }
+
+    setDeliverFormError("");
+    try {
+      await markOrderDelivered({
+        id: deliverTarget._id,
+        deliveredBy: name,
+      }).unwrap();
+      toast.success("Order marked delivered.");
+      closeDeliverModal();
+    } catch {
+      // ErrorMessage in the modal displays the API error.
+    }
+  }
+
+  function openCreateModal(order) {
+    if (!order?._id || isCreating) return;
+    setCreateTarget(order);
+    setCreateForm({
+      dueDate: getDefaultDueDate(),
+      adminNote: "",
+      currency: "AED",
+      minorUnitFactor: "100",
+    });
+    setCreateFormError("");
+  }
+
+  function closeCreateModal() {
+    if (isCreating) return;
+    setCreateTarget(null);
+    setCreateFormError("");
+  }
+
+  function handleCreateField(key, value) {
+    setCreateForm((prev) => ({ ...prev, [key]: value }));
+    if (createFormError) setCreateFormError("");
+  }
+
+  async function submitCreateInvoice() {
+    if (!createTarget?._id || isCreating) return;
+
+    const dueDate = String(createForm.dueDate || "").trim();
+    if (!dueDate) {
+      setCreateFormError("Due date is required.");
+      return;
+    }
+
+    const minorRaw = String(createForm.minorUnitFactor || "").trim();
+    if (minorRaw) {
+      const minorValue = Number(minorRaw);
+      if (!Number.isInteger(minorValue) || minorValue <= 0) {
+        setCreateFormError("Minor unit factor must be a positive integer.");
+        return;
+      }
+    }
+
+    const payload = {
+      orderId: createTarget._id,
+      dueDate,
+    };
+
+    const adminNote = String(createForm.adminNote || "").trim();
+    if (adminNote) payload.adminNote = adminNote;
+
+    const currency = String(createForm.currency || "").trim();
+    if (currency) payload.currency = currency;
+
+    if (minorRaw) payload.minorUnitFactor = Number(minorRaw);
+
+    try {
+      await createInvoiceFromOrder(payload).unwrap();
+      toast.success("Invoice created.");
+      closeCreateModal();
+    } catch {
+      // ErrorMessage in the modal displays the API error.
+    }
+  }
+
+  async function onFinalizeStock(order) {
+    if (!order?._id || busyOrderId || isFinalizing) return;
+    const confirmed = window.confirm(
+      "Finalize stock for this order? This will deduct reserved qty and lock allocations."
+    );
+    if (!confirmed) return;
+
+    setBusyOrderId(order._id);
+    try {
+      const res = await finalizeAllocations(order._id).unwrap();
+      toast.success(res?.message || "Stock finalized.");
+    } catch (err) {
+      toast.error(friendlyApiError(err, "Failed to finalize stock."));
+    } finally {
+      setBusyOrderId("");
+    }
+  }
+
+  function openAddPayment(order) {
+    const invoice =
+      order?.invoice && typeof order.invoice === "object" ? order.invoice : null;
+    if (!order?._id || !invoice?._id) {
+      toast.error("Invoice details are missing for this order.");
+      return;
+    }
+    if (invoice.status === "Cancelled") {
+      toast.error("Cancelled invoices cannot receive payments.");
+      return;
+    }
+    if (invoice.paymentStatus === "Paid") {
+      toast.info("Invoice is already paid.");
+      return;
+    }
+
+    setPaymentTarget({ order, invoice });
+    setPaymentForm(buildPaymentDefaults(invoice));
+    setPaymentFieldErrors({});
+  }
+
+  function closeAddPayment() {
+    if (isAddingPayment) return;
+    setPaymentTarget(null);
+    setPaymentFieldErrors({});
+  }
+
+  function updatePaymentForm(field, value) {
+    setPaymentForm((prev) => ({ ...prev, [field]: value }));
+    setPaymentFieldErrors((prev) => {
+      if (!prev?.[field]) return prev;
+      const { [field]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }
+
+  async function submitAddPayment() {
+    const invoiceId = paymentTarget?.invoice?._id;
+    const orderId = paymentTarget?.order?._id;
+    if (!invoiceId || !orderId || isAddingPayment) return;
+
+    const nextErrors = {};
+    const amountValue = Number(paymentForm.amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      nextErrors.amount = "Enter a positive amount.";
+    }
+
+    if (!paymentForm.method) {
+      nextErrors.method = "Required";
+    }
+
+    if (!paymentForm.receivedBy.trim()) {
+      nextErrors.receivedBy = "Required";
+    }
+
+    let paymentDateValue;
+    if (paymentForm.date) {
+      const parsed = new Date(paymentForm.date);
+      if (Number.isNaN(parsed.getTime())) {
+        nextErrors.date = "Invalid date.";
+      } else {
+        paymentDateValue = parsed.toISOString();
+      }
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setPaymentFieldErrors(nextErrors);
+      return;
+    }
+
+    setPaymentFieldErrors({});
+    try {
+      await addPaymentToInvoice({
+        invoiceId,
+        orderId,
+        amount: amountValue,
+        paymentMethod: paymentForm.method,
+        receivedBy: paymentForm.receivedBy.trim(),
+        paymentDate: paymentDateValue,
+        reference: paymentForm.reference.trim() || undefined,
+        note: paymentForm.note.trim() || undefined,
+      }).unwrap();
+
+      toast.success("Payment recorded.");
+      closeAddPayment();
+    } catch {
+      // ErrorMessage in the modal displays the API error.
+    }
+  }
+
+  function onPrimaryAction(order, action) {
+    if (!order?._id || !action?.id) return;
+    switch (action.id) {
+      case ADMIN_ORDER_ACTION_IDS.MARK_SHIPPING:
+        onMarkShipping(order);
+        break;
+      case ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED:
+        openDeliverModal(order);
+        break;
+      case ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE:
+        openCreateModal(order);
+        break;
+      case ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK:
+        onFinalizeStock(order);
+        break;
+      default:
+        break;
     }
   }
 
@@ -413,6 +871,9 @@ export default function AdminOrdersPage() {
     const row = getOrderRowMeta(o);
     const rowCopy = copyId === o._id;
     const rowDelete = deleteId === o._id;
+    const state = row.actionState;
+    const fulfillment = state.fulfillment;
+    const billing = state.billing;
     const canDelete = o.status === "Cancelled" && !row.isFinalized;
     const deleteHint =
       o.status !== "Cancelled"
@@ -439,15 +900,11 @@ export default function AdminOrdersPage() {
             <div className="text-xs text-slate-500">
               {formatDateTime(o.createdAt)}
             </div>
-            <div className="mt-1 flex items-center justify-between text-xs">
-              <span className="text-slate-500">{getInvoiceLabel(o)}</span>
-              <PaymentBadge status={o?.invoice?.paymentStatus} />
-            </div>
           </div>
           <StatusBadge status={o.status} />
         </div>
 
-        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-center">
+        <div className="mt-3 border-y border-slate-100 py-3 text-center">
           <div className="truncate text-sm font-semibold text-slate-900">
             {o.user?.name || "-"}
           </div>
@@ -456,20 +913,47 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+        <div className="mt-3 grid grid-cols-1 gap-3 text-xs">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              Stock
+              Fulfillment
             </div>
-            <StockBadge finalized={row.isFinalized} />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <StatusBadge status={fulfillment.status} size="compact" />
+              <AllocationBadge status={fulfillment.allocationStatus} size="compact" />
+              <StockBadge finalized={fulfillment.stockFinalized} size="compact" />
+            </div>
           </div>
 
-          <div className="text-right">
+          <div className="border-t border-slate-100 pt-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Billing
+                </div>
+                <div className="mt-1 truncate text-xs font-semibold text-slate-900">
+                  {billing.invoiceLabel}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {formatBillingBalance(billing)}
+                </div>
+              </div>
+              <PaymentBadge
+                status={billing.paymentStatus}
+                hasInvoice={billing.hasInvoice}
+                size="compact"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-end justify-between gap-3 text-xs">
+          <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
               Total
             </div>
             <div className="mt-1 text-sm font-semibold text-slate-900">
-              {formatMoney(getOrderTotal(o))}
+              {formatMoney(row.total)}
             </div>
             <div className="text-xs text-slate-600">
               {row.itemCountLabel}
@@ -478,6 +962,20 @@ export default function AdminOrdersPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <PrimaryActionControl
+            action={state.primaryAction}
+            order={o}
+            orderId={o._id}
+            listQueryString={listQueryString}
+            isBusy={busyOrderId === o._id}
+            onAction={onPrimaryAction}
+          />
+          <PaymentActionControl
+            paymentAction={state.paymentAction}
+            order={o}
+            isBusy={isAddingPayment && paymentTarget?.order?._id === o._id}
+            onAction={openAddPayment}
+          />
           <button
             type="button"
             className={[
@@ -494,12 +992,8 @@ export default function AdminOrdersPage() {
             Copy
           </button>
           <Link
-            to={
-              listQueryString
-                ? `/admin/orders/${o._id}?${listQueryString}`
-                : `/admin/orders/${o._id}`
-            }
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800"
+            to={buildOrderDetailsHref(o._id, listQueryString)}
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
             aria-label="Open order"
             title="Open order"
           >
@@ -534,12 +1028,11 @@ export default function AdminOrdersPage() {
                 <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Order</th>
-                    <th className="px-4 py-3">User</th>
-                    <th className="px-4 py-3">Invoice</th>
-                    <th className="px-4 py-3 text-center">Status</th>
-                    <th className="px-4 py-3 text-center">Stock</th>
+                    <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Fulfillment</th>
+                    <th className="px-4 py-3">Billing</th>
                     <th className="px-4 py-3">Total</th>
-                    <th className="px-4 py-3 text-center">Open</th>
+                    <th className="px-4 py-3 text-center">Actions</th>
                   </tr>
                 </thead>
 
@@ -548,6 +1041,9 @@ export default function AdminOrdersPage() {
                     const row = getOrderRowMeta(o);
                     const rowCopy = copyId === o._id;
                     const rowDelete = deleteId === o._id;
+                    const state = row.actionState;
+                    const fulfillment = state.fulfillment;
+                    const billing = state.billing;
                     const canDelete =
                       o.status === "Cancelled" && !row.isFinalized;
                     const deleteHint =
@@ -577,35 +1073,63 @@ export default function AdminOrdersPage() {
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="text-xs text-slate-500">
-                            {getInvoiceLabel(o)}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <StatusBadge status={fulfillment.status} size="compact" />
+                            <AllocationBadge
+                              status={fulfillment.allocationStatus}
+                              size="compact"
+                            />
+                            <StockBadge
+                              finalized={fulfillment.stockFinalized}
+                              size="compact"
+                            />
                           </div>
-                          <div className="mt-1">
-                            <PaymentBadge status={o?.invoice?.paymentStatus} />
+                          <div className="mt-1 text-xs text-slate-500">
+                            {fulfillment.stockLabel}
                           </div>
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <StatusBadge status={o.status} size="compact" />
+                          <div className="text-xs font-semibold text-slate-900">
+                            {billing.invoiceLabel}
                           </div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <StockBadge finalized={row.isFinalized} size="compact" />
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <PaymentBadge
+                              status={billing.paymentStatus}
+                              hasInvoice={billing.hasInvoice}
+                              size="compact"
+                            />
+                            <span className="text-xs text-slate-500">
+                              {formatBillingBalance(billing)}
+                            </span>
                           </div>
                         </td>
 
                         <td className="px-4 py-3 font-semibold text-slate-900">
-                          {formatMoney(getOrderTotal(o))}
+                          {formatMoney(row.total)}
                           <div className="mt-0.5 text-xs font-normal text-slate-500">
                             {row.itemCountLabel}
                           </div>
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            <PrimaryActionControl
+                              action={state.primaryAction}
+                              order={o}
+                              orderId={o._id}
+                              listQueryString={listQueryString}
+                              isBusy={busyOrderId === o._id}
+                              onAction={onPrimaryAction}
+                              compact
+                            />
+                            <PaymentActionControl
+                              paymentAction={state.paymentAction}
+                              order={o}
+                              isBusy={isAddingPayment && paymentTarget?.order?._id === o._id}
+                              onAction={openAddPayment}
+                              compact
+                            />
                             <button
                               type="button"
                               className={[
@@ -620,11 +1144,7 @@ export default function AdminOrdersPage() {
                               <FiSend className="h-4 w-4" />
                             </button>
                             <Link
-                              to={
-                                listQueryString
-                                  ? `/admin/orders/${o._id}?${listQueryString}`
-                                  : `/admin/orders/${o._id}`
-                              }
+                              to={buildOrderDetailsHref(o._id, listQueryString)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                               aria-label="Open order"
                               title="Open order"
@@ -657,6 +1177,41 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       )}
+
+      <CreateInvoiceModal
+        open={Boolean(createTarget)}
+        order={createTarget}
+        form={createForm}
+        onFieldChange={handleCreateField}
+        onClose={closeCreateModal}
+        onSubmit={submitCreateInvoice}
+        isSaving={isCreating}
+        error={createError}
+        formError={createFormError}
+      />
+
+      <MarkDeliveredModal
+        open={Boolean(deliverTarget)}
+        order={deliverTarget}
+        deliveredBy={deliveredBy}
+        onDeliveredByChange={setDeliveredBy}
+        onClose={closeDeliverModal}
+        onSubmit={submitDeliver}
+        isSaving={isDelivering}
+        error={deliverError}
+        formError={deliverFormError}
+      />
+
+      <AddPaymentModal
+        open={Boolean(paymentTarget)}
+        onClose={closeAddPayment}
+        onSubmit={submitAddPayment}
+        isSaving={isAddingPayment}
+        error={addPaymentError}
+        form={paymentForm}
+        onFieldChange={updatePaymentForm}
+        fieldErrors={paymentFieldErrors}
+      />
     </div>
   );
 }

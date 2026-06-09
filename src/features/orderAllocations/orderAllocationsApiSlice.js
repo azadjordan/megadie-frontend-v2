@@ -50,6 +50,7 @@ export const orderAllocationsApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: (_result, _error, orderId) => [
         { type: "OrderAllocation", id: "LIST" },
         { type: "OrderAllocation", id: `ORDER-${orderId}` },
+        { type: "Order", id: "LIST" },
         { type: "Order", id: orderId },
         { type: "SlotItem", id: "LIST" },
       ],

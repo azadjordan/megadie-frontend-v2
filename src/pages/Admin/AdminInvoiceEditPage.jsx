@@ -13,6 +13,12 @@ import {
 } from "../../features/invoices/invoicesApiSlice";
 import { useAddPaymentToInvoiceMutation } from "../../features/payments/paymentsApiSlice";
 import AddPaymentModal from "../../components/admin/AddPaymentModal";
+import {
+  formatInvoiceMoneyMinor as moneyMinor,
+  getInvoiceBalanceDueMinor as balanceDueMinor,
+  isInvoiceOverdue as isOverdue,
+} from "../../utils/invoiceMoney";
+import { buildPaymentDefaults } from "../../utils/paymentFormDefaults";
 
 function formatDateTime(iso) {
   if (!iso) return "";
@@ -30,24 +36,6 @@ function formatDateTime(iso) {
   }
 }
 
-function moneyMinor(amountMinor, currency = "AED", factor = 100) {
-  if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
-    return "";
-
-  const f = typeof factor === "number" && factor > 0 ? factor : 100;
-  const major = amountMinor / f;
-
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(major);
-  } catch {
-    return String(major);
-  }
-}
-
 function toDateInputValue(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -56,56 +44,6 @@ function toDateInputValue(iso) {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function toDateTimeLocalValue(input) {
-  if (!input) return "";
-  const d = input instanceof Date ? input : new Date(input);
-  if (Number.isNaN(d.getTime())) return "";
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const hours = String(d.getHours()).padStart(2, "0");
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function formatAmountInput(minor, factor = 100) {
-  const f = typeof factor === "number" && factor > 0 ? factor : 100;
-  const major = Number(minor) / f;
-  if (!Number.isFinite(major)) return "";
-  return major.toFixed(2);
-}
-
-function buildPaymentDefaults(inv) {
-  const factor = inv?.minorUnitFactor || 100;
-  const balanceMinor = inv ? balanceDueMinor(inv) : 0;
-  const amount = balanceMinor > 0 ? formatAmountInput(balanceMinor, factor) : "";
-
-  return {
-    amount,
-    method: "",
-    receivedBy: "",
-    date: toDateTimeLocalValue(new Date()),
-    reference: "",
-    note: "",
-  };
-}
-
-function balanceDueMinor(inv) {
-  if (!inv) return 0;
-  if (typeof inv.balanceDueMinor === "number") return inv.balanceDueMinor;
-  const amount = typeof inv.amountMinor === "number" ? inv.amountMinor : 0;
-  const paid = typeof inv.paidTotalMinor === "number" ? inv.paidTotalMinor : 0;
-  return Math.max(amount - paid, 0);
-}
-
-function isOverdue(inv) {
-  if (!inv || inv.status === "Cancelled") return false;
-  const due = inv.dueDate ? Date.parse(inv.dueDate) : NaN;
-  if (!Number.isFinite(due)) return false;
-  if (inv.paymentStatus === "Paid") return false;
-  return balanceDueMinor(inv) > 0 && due < Date.now();
 }
 
 function PaymentStatusBadge({ status }) {
