@@ -82,10 +82,17 @@ function formatMoney(amount) {
   }
 }
 
-function formatItemCount(items) {
-  const count = Array.isArray(items) ? items.length : null;
-  if (count == null) return "-";
-  return `${count} item${count === 1 ? "" : "s"}`;
+function formatOrderItemSummary(items) {
+  if (!Array.isArray(items)) return "-";
+  const lineCount = items.length;
+  const unitCount = items.reduce((sum, item) => {
+    const qty = Number(item?.qty);
+    return sum + (Number.isFinite(qty) ? Math.max(0, qty) : 0);
+  }, 0);
+
+  return `${lineCount} line${lineCount === 1 ? "" : "s"}, ${unitCount} unit${
+    unitCount === 1 ? "" : "s"
+  }`;
 }
 
 function getOrderTotal(order) {
@@ -96,7 +103,7 @@ function getOrderRowMeta(order) {
   const actionState = getAdminOrderActionState(order);
   const isFinalized = Boolean(order?.stockFinalizedAt);
   const orderNumber = order?.orderNumber || order?._id || "-";
-  const itemCountLabel = formatItemCount(order?.orderItems);
+  const itemCountLabel = formatOrderItemSummary(order?.orderItems);
   const total = getOrderTotal(order);
   return { actionState, isFinalized, orderNumber, itemCountLabel, total };
 }
@@ -174,7 +181,7 @@ function StockBadge({ finalized, size = "default" }) {
           sizes[size] || sizes.default
         } bg-amber-50 text-amber-700 ring-amber-200`}
       >
-        Not Finalized
+        Not deducted
       </span>
     );
   }
@@ -182,7 +189,7 @@ function StockBadge({ finalized, size = "default" }) {
     <span
       className={`${base} ${sizes[size] || sizes.default} bg-emerald-50 text-emerald-700 ring-emerald-200`}
     >
-      Finalized
+      Deducted
     </span>
   );
 }
@@ -200,14 +207,14 @@ function AllocationBadge({ status, size = "default" }) {
     Unallocated: "bg-slate-50 text-slate-600 ring-slate-200",
   };
   const labels = {
-    Allocated: "Allocated",
-    PartiallyAllocated: "Partially allocated",
-    Unallocated: "Unallocated",
+    Allocated: "Reserved",
+    PartiallyAllocated: "Partially reserved",
+    Unallocated: "Not reserved",
   };
 
   return (
     <span className={`${base} ${sizes[size] || sizes.default} ${map[status] || map.Unallocated}`}>
-      {labels[status] || status || "Unallocated"}
+      {labels[status] || status || "Not reserved"}
     </span>
   );
 }

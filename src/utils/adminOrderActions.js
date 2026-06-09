@@ -23,9 +23,9 @@ export const ADMIN_ORDER_ACTION_LABELS = Object.freeze({
 });
 
 const ALLOCATION_LABELS = {
-  Unallocated: "Unallocated",
-  PartiallyAllocated: "Partially allocated",
-  Allocated: "Allocated",
+  Unallocated: "Not reserved",
+  PartiallyAllocated: "Partially reserved",
+  Allocated: "Reserved",
 };
 
 function resolveEntityId(value) {
@@ -70,7 +70,7 @@ export function getAdminOrderFulfillmentState(order) {
     allocationStatus,
     allocationLabel: ALLOCATION_LABELS[allocationStatus] || allocationStatus,
     stockFinalized,
-    stockLabel: stockFinalized ? "Stock finalized" : "Stock not finalized",
+    stockLabel: stockFinalized ? "Stock deducted" : "Stock not deducted",
     isProcessing: status === "Processing",
     isShipping: status === "Shipping",
     isDelivered: status === "Delivered",
