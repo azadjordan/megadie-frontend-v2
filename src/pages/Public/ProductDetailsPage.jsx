@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaArrowLeft, FaCheck, FaShoppingCart } from "react-icons/fa";
@@ -8,6 +8,12 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import QuantityControl from "../../components/common/QuantityControl";
 import { addToCart } from "../../features/cart/cartSlice";
 import { useGetProductByIdQuery } from "../../features/products/productsApiSlice";
+import {
+  PRODUCT_AVAILABILITY_STATUS,
+  formatUnitCount,
+  formatSourcingCount,
+  resolveProductAvailability,
+} from "../../utils/productAvailability";
 
 const placeholder = `data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="600" height="400" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-family="Arial, sans-serif" font-size="20" font-weight="600" text-anchor="middle" dominant-baseline="middle">No image</text></svg>'
@@ -62,6 +68,7 @@ export default function ProductDetailsPage() {
   const [quantity, setQuantity] = useState(1);
   const [isAdded, setIsAdded] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [resetKey, setResetKey] = useState("");
 
   const name = product?.name || "Untitled product";
   const images = useMemo(() => {
@@ -89,6 +96,13 @@ export default function ProductDetailsPage() {
 
   const minQty = Math.max(moq || 1, 1);
   const description = product?.description?.trim();
+  const productResetKey = `${product?._id || product?.id || id || ""}:${minQty}`;
+
+  if (productResetKey && productResetKey !== resetKey) {
+    setResetKey(productResetKey);
+    setActiveImageIndex(0);
+    setQuantity(minQty);
+  }
 
   const specs = useMemo(() => {
     if (!product) return [];
@@ -108,19 +122,35 @@ export default function ProductDetailsPage() {
 
   const breadcrumbLabel = categoryLabel || product?.productType || "Product";
 
-  useEffect(() => {
-    setActiveImageIndex(0);
-    setQuantity(minQty);
-  }, [product?.id, minQty]);
-
   const qtyNum =
     typeof quantity === "number" ? quantity : parseInt(quantity, 10) || 1;
+  const safeSelectedQty = Math.max(qtyNum, minQty);
+  const availability = resolveProductAvailability(product, safeSelectedQty);
+  const availabilityClass = {
+    [PRODUCT_AVAILABILITY_STATUS.AVAILABLE]:
+      "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    [PRODUCT_AVAILABILITY_STATUS.PARTIAL]:
+      "bg-amber-50 text-amber-700 ring-amber-200",
+    [PRODUCT_AVAILABILITY_STATUS.MAYBE]:
+      "bg-slate-50 text-slate-700 ring-slate-200",
+    [PRODUCT_AVAILABILITY_STATUS.UNAVAILABLE]:
+      "bg-rose-50 text-rose-700 ring-rose-200",
+  }[availability.status];
+  const availabilityDetail =
+    availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL
+      ? `${formatUnitCount(
+          availability.availableNow
+        )} available now. We'll try to find ${formatSourcingCount(
+          availability.shortageQty
+        )}.`
+    : availability.status === PRODUCT_AVAILABILITY_STATUS.MAYBE
+      ? "Maybe available on request"
+      : availability.summary;
 
   const handleAddToCart = () => {
     if (!product || isAdded || !isAvailable) return;
 
-    const safeQty = Math.max(qtyNum, minQty);
-    dispatch(addToCart({ ...product, quantity: safeQty }));
+    dispatch(addToCart({ ...product, quantity: safeSelectedQty }));
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 900);
     setQuantity(minQty);
@@ -267,6 +297,15 @@ export default function ProductDetailsPage() {
               {product?.packingUnit ? ` ${product.packingUnit}` : ""}
             </div>
 
+            <div
+              className={[
+                "mt-3 rounded-xl px-3 py-2 text-sm ring-1",
+                availabilityClass,
+              ].join(" ")}
+            >
+              <div className="text-sm font-semibold">{availabilityDetail}</div>
+            </div>
+
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <QuantityControl
                 quantity={quantity}
@@ -305,12 +344,6 @@ export default function ProductDetailsPage() {
                 )}
               </button>
             </div>
-
-            {!isAvailable ? (
-              <div className="mt-2 text-xs text-rose-600">
-                This product is currently unavailable.
-              </div>
-            ) : null}
           </div>
         </div>
       </div>

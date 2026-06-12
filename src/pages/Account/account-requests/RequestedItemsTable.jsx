@@ -1,6 +1,4 @@
-import { FiAlertTriangle, FiClock, FiTrash2 } from "react-icons/fi";
-
-import QuantityControlRequests from "../../../components/common/QantityControlRequests";
+import { FiClock } from "react-icons/fi";
 
 function formatNumber(amount) {
   if (amount === null || amount === undefined) return "-";
@@ -24,13 +22,15 @@ export function AvailabilityBadge({ status, size = "sm", label, className = "" }
     AVAILABLE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     PARTIAL: "bg-amber-50 text-amber-700 ring-amber-200",
     SHORTAGE: "bg-amber-50 text-amber-700 ring-amber-200",
-    NOT_AVAILABLE: "bg-rose-50 text-rose-700 ring-rose-200",
+    SOURCING: "bg-amber-50 text-amber-800 ring-amber-200",
+    NOT_AVAILABLE: "bg-amber-50 text-amber-800 ring-amber-200",
   };
   const labelMap = {
     AVAILABLE: "Available",
-    PARTIAL: "Shortage",
-    SHORTAGE: "Shortage",
-    NOT_AVAILABLE: "Not Available",
+    PARTIAL: "Sourcing",
+    SHORTAGE: "Sourcing",
+    SOURCING: "Sourcing",
+    NOT_AVAILABLE: "Sourcing",
   };
   const resolvedLabel =
     label !== undefined && label !== null && label !== ""
@@ -39,10 +39,8 @@ export function AvailabilityBadge({ status, size = "sm", label, className = "" }
 
   return (
     <span className={`${base} ${map[status] || map.NOT_AVAILABLE} ${className}`}>
-      {status === "SHORTAGE" ? (
-        <FiAlertTriangle
-          className={size === "md" ? "h-3.5 w-3.5" : "h-2.5 w-2.5"}
-        />
+      {status === "SOURCING" || status === "SHORTAGE" || status === "PARTIAL" ? (
+        <FiClock className={size === "md" ? "h-3.5 w-3.5" : "h-2.5 w-2.5"} />
       ) : null}
       {resolvedLabel}
     </span>
@@ -52,17 +50,12 @@ export function AvailabilityBadge({ status, size = "sm", label, className = "" }
 export default function RequestedItemsTable({
   quoteId,
   requestedItems,
-  isEditing,
   isCancelled,
   showFullPricing,
   showPricingColumn,
-  editDraft,
-  editMaxHit,
-  onAdjustDraftQty,
 }) {
   const items = Array.isArray(requestedItems) ? requestedItems : [];
   const shouldScrollItems = items.length > 5;
-  const draftByProduct = editDraft || {};
 
   return (
     <div
@@ -143,66 +136,30 @@ export default function RequestedItemsTable({
         const availableQty = Number.isFinite(Number(availableNow))
           ? Number(availableNow)
           : null;
-        const draftQty = Number(draftByProduct?.[productKey]);
-        const fallbackQty =
-          hasItemShortage && Number.isFinite(availableQty)
-            ? availableQty
-            : requestedQty;
-        const editingQty = Number.isFinite(draftQty) ? draftQty : fallbackQty;
-        const showShortageVisuals = hasItemShortage && isEditing;
-        const canEditRow =
-          isEditing &&
-          Number.isFinite(availableQty) &&
-          Number(availableQty) > 0;
-        const displayQty = canEditRow ? editingQty : requestedQty;
-        const isShortageStatus =
-          availabilityStatus === "SHORTAGE" || availabilityStatus === "PARTIAL";
-        const availabilityLabel = isShortageStatus
-          ? `Only ${
-              Number.isFinite(availableQty) ? formatNumber(availableQty) : "0"
-            } available`
-          : null;
         const lineTotal =
-          showFullPricing && unitPrice != null ? unitPrice * displayQty : null;
+          showFullPricing && unitPrice != null ? unitPrice * requestedQty : null;
         const showWaitingIndicator =
           !showFullPricing && !(hasItemShortage && Number(availableQty) === 0);
-        const maxHitKey = `${quoteId}:${productKey}`;
-        const isUnavailable =
-          showAvailabilityBadge &&
-          Number.isFinite(Number(availableQty)) &&
-          Number(availableQty) === 0;
-
-        const showQtyControl = canEditRow;
-        const controlValue = editingQty;
-        const shouldShowZeroQtyNotice =
-          canEditRow && Number(controlValue) === 0;
-        const shouldStrikeName = isUnavailable || shouldShowZeroQtyNotice;
-        const showRemoveAction = canEditRow;
-        const fadedClass = shouldStrikeName ? "opacity-50" : "";
-        const isOverAvailable =
-          canEditRow &&
-          Number.isFinite(availableQty) &&
-          Number(controlValue) > Number(availableQty);
-        const badgeStatus = shouldShowZeroQtyNotice
-          ? "PARTIAL"
-          : canEditRow && Number.isFinite(availableQty)
-          ? Number(availableQty) === 0
-            ? "NOT_AVAILABLE"
-            : isOverAvailable
-            ? "SHORTAGE"
-            : "AVAILABLE"
-          : availabilityStatus;
-        const badgeLabel = shouldShowZeroQtyNotice
-          ? "Will be Removed"
-          : isOverAvailable
-          ? `Only ${formatNumber(availableQty)} available`
-          : showShortageVisuals && Number.isFinite(availableQty)
-          ? null
-          : availabilityLabel;
+        const availableDisplayQty = Number.isFinite(availableQty)
+          ? Math.max(0, Number(availableQty))
+          : 0;
+        const effectiveRequestedQty = Math.max(0, Number(requestedQty) || 0);
+        const availabilityText = !showAvailabilityBadge
+          ? ""
+          : availableDisplayQty <= 0
+          ? `Sourcing ${formatNumber(effectiveRequestedQty)}`
+          : effectiveRequestedQty > availableDisplayQty
+          ? `${formatNumber(availableDisplayQty)} available, sourcing ${formatNumber(
+              effectiveRequestedQty
+            )}`
+          : `Available: ${formatNumber(availableDisplayQty)}`;
+        const availabilityTextClass = effectiveRequestedQty > availableDisplayQty
+          ? "text-amber-700"
+          : "text-emerald-700";
 
         return (
           <div
-            key={`${quoteId}-${idx}`}
+            key={`${quoteId}-${productKey}-${idx}`}
             className={[
               "grid grid-cols-12 items-center gap-x-2 border-t border-slate-200 px-4 py-2 text-sm text-slate-800",
             ]
@@ -210,12 +167,7 @@ export default function RequestedItemsTable({
               .join(" ")}
           >
             <div
-              className={[
-                "hidden sm:block col-span-1 text-xs font-semibold text-slate-400 tabular-nums",
-                fadedClass,
-              ]
-                .filter(Boolean)
-                .join(" ")}
+              className="hidden sm:block col-span-1 text-xs font-semibold text-slate-400 tabular-nums"
             >
               {idx + 1}
             </div>
@@ -224,97 +176,19 @@ export default function RequestedItemsTable({
                 showPricingColumn
                   ? "col-span-3 sm:col-span-4 min-w-0"
                   : "col-span-4 sm:col-span-5 min-w-0",
-                fadedClass,
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
-              <div
-                className={[
-                  "line-clamp-4 text-[11px] sm:text-sm",
-                  shouldStrikeName
-                    ? "line-through decoration-rose-500 decoration-2"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
+              <div className="line-clamp-4 text-[11px] sm:text-sm">
                 {name}
               </div>
             </div>
             <div className="col-span-3 sm:col-span-2 flex items-center justify-end text-right overflow-visible pr-0.5 sm:pr-1">
               <div className="flex w-full items-center justify-end gap-1 sm:gap-2">
-                {showQtyControl ? (
-                  <QuantityControlRequests
-                    value={controlValue}
-                    onIncrease={() =>
-                      onAdjustDraftQty(
-                        quoteId,
-                        productKey,
-                        1,
-                        Number(availableQty) || 0,
-                        fallbackQty
-                      )
-                    }
-                    onDecrease={() =>
-                      onAdjustDraftQty(
-                        quoteId,
-                        productKey,
-                        -1,
-                        Number(availableQty) || 0,
-                        fallbackQty
-                      )
-                    }
-                    onChangeRaw={(rawValue) => {
-                      const maxQty = Number(availableQty) || 0;
-                      if (!Number.isFinite(rawValue)) return;
-                      const next = Math.max(0, rawValue);
-                      onAdjustDraftQty(
-                        quoteId,
-                        productKey,
-                        next - controlValue,
-                        maxQty,
-                        fallbackQty,
-                        { allowAboveMax: true }
-                      );
-                    }}
-                    onCommit={(rawValue) => {
-                      const maxQty = Number(availableQty) || 0;
-                      const next = Math.max(0, Math.min(Number(rawValue) || 0, maxQty));
-                      onAdjustDraftQty(
-                        quoteId,
-                        productKey,
-                        next - controlValue,
-                        maxQty,
-                        fallbackQty
-                      );
-                    }}
-                    min={0}
-                    max={Number(availableQty) || 0}
-                    disableDecrease={controlValue <= 0}
-                    maxHit={Boolean(editMaxHit?.[maxHitKey])}
-                  />
-                ) : (
-                  <span
-                    className={[
-                      "inline-flex w-[3ch] items-center justify-end tabular-nums sm:w-[4ch]",
-                      fadedClass,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    {showShortageVisuals && availableQty != null ? (
-                      <span className="relative inline-block px-0.5">
-                        {requestedQty}
-                        {Number(availableQty) === 0 ? (
-                          <span className="pointer-events-none absolute left-0 right-0 top-1/2 h-0.5 -translate-y-1/2 rotate-[-20deg] bg-rose-500" />
-                        ) : null}
-                      </span>
-                    ) : (
-                      <span>{requestedQty}</span>
-                    )}
-                  </span>
-                )}
+                <span className="inline-flex w-[3ch] items-center justify-end tabular-nums sm:w-[4ch]">
+                  {requestedQty}
+                </span>
               </div>
             </div>
             <div
@@ -325,44 +199,18 @@ export default function RequestedItemsTable({
               }
             >
               {showAvailabilityBadge ? (
-                <AvailabilityBadge
-                  status={badgeStatus}
-                  label={badgeLabel}
-                />
-              ) : null}
-              {showRemoveAction && !showPricingColumn ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    onAdjustDraftQty(
-                      quoteId,
-                      productKey,
-                      -controlValue,
-                      Number(availableQty) || 0,
-                      fallbackQty
-                    )
-                  }
+                <span
                   className={[
-                    "ml-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-rose-500 transition hover:bg-rose-50 hover:text-rose-600",
-                    fadedClass,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-label="Set quantity to 0"
+                    "min-w-0 text-[11px] font-semibold leading-snug sm:text-xs",
+                    availabilityTextClass,
+                  ].join(" ")}
                 >
-                  <FiTrash2 className="h-3.5 w-3.5" />
-                </button>
+                  {availabilityText}
+                </span>
               ) : null}
             </div>
             {showPricingColumn ? (
-              <div
-                className={[
-                  "col-span-2 text-left tabular-nums",
-                  fadedClass,
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
+              <div className="col-span-2 text-left tabular-nums">
                 <div className="flex items-center gap-2">
                   {showFullPricing ? (
                     <span className="inline-flex w-[8ch] justify-start">
@@ -381,24 +229,6 @@ export default function RequestedItemsTable({
                       -
                     </span>
                   )}
-                  {showRemoveAction ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onAdjustDraftQty(
-                          quoteId,
-                          productKey,
-                          -controlValue,
-                          Number(availableQty) || 0,
-                          fallbackQty
-                        )
-                      }
-                      className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-rose-500 transition hover:bg-rose-50 hover:text-rose-600"
-                      aria-label="Set quantity to 0"
-                    >
-                      <FiTrash2 className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
                 </div>
               </div>
             ) : null}

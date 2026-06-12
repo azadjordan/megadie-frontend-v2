@@ -13,6 +13,11 @@ import {
 } from "../../features/cart/cartSlice";
 import QuantityControl from "../../components/common/QuantityControl";
 import { useCreateQuoteMutation } from "../../features/quotes/quotesApiSlice";
+import { useGetProductsAvailabilityQuery } from "../../features/products/productsApiSlice";
+import {
+  PRODUCT_AVAILABILITY_STATUS,
+  resolveProductAvailability,
+} from "../../utils/productAvailability";
 
 const placeholder = "/placeholder.jpg";
 
@@ -28,6 +33,27 @@ const resolveProduct = (raw) => {
   return firstNested || raw;
 };
 
+const availabilityClassByStatus = {
+  [PRODUCT_AVAILABILITY_STATUS.AVAILABLE]:
+    "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  [PRODUCT_AVAILABILITY_STATUS.PARTIAL]:
+    "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  [PRODUCT_AVAILABILITY_STATUS.MAYBE]:
+    "bg-slate-50 text-slate-700 ring-slate-200",
+  [PRODUCT_AVAILABILITY_STATUS.UNAVAILABLE]:
+    "bg-rose-50 text-rose-700 ring-rose-200",
+};
+
+const getAvailabilityLabel = (availability) => {
+  if (availability.status === PRODUCT_AVAILABILITY_STATUS.AVAILABLE) {
+    return `Available: ${availability.availableNow}`;
+  }
+  if (availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL) {
+    return `Available: ${availability.availableNow}`;
+  }
+  return availability.summary;
+};
+
 export default function CartPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -38,6 +64,27 @@ export default function CartPage() {
 
   const [note, setNote] = useState("");
   const [createQuote, { isLoading: isSubmitting }] = useCreateQuoteMutation();
+
+  const productIds = useMemo(
+    () =>
+      Array.from(
+        new Set(items.map((item) => item?.productId).filter(Boolean))
+      ),
+    [items]
+  );
+
+  const { data: availabilityRows = [] } = useGetProductsAvailabilityQuery(
+    productIds,
+    { skip: productIds.length === 0 }
+  );
+
+  const availabilityByProductId = useMemo(
+    () =>
+      new Map(
+        availabilityRows.map((row) => [String(row.productId), row])
+      ),
+    [availabilityRows]
+  );
 
   const summary = useMemo(() => {
     const lines = items.length;
@@ -170,6 +217,45 @@ export default function CartPage() {
               <div className="mt-4 space-y-4 lg:max-h-[calc(100vh-320px)] lg:overflow-y-auto lg:pr-2">
                 {items.map(({ productId, product, quantity }) => {
                   const item = resolveProduct(product);
+                  const availabilityRow = availabilityByProductId.get(
+                    String(productId)
+                  );
+                  const itemForAvailability = availabilityRow
+                    ? {
+                        ...item,
+                        isAvailable: availabilityRow.isAvailable,
+                        availability: availabilityRow.availability,
+                      }
+                    : item;
+                  const availability = resolveProductAvailability(
+                    itemForAvailability,
+                    quantity
+                  );
+                  const availabilityLabel = getAvailabilityLabel(availability);
+                  const availabilityClass =
+                    availabilityClassByStatus[availability.status];
+                  const showSourcingBadge =
+                    availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL &&
+                    availability.shortageQty > 0;
+                  const availabilityBadge = (
+                    <div className="flex max-w-full shrink-0 flex-col items-start gap-1 lg:items-end">
+                      <span
+                        className={[
+                          "inline-flex max-w-full items-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none ring-1",
+                          availabilityClass,
+                        ].join(" ")}
+                      >
+                        <span className="truncate">{availabilityLabel}</span>
+                      </span>
+                      {showSourcingBadge ? (
+                        <span className="inline-flex max-w-full items-center rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold leading-none text-amber-800 ring-1 ring-amber-200">
+                          <span className="truncate">
+                            We'll try to find {availability.requestedQty}
+                          </span>
+                        </span>
+                      ) : null}
+                    </div>
+                  );
                   const image =
                     item?.images?.[0] || item?.imageUrl || placeholder;
                   const name = item?.name || "Untitled product";
@@ -195,9 +281,24 @@ export default function CartPage() {
                       {/* Mobile layout */}
                       <div className="min-w-0 lg:hidden">
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                          <p className="line-clamp-2 text-base font-semibold text-slate-900 sm:text-sm">
-                            {name}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 text-base font-semibold text-slate-900 sm:text-sm">
+                              {name}
+                            </p>
+                            {tags.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-600">
+                                {tags.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200/70"
+                                    title={tag}
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                           <button
                             type="button"
                             onClick={() => dispatch(removeFromCart(productId))}
@@ -207,19 +308,6 @@ export default function CartPage() {
                           >
                             <FiTrash2 size={18} />
                           </button>
-                          {tags.length > 0 && (
-                            <div className="col-span-2 mt-2 flex flex-wrap gap-1.5 text-xs text-slate-600">
-                              {tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200/70"
-                                  title={tag}
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
                         </div>
 
                         <div className="mt-4 sm:mt-3">
@@ -253,13 +341,16 @@ export default function CartPage() {
                                 </button>
                               </div>
                               <div className="mt-2">
-                                <QuantityControl
-                                  quantity={quantity}
-                                  setQuantity={(val) => setQty(productId, val)}
-                                  min={1}
-                                  size="sm"
-                                  className="w-full max-w-[140px]"
-                                />
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <QuantityControl
+                                    quantity={quantity}
+                                    setQuantity={(val) => setQty(productId, val)}
+                                    min={1}
+                                    size="sm"
+                                    className="w-full max-w-[140px]"
+                                  />
+                                  {availabilityBadge}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -314,6 +405,7 @@ export default function CartPage() {
                             size="sm"
                             className="w-full max-w-[140px]"
                           />
+                          {availabilityBadge}
                         </div>
                       </div>
                     </div>

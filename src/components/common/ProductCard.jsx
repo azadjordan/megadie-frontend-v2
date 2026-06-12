@@ -4,6 +4,10 @@ import { useDispatch } from 'react-redux'
 import { Link } from 'react-router-dom'
 import { FaShoppingCart, FaCheck, FaPlus } from 'react-icons/fa'
 import { addToCart } from '../../features/cart/cartSlice'
+import {
+  PRODUCT_AVAILABILITY_STATUS,
+  resolveProductAvailability,
+} from '../../utils/productAvailability'
 import QuantityControl from './QuantityControl'
 
 const FALLBACK_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -73,8 +77,11 @@ export default function ProductCard({ product }) {
   const detailsPath = productId
     ? `/shop/${encodeURIComponent(productId)}`
     : null
+  const moqValue = Number(item?.moq)
+  const minQty =
+    Number.isFinite(moqValue) && moqValue > 0 ? Math.trunc(moqValue) : 1
 
-  const [quantity, setQuantity] = useState(1)
+  const [quantity, setQuantity] = useState(minQty)
   const [isAdded, setIsAdded] = useState(false)
 
   const tags = useMemo(
@@ -95,15 +102,59 @@ export default function ProductCard({ product }) {
 
   const qtyNum =
     typeof quantity === 'number' ? quantity : parseInt(quantity, 10) || 1
+  const safeQty = Math.max(qtyNum, minQty)
+  const availability = resolveProductAvailability(item, safeQty)
+  const isUnavailable =
+    availability.status === PRODUCT_AVAILABILITY_STATUS.UNAVAILABLE
+
+  const availabilityClass = {
+    [PRODUCT_AVAILABILITY_STATUS.AVAILABLE]:
+      'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    [PRODUCT_AVAILABILITY_STATUS.PARTIAL]:
+      'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    [PRODUCT_AVAILABILITY_STATUS.MAYBE]:
+      'bg-slate-50 text-slate-700 ring-slate-200',
+    [PRODUCT_AVAILABILITY_STATUS.UNAVAILABLE]:
+      'bg-rose-50 text-rose-700 ring-rose-200',
+  }[availability.status]
+  const availabilityBadgeText =
+    availability.status === PRODUCT_AVAILABILITY_STATUS.AVAILABLE
+      ? `Available: ${availability.availableNow}`
+    : availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL
+      ? `Available: ${availability.availableNow}`
+      : availability.summary
+  const showSourcingBadge =
+    availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL &&
+    availability.shortageQty > 0
 
   const handleAddToCart = () => {
-    if (isAdded) return
+    if (isAdded || isUnavailable) return
 
-    dispatch(addToCart({ ...item, quantity: qtyNum }))
+    dispatch(addToCart({ ...item, quantity: safeQty }))
     setIsAdded(true)
     setTimeout(() => setIsAdded(false), 900)
-    setQuantity(1)
+    setQuantity(minQty)
   }
+
+  const availabilityBadge = (
+    <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
+      <span
+        className={[
+          'inline-flex max-w-full items-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none shadow-sm ring-1',
+          availabilityClass,
+        ].join(' ')}
+      >
+        <span className="truncate">{availabilityBadgeText}</span>
+      </span>
+      {showSourcingBadge ? (
+        <span className="inline-flex max-w-full items-center rounded-full bg-white/95 px-2 py-1 text-[11px] font-semibold leading-none text-amber-800 shadow-sm ring-1 ring-amber-200">
+          <span className="truncate">
+            We'll try to find {availability.requestedQty}
+          </span>
+        </span>
+      ) : null}
+    </div>
+  )
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl bg-white/90 shadow-sm ring-1 ring-slate-200/80 transition hover:-translate-y-0.5 hover:shadow-md">
@@ -136,6 +187,7 @@ export default function ProductCard({ product }) {
               onDragStart={(e) => e.preventDefault()}
               aria-hidden="true"
             />
+            {availabilityBadge}
           </div>
         </Link>
       ) : (
@@ -160,6 +212,7 @@ export default function ProductCard({ product }) {
             onDragStart={(e) => e.preventDefault()}
             aria-hidden="true"
           />
+          {availabilityBadge}
         </div>
       )}
 
@@ -199,21 +252,26 @@ export default function ProductCard({ product }) {
           <QuantityControl
             quantity={quantity}
             setQuantity={setQuantity}
-            min={1}
+            min={minQty}
             size="sm"
+            disabled={isUnavailable}
             className="w-full lg:w-auto"
           />
 
           <button
             type="button"
             onClick={handleAddToCart}
-            disabled={isAdded}
-            aria-label={isAdded ? 'Added to cart' : 'Add to cart'}
+            disabled={isAdded || isUnavailable}
+            aria-label={
+              isUnavailable ? 'Unavailable' : isAdded ? 'Added to cart' : 'Add to cart'
+            }
             className={[
               'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition ring-1 ring-inset lg:w-24 lg:px-0',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2',
               isAdded
                 ? 'cursor-default bg-emerald-600 text-white ring-emerald-600'
+                : isUnavailable
+                ? 'cursor-not-allowed bg-slate-100 text-slate-500 ring-slate-200'
                 : 'bg-white text-violet-700 ring-violet-300 hover:bg-violet-600 hover:text-white hover:ring-violet-600',
             ].join(' ')}
           >
@@ -223,6 +281,8 @@ export default function ProductCard({ product }) {
                 <span className="lg:hidden">Added</span>
                 <FaCheck size={16} className="hidden lg:inline" />
               </>
+            ) : isUnavailable ? (
+              <span>Unavailable</span>
             ) : (
               <>
                 <FaShoppingCart size={14} />

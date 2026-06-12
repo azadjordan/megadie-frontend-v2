@@ -35,6 +35,25 @@ export const productsApiSlice = apiSlice.injectEndpoints({
       providesTags: (result, error, id) => [{ type: 'Product', id }],
     }),
 
+    getProductsAvailability: builder.query({
+      query: (productIds = []) => ({
+        url: '/products/availability',
+        method: 'POST',
+        body: { productIds },
+      }),
+      transformResponse: (response) => response?.data ?? [],
+      providesTags: (result) =>
+        result?.length
+          ? [
+              ...result.map((row) => ({
+                type: 'Product',
+                id: row.productId,
+              })),
+              { type: 'Product', id: 'AVAILABILITY' },
+            ]
+          : [{ type: 'Product', id: 'AVAILABILITY' }],
+    }),
+
     // Admin product meta (enums for create/edit UI)
     getProductMeta: builder.query({
       query: () => '/products/meta',
@@ -90,6 +109,7 @@ export const productsApiSlice = apiSlice.injectEndpoints({
 export const {
   useGetProductsQuery,
   useGetProductByIdQuery,
+  useGetProductsAvailabilityQuery,
   useGetProductMetaQuery,
   usePreviewProductMutation,
   useCreateProductMutation,
