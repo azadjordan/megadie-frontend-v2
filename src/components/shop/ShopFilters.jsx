@@ -39,13 +39,13 @@ export default function ShopFilters({
             disabled={disabled}
             onClick={onClearAll}
             className={[
-              'text-xs font-medium transition',
+              'rounded-md px-2 py-1 text-xs font-semibold transition',
               disabled
                 ? 'cursor-not-allowed text-slate-400'
-                : 'text-slate-500 hover:text-slate-700 hover:underline',
+                : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700',
             ].join(' ')}
           >
-            Clear all
+            Reset Filters
           </button>
         )}
       </div>
