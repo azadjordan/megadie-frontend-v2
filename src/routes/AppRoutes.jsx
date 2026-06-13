@@ -1,11 +1,11 @@
 // src/routes/AppRoutes.jsx
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
 
 import PublicLayout from "../components/layout/PublicLayout";
-import AdminLayout from "../components/layout/AdminLayout";
 
 import HomePage from "../pages/Public/HomePage";
 import ShopPage from "../pages/Public/ShopPage";
@@ -20,32 +20,6 @@ import NotFoundPage from "../pages/Public/NotFoundPage";
 
 import LoginPage from "../pages/Auth/LoginPage";
 import RegisterPage from "../pages/Auth/RegisterPage";
-
-// Admin pages
-import AdminDashboardPage from "../pages/Admin/AdminDashboardPage";
-import AdminRequestsPage from "../pages/Admin/AdminRequestsPage";
-import AdminOrdersPage from "../pages/Admin/AdminOrdersPage";
-import AdminInvoicesPage from "../pages/Admin/AdminInvoicesPage";
-import AdminFinancePage from "../pages/Admin/AdminFinancePage";
-import AdminInvoiceEditPage from "../pages/Admin/AdminInvoiceEditPage";
-import AdminInventoryPage from "../pages/Admin/AdminInventoryPage";
-import AdminInventorySlotsPage from "../pages/Admin/AdminInventorySlotsPage";
-import AdminInventoryAllocationsPage from "../pages/Admin/AdminInventoryAllocationsPage";
-import AdminInventoryMovementsPage from "../pages/Admin/AdminInventoryMovementsPage";
-import AdminInventoryCategoriesPage from "../pages/Admin/AdminInventoryCategoriesPage";
-import AdminProductCreatePage from "../pages/Admin/AdminProductCreatePage";
-import AdminProductEditPage from "../pages/Admin/AdminProductEditPage";
-import AdminSlotDetailsPage from "../pages/Admin/AdminSlotDetailsPage";
-import AdminUsersPage from "../pages/Admin/AdminUsersPage";
-import AdminUserDetailsPage from "../pages/Admin/AdminUserDetailsPage";
-import AdminRequestDetailsPage from "../pages/Admin/AdminRequestDetailsPage";
-import AdminOrderDetailsPage from "../pages/Admin/AdminOrderDetailsPage";
-import AdminPriceRulesPage from "../pages/Admin/AdminPriceRulesPage";
-import AdminFilterConfigsPage from "../pages/Admin/AdminFilterConfigsPage";
-import AdminFilterConfigEditPage from "../pages/Admin/AdminFilterConfigEditPage";
-import AdminNotFoundPage from "../pages/Admin/AdminNotFoundPage";
-
-
 
 // Guards
 import RequireAdmin from "../components/auth/RequireAdmin";
@@ -64,7 +38,74 @@ import AccountNotFoundPage from "../pages/Account/AccountNotFoundPage";
 
 // ✅ Billing (Invoices list + Invoice details + Order details)
 import AccountInvoicesReceiptPage from "../pages/Account/AccountInvoicesReceiptPage";
-import AdminPaymentsPage from "../pages/Admin/AdminPaymentsPage";
+
+const AdminLayout = lazy(() => import("../components/layout/AdminLayout"));
+const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
+const AdminRequestsPage = lazy(() => import("../pages/Admin/AdminRequestsPage"));
+const AdminRequestDetailsPage = lazy(() =>
+  import("../pages/Admin/AdminRequestDetailsPage")
+);
+const AdminOrdersPage = lazy(() => import("../pages/Admin/AdminOrdersPage"));
+const AdminOrderDetailsPage = lazy(() =>
+  import("../pages/Admin/AdminOrderDetailsPage")
+);
+const AdminInvoicesPage = lazy(() => import("../pages/Admin/AdminInvoicesPage"));
+const AdminInvoiceEditPage = lazy(() =>
+  import("../pages/Admin/AdminInvoiceEditPage")
+);
+const AdminFinancePage = lazy(() => import("../pages/Admin/AdminFinancePage"));
+const AdminPaymentsPage = lazy(() => import("../pages/Admin/AdminPaymentsPage"));
+const AdminUsersPage = lazy(() => import("../pages/Admin/AdminUsersPage"));
+const AdminUserDetailsPage = lazy(() =>
+  import("../pages/Admin/AdminUserDetailsPage")
+);
+const AdminInventoryPage = lazy(() => import("../pages/Admin/AdminInventoryPage"));
+const AdminInventorySlotsPage = lazy(() =>
+  import("../pages/Admin/AdminInventorySlotsPage")
+);
+const AdminInventoryAllocationsPage = lazy(() =>
+  import("../pages/Admin/AdminInventoryAllocationsPage")
+);
+const AdminInventoryMovementsPage = lazy(() =>
+  import("../pages/Admin/AdminInventoryMovementsPage")
+);
+const AdminSlotDetailsPage = lazy(() =>
+  import("../pages/Admin/AdminSlotDetailsPage")
+);
+const AdminProductCreatePage = lazy(() =>
+  import("../pages/Admin/AdminProductCreatePage")
+);
+const AdminProductEditPage = lazy(() =>
+  import("../pages/Admin/AdminProductEditPage")
+);
+const AdminInventoryCategoriesPage = lazy(() =>
+  import("../pages/Admin/AdminInventoryCategoriesPage")
+);
+const AdminPriceRulesPage = lazy(() =>
+  import("../pages/Admin/AdminPriceRulesPage")
+);
+const AdminFilterConfigsPage = lazy(() =>
+  import("../pages/Admin/AdminFilterConfigsPage")
+);
+const AdminFilterConfigEditPage = lazy(() =>
+  import("../pages/Admin/AdminFilterConfigEditPage")
+);
+const AdminNotFoundPage = lazy(() => import("../pages/Admin/AdminNotFoundPage"));
+
+function AdminShellLoading() {
+  return (
+    <div role="status" aria-live="polite" className="min-h-screen bg-slate-50 px-4 py-10">
+      <div className="mx-auto flex min-h-[45vh] w-full max-w-sm items-center justify-center">
+        <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+          <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+          <div className="mt-3 text-sm font-semibold text-slate-900">
+            Loading admin...
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ✅ Backward-compat param redirects (Navigate can't keep ":id" by itself)
 function InvoiceRedirect() {
@@ -150,7 +191,14 @@ export default function AppRoutes() {
 
       {/* Admin routes (protected) */}
       <Route element={<RequireAdmin />}>
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route
+          path="/admin"
+          element={
+            <Suspense fallback={<AdminShellLoading />}>
+              <AdminLayout />
+            </Suspense>
+          }
+        >
           <Route index element={<AdminDashboardPage />} />
 
           <Route path="requests" element={<AdminRequestsPage />} />

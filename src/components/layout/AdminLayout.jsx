@@ -1,5 +1,5 @@
 // src/components/layout/AdminLayout.jsx
-import { createElement, useEffect, useMemo, useState } from "react";
+import { Suspense, createElement, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -53,6 +53,19 @@ function NavItem({
       {createElement(Icon, { className: "h-4 w-4 shrink-0" })}
       <span className="truncate">{label}</span>
     </NavLink>
+  );
+}
+
+function AdminPageLoading() {
+  return (
+    <div role="status" aria-live="polite" className="flex min-h-[280px] items-center justify-center">
+      <div className="text-center">
+        <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+        <div className="mt-3 text-sm font-semibold text-slate-800">
+          Loading page...
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -169,7 +182,9 @@ export default function AdminLayout() {
           {/* Main content */}
           <main className="min-w-0 max-w-full">
             <div className="w-full max-w-full rounded-none bg-white p-3 shadow-sm ring-0 sm:rounded-2xl sm:p-4 sm:ring-1 sm:ring-slate-200">
-              <Outlet />
+              <Suspense fallback={<AdminPageLoading />}>
+                <Outlet />
+              </Suspense>
             </div>
           </main>
         </div>
