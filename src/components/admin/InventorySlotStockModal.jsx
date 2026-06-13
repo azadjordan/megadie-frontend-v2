@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-export default function InventorySlotStockModal({
-  open,
+export default function InventorySlotStockModal(props) {
+  if (!props.open || !props.slot) return null;
+  return <InventorySlotStockModalContent {...props} />;
+}
+
+function InventorySlotStockModalContent({
   slot,
   search,
   onSearchChange,
@@ -21,8 +25,6 @@ export default function InventorySlotStockModal({
   submitSuccess,
   submitFailures,
 }) {
-  if (!open || !slot) return null;
-
   const slotLabel = slot.label || "Unknown slot";
 
   const selectedEntries = Object.entries(selectedItems || {});
@@ -37,6 +39,7 @@ export default function InventorySlotStockModal({
     return !Number.isFinite(qtyValue) || qtyValue <= 0;
   });
   const canSubmit = selectedCount > 0 && !hasMissingQty;
+  const shouldShowConfirm = showConfirm && canSubmit && !submitting && !submitSuccess;
 
   const handleRequestClose = () => {
     if (hasPendingChanges) {
@@ -51,22 +54,6 @@ export default function InventorySlotStockModal({
     if (hasPendingChanges) return;
     onClose();
   };
-
-  useEffect(() => {
-    if (selectedCount === 0) {
-      setShowConfirm(false);
-    }
-  }, [selectedCount]);
-
-  useEffect(() => {
-    if (!canSubmit) setShowConfirm(false);
-  }, [canSubmit]);
-
-  useEffect(() => {
-    if (submitting || submitSuccess) {
-      setShowConfirm(false);
-    }
-  }, [submitting, submitSuccess]);
 
   return (
     <div
@@ -264,7 +251,7 @@ export default function InventorySlotStockModal({
             </div>
 
             <div className="mt-3">
-              {showConfirm ? (
+              {shouldShowConfirm ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                   <div className="font-semibold text-slate-700">
                     Add {selectedCount} SKU(s) to this slot?
@@ -272,7 +259,10 @@ export default function InventorySlotStockModal({
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={onSubmit}
+                      onClick={() => {
+                        setShowConfirm(false);
+                        onSubmit();
+                      }}
                       disabled={submitting || hasMissingQty}
                       className={[
                         "rounded-xl px-3 py-2 text-xs font-semibold transition",

@@ -126,9 +126,10 @@ export default function AdminInventoryAllocationsPage() {
     error,
   } = useGetInventoryAllocationsQuery(queryParams);
 
-  const allocations = Array.isArray(allocationsResult?.rows)
-    ? allocationsResult.rows
-    : [];
+  const allocations = useMemo(
+    () => (Array.isArray(allocationsResult?.rows) ? allocationsResult.rows : []),
+    [allocationsResult]
+  );
   const pagination = allocationsResult?.pagination ?? null;
   const totalAllocations = pagination?.total ?? allocations.length;
 

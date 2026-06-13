@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-export default function InventoryProductStockModal({
-  open,
+export default function InventoryProductStockModal(props) {
+  if (!props.open || !props.product) return null;
+  return <InventoryProductStockModalContent {...props} />;
+}
+
+function InventoryProductStockModalContent({
   product,
   storeOptions,
   storeValue,
@@ -31,8 +35,6 @@ export default function InventoryProductStockModal({
   submitSuccess,
   submitFailures,
 }) {
-  if (!open || !product) return null;
-
   const selectedEntries = Object.entries(selectedSlots || {});
   const selectedEntriesByRecent = [...selectedEntries].reverse();
   const selectedCount = selectedEntries.length;
@@ -55,14 +57,7 @@ export default function InventoryProductStockModal({
   const hasPendingChanges = selectedCount > 0 || existingAddCount > 0;
   const canSubmit = hasPendingChanges && !hasMissingQty;
   const [showConfirm, setShowConfirm] = useState(false);
-
-  useEffect(() => {
-    if (!canSubmit) setShowConfirm(false);
-  }, [canSubmit]);
-
-  useEffect(() => {
-    if (submitting || submitSuccess) setShowConfirm(false);
-  }, [submitting, submitSuccess]);
+  const shouldShowConfirm = showConfirm && canSubmit && !submitting && !submitSuccess;
 
   const totalAdds = existingAddCount + selectedCount;
 
@@ -390,7 +385,7 @@ export default function InventoryProductStockModal({
             </div>
 
             <div className="mt-3">
-              {showConfirm ? (
+              {shouldShowConfirm ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                   <div className="font-semibold text-slate-700">
                     Add this product to {totalAdds} slot(s)?
@@ -398,7 +393,10 @@ export default function InventoryProductStockModal({
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={onSubmit}
+                      onClick={() => {
+                        setShowConfirm(false);
+                        onSubmit();
+                      }}
                       disabled={submitting || hasMissingQty}
                       className={[
                         "rounded-xl px-3 py-2 text-xs font-semibold transition",

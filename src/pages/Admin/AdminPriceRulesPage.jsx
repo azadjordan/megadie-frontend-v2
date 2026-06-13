@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
@@ -92,13 +92,8 @@ export default function AdminPriceRulesPage() {
   const rules = useMemo(() => data?.data || [], [data]);
   const isBusy = isCreating || isUpdating || isDeleting;
 
-  useEffect(() => {
-    if (editId && !rules.some((rule) => rule._id === editId)) {
-      setEditId(null);
-      setEditPriceStr("");
-      setEditProductType("");
-    }
-  }, [editId, rules]);
+  const activeEditId =
+    editId && rules.some((rule) => rule._id === editId) ? editId : null;
 
   const newPrice = parsePrice(newPriceStr);
   const canAdd =
@@ -164,7 +159,6 @@ export default function AdminPriceRulesPage() {
       toast.error("This rule is in use and cannot be deleted.");
       return;
     }
-    // eslint-disable-next-line no-restricted-globals
     const ok = confirm("Delete this price rule?");
     if (!ok) return;
     try {
@@ -313,7 +307,7 @@ export default function AdminPriceRulesPage() {
           <div className="space-y-3 md:hidden">
             {rules.map((rule) => {
               const row = getPriceRuleMeta(rule, {
-                editId,
+                editId: activeEditId,
                 editPriceStr,
                 editProductType,
                 productTypes,
@@ -484,7 +478,7 @@ export default function AdminPriceRulesPage() {
                 <tbody className="divide-y divide-slate-200">
                   {rules.map((rule) => {
                     const row = getPriceRuleMeta(rule, {
-                      editId,
+                      editId: activeEditId,
                       editPriceStr,
                       editProductType,
                       productTypes,

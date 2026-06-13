@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { FiChevronLeft, FiPlus, FiSave } from "react-icons/fi";
 import { toast } from "react-toastify";
@@ -126,6 +126,7 @@ export default function AdminFilterConfigEditPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [isDirty, setIsDirty] = useState(false);
+  const [loadedConfigKey, setLoadedConfigKey] = useState("");
 
   const {
     data: config,
@@ -136,6 +137,16 @@ export default function AdminFilterConfigEditPage() {
 
   const [updateFilterConfig, { isLoading: isSaving, error: saveError }] =
     useUpdateFilterConfigMutation();
+  const configKey = config
+    ? `${productType || ""}:${config.updatedAt || config._id || "loaded"}`
+    : "";
+
+  if (config && !isDirty && loadedConfigKey !== configKey) {
+    setForm(buildFormState(config, productType));
+    setFieldErrors({});
+    setFormError("");
+    setLoadedConfigKey(configKey);
+  }
 
   const summaryCards = useMemo(
     () => [
@@ -148,14 +159,6 @@ export default function AdminFilterConfigEditPage() {
     ],
     [form.productType, form.fields.length, config?.updatedAt]
   );
-
-  useEffect(() => {
-    if (!productType) return;
-    if (!config || isDirty) return;
-    setForm(buildFormState(config, productType));
-    setFieldErrors({});
-    setFormError("");
-  }, [config, productType, isDirty]);
 
   const updateFormField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -242,6 +245,7 @@ export default function AdminFilterConfigEditPage() {
     setFieldErrors({});
     setFormError("");
     setIsDirty(false);
+    setLoadedConfigKey(configKey);
   };
 
   const validateForm = () => {
@@ -324,10 +328,14 @@ export default function AdminFilterConfigEditPage() {
         fields: payloadFields,
       }).unwrap();
       const updated = res?.data || res;
+      const updatedKey = `${productType || ""}:${
+        updated?.updatedAt || updated?._id || "loaded"
+      }`;
       setForm(buildFormState(updated, productType));
       setFieldErrors({});
       setFormError("");
       setIsDirty(false);
+      setLoadedConfigKey(updatedKey);
       toast.success("Filter config saved.");
     } catch {
       // ErrorMessage handles API errors.

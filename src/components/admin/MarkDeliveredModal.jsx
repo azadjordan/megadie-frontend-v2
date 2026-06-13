@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import ErrorMessage from "../common/ErrorMessage";
 
 function modalLabel(id) {
@@ -13,8 +13,32 @@ const DELIVERED_BY_OPTIONS = [
 ];
 const DELIVERED_BY_OTHER = "Other";
 
-export default function MarkDeliveredModal({
-  open,
+function resolveDeliveredByDraft(deliveredBy) {
+  const raw = String(deliveredBy ?? "");
+  const normalized = raw.trim();
+
+  if (!normalized) {
+    return { selectedOption: "", customValue: "" };
+  }
+
+  if (DELIVERED_BY_OPTIONS.includes(normalized)) {
+    return { selectedOption: normalized, customValue: "" };
+  }
+
+  return { selectedOption: DELIVERED_BY_OTHER, customValue: raw };
+}
+
+export default function MarkDeliveredModal(props) {
+  if (!props.open) return null;
+  return (
+    <MarkDeliveredModalContent
+      key={props.order?._id || props.order?.id || "order"}
+      {...props}
+    />
+  );
+}
+
+function MarkDeliveredModalContent({
   order,
   deliveredBy,
   onDeliveredByChange,
@@ -24,37 +48,11 @@ export default function MarkDeliveredModal({
   error,
   formError,
 }) {
-  const [selectedOption, setSelectedOption] = useState("");
-  const [customValue, setCustomValue] = useState("");
-  const [initialized, setInitialized] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setInitialized(false);
-      return;
-    }
-    if (initialized) return;
-
-    const raw = String(deliveredBy ?? "");
-    const normalized = raw.trim();
-    if (!normalized) {
-      setSelectedOption("");
-      setCustomValue("");
-      setInitialized(true);
-      return;
-    }
-    if (DELIVERED_BY_OPTIONS.includes(normalized)) {
-      setSelectedOption(normalized);
-      setCustomValue("");
-      setInitialized(true);
-      return;
-    }
-    setSelectedOption(DELIVERED_BY_OTHER);
-    setCustomValue(raw);
-    setInitialized(true);
-  }, [open, deliveredBy, initialized]);
-
-  if (!open) return null;
+  const initialDraft = resolveDeliveredByDraft(deliveredBy);
+  const [selectedOption, setSelectedOption] = useState(
+    initialDraft.selectedOption
+  );
+  const [customValue, setCustomValue] = useState(initialDraft.customValue);
 
   const orderLabel = order?.orderNumber || order?._id || "Order";
 

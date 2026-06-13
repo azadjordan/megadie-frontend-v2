@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
 import { toast } from "react-toastify";
@@ -149,9 +149,13 @@ export default function AdminInvoiceEditPage() {
     buildPaymentDefaults(invoice)
   );
   const [paymentFieldErrors, setPaymentFieldErrors] = useState({});
+  const [loadedInvoiceKey, setLoadedInvoiceKey] = useState("");
 
-  useEffect(() => {
-    if (!invoice) return;
+  const invoiceFormKey = invoice
+    ? `${invoice._id || invoice.id || id}:${invoice.updatedAt || ""}`
+    : "";
+
+  if (invoice && loadedInvoiceKey !== invoiceFormKey) {
     setDueDate(toDateInputValue(invoice.dueDate));
     setStatus(invoice.status || "Issued");
     setAdminNote(invoice.adminNote || "");
@@ -160,9 +164,13 @@ export default function AdminInvoiceEditPage() {
     setShowAddPayment(false);
     setPaymentForm(buildPaymentDefaults(invoice));
     setPaymentFieldErrors({});
-  }, [invoice?._id, invoice?.id, invoice?.updatedAt]);
+    setLoadedInvoiceKey(invoiceFormKey);
+  }
 
-  const payments = Array.isArray(invoice?.payments) ? invoice.payments : [];
+  const payments = useMemo(
+    () => (Array.isArray(invoice?.payments) ? invoice.payments : []),
+    [invoice?.payments]
+  );
   const paymentsSorted = useMemo(() => {
     return [...payments].sort(
       (a, b) =>

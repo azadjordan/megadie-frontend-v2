@@ -175,9 +175,10 @@ export default function AdminInventoryMovementsPage() {
     error,
   } = useGetInventoryMovementsQuery(queryParams);
 
-  const movements = Array.isArray(movementsResult?.rows)
-    ? movementsResult.rows
-    : [];
+  const movements = useMemo(
+    () => (Array.isArray(movementsResult?.rows) ? movementsResult.rows : []),
+    [movementsResult]
+  );
   const pagination = movementsResult?.pagination ?? null;
   const totalMovements = pagination?.total ?? movements.length;
 
@@ -683,6 +684,4 @@ export default function AdminInventoryMovementsPage() {
     </div>
   );
 }
-
-
 

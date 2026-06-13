@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
 import { toast } from "react-toastify";
@@ -128,7 +128,10 @@ export default function AdminOrderDetailsPage() {
   } = useGetOrderByIdQuery(id, { skip: !id });
 
   const order = orderResult?.data ?? orderResult;
-  const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
+  const items = useMemo(
+    () => (Array.isArray(order?.orderItems) ? order.orderItems : []),
+    [order]
+  );
 
   const invoiceId =
     typeof order?.invoice === "string"
@@ -189,11 +192,11 @@ export default function AdminOrderDetailsPage() {
     { isLoading: isFinalizing, error: finalizeError },
   ] = useFinalizeOrderAllocationsMutation();
 
-  const allocations = Array.isArray(allocationsResult?.data)
-    ? allocationsResult.data
-    : Array.isArray(allocationsResult)
-      ? allocationsResult
-      : [];
+  const allocations = useMemo(() => {
+    if (Array.isArray(allocationsResult?.data)) return allocationsResult.data;
+    if (Array.isArray(allocationsResult)) return allocationsResult;
+    return [];
+  }, [allocationsResult]);
   const reservedAllocations = useMemo(
     () =>
       allocations.filter(
@@ -412,10 +415,14 @@ export default function AdminOrderDetailsPage() {
     ["general", "invoice", "stock", "finalize"].includes(value)
       ? value
       : "general";
-  const [activeTab, setActiveTab] = useState(() => {
+  const [tabState, setTabState] = useState(() => {
     const params = new URLSearchParams(location.search);
-    return resolveTab(params.get("tab"));
+    return {
+      search: location.search,
+      value: resolveTab(params.get("tab")),
+    };
   });
+  const [loadedOrderFormKey, setLoadedOrderFormKey] = useState("");
   const [createTarget, setCreateTarget] = useState(null);
   const [isDeliverModalOpen, setIsDeliverModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -426,10 +433,21 @@ export default function AdminOrderDetailsPage() {
   });
   const [createFormError, setCreateFormError] = useState("");
 
-  useEffect(() => {
+  if (tabState.search !== location.search) {
     const params = new URLSearchParams(location.search);
-    setActiveTab(resolveTab(params.get("tab")));
-  }, [id, location.search]);
+    setTabState({
+      search: location.search,
+      value: resolveTab(params.get("tab")),
+    });
+  }
+
+  const activeTab = tabState.value;
+  const setActiveTab = (value) => {
+    setTabState({
+      search: location.search,
+      value: resolveTab(value),
+    });
+  };
 
   const [updateOrderByAdmin, { isLoading: isSaving, error: saveError }] =
     useUpdateOrderByAdminMutation();
@@ -444,8 +462,11 @@ export default function AdminOrderDetailsPage() {
   const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
     useCreateInvoiceFromOrderMutation();
 
-  useEffect(() => {
-    if (!order) return;
+  const orderFormKey = order
+    ? `${order._id || order.id || orderId}:${order.updatedAt || ""}`
+    : "";
+
+  if (order && loadedOrderFormKey !== orderFormKey) {
     setDeliveryCharge(String(Number(order.deliveryCharge ?? 0)));
     setExtraFee(String(Number(order.extraFee ?? 0)));
     setDeliveredBy(order.deliveredBy || "");
@@ -455,7 +476,8 @@ export default function AdminOrderDetailsPage() {
     setShippingError("");
     setDeliverFormError("");
     setSaved(false);
-  }, [order?._id, order?.id, order?.updatedAt]);
+    setLoadedOrderFormKey(orderFormKey);
+  }
 
   const summaryDeliveryCharge = canEditFees
     ? parseNumberInput(deliveryCharge) ?? delivery

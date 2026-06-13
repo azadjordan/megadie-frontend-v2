@@ -101,7 +101,10 @@ export default function AdminSlotDetailsPage() {
     useLazyGetInventoryProductsQuery();
   const [adjustSlotItem] = useAdjustSlotItemMutation();
 
-  const slotItems = slotItemsResult?.data ?? [];
+  const slotItems = useMemo(
+    () => slotItemsResult?.data ?? [],
+    [slotItemsResult?.data]
+  );
   const slotItemIds = useMemo(
     () =>
       slotItems

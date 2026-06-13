@@ -80,6 +80,7 @@ export default function AdminRequestDetailsPage() {
 
   const [showOwnerEditor, setShowOwnerEditor] = useState(false);
   const [activeTab, setActiveTab] = useState("owner");
+  const [loadedQuoteKey, setLoadedQuoteKey] = useState("");
 
   const {
     data: usersResult,
@@ -91,7 +92,10 @@ export default function AdminRequestDetailsPage() {
     { skip: !showOwnerEditor }
   );
 
-  const users = usersResult?.data || usersResult?.items || [];
+  const users = useMemo(
+    () => usersResult?.data || usersResult?.items || [],
+    [usersResult?.data, usersResult?.items]
+  );
 
   const [
     updateQuoteOwnerByAdmin,
@@ -180,8 +184,13 @@ export default function AdminRequestDetailsPage() {
 
   // Step 5
 
-  useEffect(() => {
-    if (!quote) return;
+  const quoteFormKey = quote
+    ? `${quote.id || quote._id || id}:${quote.updatedAt || ""}:${
+        quote.availabilityCheckedAt || ""
+      }`
+    : "";
+
+  if (quote && loadedQuoteKey !== quoteFormKey) {
 
     setUserId(getId(quote.user));
 
@@ -221,7 +230,8 @@ export default function AdminRequestDetailsPage() {
     setAddSearchError("");
     setAddSearchLoading(false);
     setAddSelected({});
-  }, [quote?.id, quote?._id, quote?.updatedAt, quote?.availabilityCheckedAt]);
+    setLoadedQuoteKey(quoteFormKey);
+  }
 
   const selectedUser = useMemo(() => {
     const uid = String(userId || "");
@@ -279,9 +289,10 @@ export default function AdminRequestDetailsPage() {
     ? "Merged into another quote — quote locked."
     : "";
 
-  const stockCheckItems = Array.isArray(stockCheckData?.items)
-    ? stockCheckData.items
-    : [];
+  const stockCheckItems = useMemo(
+    () => (Array.isArray(stockCheckData?.items) ? stockCheckData.items : []),
+    [stockCheckData?.items]
+  );
   const stockCheckedAt =
     showAvailability && stockCheckData?.checkedAt
       ? formatDateTime(stockCheckData.checkedAt)

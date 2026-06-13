@@ -104,7 +104,10 @@ export default function AdminInventoryPage() {
     isLoading: metaLoading,
     error: metaError,
   } = useGetProductMetaQuery();
-  const productTypes = metaData?.productTypes ?? [];
+  const productTypes = useMemo(
+    () => metaData?.productTypes ?? [],
+    [metaData?.productTypes]
+  );
 
   const productParams = useMemo(() => {
     const params = { sort, page: productPage, limit: productLimit };
@@ -157,7 +160,10 @@ export default function AdminInventoryPage() {
     productError?.error ||
     "Unable to load inventory.";
 
-  const slotItems = slotItemsData?.data ?? [];
+  const slotItems = useMemo(
+    () => slotItemsData?.data ?? [],
+    [slotItemsData?.data]
+  );
   const slotItemsErrorMessage =
     slotItemsError?.data?.message ||
     slotItemsError?.error ||

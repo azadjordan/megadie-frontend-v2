@@ -1236,7 +1236,7 @@ export default function AdminOrderAllocation({
   invoiceWarning = "",
   mode,
 }) {
-  const rows = Array.isArray(items) ? items : [];
+  const rows = useMemo(() => (Array.isArray(items) ? items : []), [items]);
   const money =
     typeof formatMoney === "function" ? formatMoney : (value) => value;
   const resolvedMode = mode || (showSlots && !showPricing ? "allocation" : "summary");
@@ -1258,11 +1258,11 @@ export default function AdminOrderAllocation({
   } = useGetOrderAllocationsQuery(orderId, { skip: !shouldLoadAllocations });
 
 
-  const allocations = Array.isArray(allocationsResult?.data)
-    ? allocationsResult.data
-    : Array.isArray(allocationsResult)
-      ? allocationsResult
-      : [];
+  const allocations = useMemo(() => {
+    if (Array.isArray(allocationsResult?.data)) return allocationsResult.data;
+    if (Array.isArray(allocationsResult)) return allocationsResult;
+    return [];
+  }, [allocationsResult]);
 
   const reservedAllocations = useMemo(
     () =>
@@ -1379,16 +1379,9 @@ export default function AdminOrderAllocation({
   }, [rows, allocationsByProduct, allocationSummaryByProduct, deductedByProduct]);
 
   const [activeItemKey, setActiveItemKey] = useState("");
-
-  useEffect(() => {
-    if (!itemRows.length) {
-      setActiveItemKey("");
-      return;
-    }
-    if (!itemRows.some((row) => row.key === activeItemKey)) {
-      setActiveItemKey(itemRows[0].key);
-    }
-  }, [itemRows, activeItemKey]);
+  const resolvedActiveItemKey = itemRows.some((row) => row.key === activeItemKey)
+    ? activeItemKey
+    : itemRows[0]?.key || "";
 
   if (isAllocationView) {
     const orderedTotal = rows.reduce(
@@ -1432,7 +1425,7 @@ export default function AdminOrderAllocation({
     const slotLockMessage = isAllocationLocked ? "" : allocationMessage;
 
     const activeRow =
-      itemRows.find((row) => row.key === activeItemKey) || itemRows[0] || null;
+      itemRows.find((row) => row.key === resolvedActiveItemKey) || null;
     const statusStyles = {
       Unreserved: "bg-slate-100 text-slate-600 ring-slate-200",
       Partial: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -1513,7 +1506,7 @@ export default function AdminOrderAllocation({
                       : "") ||
                     "Item";
                   const sku = row.item?.sku || row.item?.product?.sku || "";
-                  const isActive = row.key === activeItemKey;
+                  const isActive = row.key === resolvedActiveItemKey;
                   return (
                     <button
                       key={row.key}
@@ -1590,7 +1583,7 @@ export default function AdminOrderAllocation({
                         : "") ||
                       "Untitled product";
                     const sku = row.item?.sku || row.item?.product?.sku || "";
-                    const isActive = row.key === activeItemKey;
+                    const isActive = row.key === resolvedActiveItemKey;
                     const progressTone =
                       row.status === "Reserved"
                         ? "bg-emerald-500"
@@ -1850,4 +1843,3 @@ export default function AdminOrderAllocation({
     </div>
   );
 }
-

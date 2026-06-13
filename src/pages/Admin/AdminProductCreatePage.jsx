@@ -161,7 +161,7 @@ export default function AdminProductCreatePage() {
   const [createProduct, { isLoading: isCreating }] =
     useCreateProductMutation();
   const [previewProduct] = usePreviewProductMutation();
-  const [remotePreview, setRemotePreview] = useState(null);
+  const [remotePreview, setRemotePreview] = useState({ key: "", data: null });
 
   const step = STEPS[stepIndex];
   const productTypes = metaData?.productTypes ?? [];
@@ -172,10 +172,13 @@ export default function AdminProductCreatePage() {
   const packingUnits = metaData?.packingUnits ?? [];
   const tags = metaData?.tags ?? [];
   const catalogCodes = metaData?.ribbonCatalogCodes ?? [];
-  const skuTokens = metaData?.skuTokens ?? {};
+  const skuTokens = useMemo(
+    () => metaData?.skuTokens ?? {},
+    [metaData?.skuTokens]
+  );
 
   const priceRules = priceRulesData?.data ?? [];
-  const categories = categoriesData ?? [];
+  const categories = useMemo(() => categoriesData ?? [], [categoriesData]);
 
   const selectedCategory = useMemo(() => {
     if (!form.categoryId) return null;
@@ -213,26 +216,31 @@ export default function AdminProductCreatePage() {
     ]
   );
   const debouncedPreviewPayload = useDebouncedValue(previewPayload, 400);
+  const previewKey = useMemo(
+    () => JSON.stringify(debouncedPreviewPayload || {}),
+    [debouncedPreviewPayload]
+  );
+  const effectiveRemotePreview =
+    remotePreview.key === previewKey ? remotePreview.data : null;
 
   useEffect(() => {
     if (!debouncedPreviewPayload?.categoryId) {
-      setRemotePreview(null);
       return;
     }
     let active = true;
     const loadPreview = async () => {
       try {
         const res = await previewProduct(debouncedPreviewPayload).unwrap();
-        if (active) setRemotePreview(res?.data || res);
+        if (active) setRemotePreview({ key: previewKey, data: res?.data || res });
       } catch {
-        if (active) setRemotePreview(null);
+        if (active) setRemotePreview({ key: previewKey, data: null });
       }
     };
     loadPreview();
     return () => {
       active = false;
     };
-  }, [debouncedPreviewPayload, previewProduct]);
+  }, [debouncedPreviewPayload, previewKey, previewProduct]);
 
   const preview = useMemo(() => {
     const resolvedType = selectedCategory?.productType || form.productType;
@@ -257,7 +265,7 @@ export default function AdminProductCreatePage() {
       packingUnit: form.packingUnit,
       grade: form.grade,
     });
-    const remote = remotePreview;
+    const remote = effectiveRemotePreview;
 
     const missing = [];
     if (!selectedCategory) missing.push("category");
@@ -281,7 +289,7 @@ export default function AdminProductCreatePage() {
     form.productType,
     form.size,
     form.variant,
-    remotePreview,
+    effectiveRemotePreview,
     selectedCategory,
     skuTokens,
   ]);

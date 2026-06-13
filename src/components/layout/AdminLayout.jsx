@@ -1,5 +1,5 @@
 // src/components/layout/AdminLayout.jsx
-import { useEffect, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -50,7 +50,7 @@ function NavItem({
         ].join(" ")
       }
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      {createElement(Icon, { className: "h-4 w-4 shrink-0" })}
       <span className="truncate">{label}</span>
     </NavLink>
   );

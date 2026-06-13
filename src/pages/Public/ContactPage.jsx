@@ -19,11 +19,9 @@ export default function ContactPage() {
 
     // Placeholder until backend exists in this project.
     try {
-      // eslint-disable-next-line no-alert
       alert('Message sent successfully! (placeholder)\n\nWe will wire the API later.')
       setFormData({ name: '', phone: '', message: '' })
-    } catch (err) {
-      // eslint-disable-next-line no-alert
+    } catch {
       alert('Failed to send message. Please try again later.')
     } finally {
       setIsSending(false)

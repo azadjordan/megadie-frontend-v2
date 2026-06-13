@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FiMinus, FiPlus } from "react-icons/fi";
 
 const clampValue = (val, min, max) => {
@@ -27,12 +27,6 @@ export default function QuantityControl({
   const clampedQty = clampValue(numericQty, min, max);
   const [draft, setDraft] = useState(String(clampedQty));
   const [isEditing, setIsEditing] = useState(false);
-
-  useEffect(() => {
-    if (!isEditing) {
-      setDraft(String(clampedQty));
-    }
-  }, [clampedQty, isEditing]);
 
   const canDecrease = clampedQty > min;
   const canIncrease =
@@ -135,7 +129,10 @@ export default function QuantityControl({
         step={1}
         value={isEditing ? draft : String(clampedQty)}
         onChange={handleChange}
-        onFocus={() => setIsEditing(true)}
+        onFocus={() => {
+          setDraft(String(clampedQty));
+          setIsEditing(true);
+        }}
         onBlur={commitDraft}
         onKeyDown={(event) => {
           if (event.key === "Enter") {

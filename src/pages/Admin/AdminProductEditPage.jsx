@@ -138,7 +138,7 @@ export default function AdminProductEditPage() {
   const [form, setForm] = useState(emptyForm);
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
-  const [hasInitialized, setHasInitialized] = useState(false);
+  const [initializedProductKey, setInitializedProductKey] = useState("");
 
   const {
     data: productData,
@@ -169,7 +169,7 @@ export default function AdminProductEditPage() {
   const [updateProduct, { isLoading: isSaving }] =
     useUpdateProductMutation();
   const [previewProduct] = usePreviewProductMutation();
-  const [remotePreview, setRemotePreview] = useState(null);
+  const [remotePreview, setRemotePreview] = useState({ key: "", data: null });
 
   const step = STEPS[stepIndex];
   const productTypes = metaData?.productTypes ?? [];
@@ -178,14 +178,18 @@ export default function AdminProductEditPage() {
   const variants = metaData?.variants ?? [];
   const finishes = metaData?.finishes ?? [];
   const packingUnits = metaData?.packingUnits ?? [];
-  const tags = metaData?.tags ?? [];
+  const tags = useMemo(() => metaData?.tags ?? [], [metaData?.tags]);
   const catalogCodes = metaData?.ribbonCatalogCodes ?? [];
-  const skuTokens = metaData?.skuTokens ?? {};
+  const skuTokens = useMemo(
+    () => metaData?.skuTokens ?? {},
+    [metaData?.skuTokens]
+  );
 
   const priceRules = priceRulesData?.data ?? [];
-  const categories = categoriesData ?? [];
+  const categories = useMemo(() => categoriesData ?? [], [categoriesData]);
 
   const product = productData ?? null;
+  const productKey = product?._id || product?.id || "";
 
   const tagOptions = useMemo(() => {
     const map = new Map();
@@ -200,8 +204,7 @@ export default function AdminProductEditPage() {
     return Array.from(map.values());
   }, [tags, form.tags]);
 
-  useEffect(() => {
-    if (!product || hasInitialized) return;
+  if (product && productKey !== initializedProductKey) {
     const categoryId =
       product.category?._id ||
       product.category?.id ||
@@ -235,8 +238,8 @@ export default function AdminProductEditPage() {
       cbm: product.cbm != null ? String(product.cbm) : "",
     });
     setFieldErrors({});
-    setHasInitialized(true);
-  }, [product, hasInitialized]);
+    setInitializedProductKey(productKey);
+  }
 
   const selectedCategory = useMemo(() => {
     if (!form.categoryId) return null;
@@ -274,26 +277,31 @@ export default function AdminProductEditPage() {
     ]
   );
   const debouncedPreviewPayload = useDebouncedValue(previewPayload, 400);
+  const previewKey = useMemo(
+    () => JSON.stringify(debouncedPreviewPayload || {}),
+    [debouncedPreviewPayload]
+  );
+  const effectiveRemotePreview =
+    remotePreview.key === previewKey ? remotePreview.data : null;
 
   useEffect(() => {
     if (!debouncedPreviewPayload?.categoryId) {
-      setRemotePreview(null);
       return;
     }
     let active = true;
     const loadPreview = async () => {
       try {
         const res = await previewProduct(debouncedPreviewPayload).unwrap();
-        if (active) setRemotePreview(res?.data || res);
+        if (active) setRemotePreview({ key: previewKey, data: res?.data || res });
       } catch {
-        if (active) setRemotePreview(null);
+        if (active) setRemotePreview({ key: previewKey, data: null });
       }
     };
     loadPreview();
     return () => {
       active = false;
     };
-  }, [debouncedPreviewPayload, previewProduct]);
+  }, [debouncedPreviewPayload, previewKey, previewProduct]);
 
   const preview = useMemo(() => {
     const resolvedType = selectedCategory?.productType || form.productType;
@@ -318,7 +326,7 @@ export default function AdminProductEditPage() {
       packingUnit: form.packingUnit,
       grade: form.grade,
     });
-    const remote = remotePreview;
+    const remote = effectiveRemotePreview;
 
     const missing = [];
     if (!selectedCategory) missing.push("category");
@@ -342,7 +350,7 @@ export default function AdminProductEditPage() {
     form.productType,
     form.size,
     form.variant,
-    remotePreview,
+    effectiveRemotePreview,
     selectedCategory,
     skuTokens,
   ]);

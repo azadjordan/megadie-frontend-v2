@@ -85,7 +85,10 @@ export default function AdminInventoryCategoriesPage() {
     isLoading: metaLoading,
     error: metaError,
   } = useGetProductMetaQuery();
-  const productTypes = metaData?.productTypes ?? [];
+  const productTypes = useMemo(
+    () => metaData?.productTypes ?? [],
+    [metaData?.productTypes]
+  );
 
   const queryParams = useMemo(() => {
     const params = { page, limit, includeUsage: true };
@@ -108,7 +111,10 @@ export default function AdminInventoryCategoriesPage() {
     useDeleteCategoryMutation();
   const [deletingId, setDeletingId] = useState(null);
 
-  const categories = categoriesResult?.rows ?? [];
+  const categories = useMemo(
+    () => categoriesResult?.rows ?? [],
+    [categoriesResult?.rows]
+  );
   const pagination = categoriesResult?.pagination ?? null;
   const totalCategories = pagination?.total ?? categories.length;
 

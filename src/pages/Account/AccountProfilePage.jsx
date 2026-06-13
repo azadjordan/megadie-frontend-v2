@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useDispatch } from "react-redux";
 
 import {
@@ -16,24 +16,62 @@ export default function AccountProfilePage() {
 
   const profile = data?.data;
 
-  const [name, setName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [address, setAddress] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const loadErrMsg = error?.data?.message || error?.error;
 
+  return (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="h-8 w-1 rounded-full bg-violet-500" aria-hidden="true" />
+          <div>
+            <div className="text-2xl font-semibold text-slate-900">Profile</div>
+            <div className="mt-1 text-sm text-slate-600">
+              Keep your contact details up to date.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        {isLoading ? (
+          <div className="text-sm text-slate-600">Loading...</div>
+        ) : isError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            {loadErrMsg || "Failed to load profile."}
+          </div>
+        ) : (
+          <AccountProfileForm
+            key={profile?._id || profile?.email || "profile"}
+            profile={profile}
+            updateProfile={updateProfile}
+            isSaving={isSaving}
+            saveError={saveError}
+            refetch={refetch}
+            dispatch={dispatch}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccountProfileForm({
+  profile,
+  updateProfile,
+  isSaving,
+  saveError,
+  refetch,
+  dispatch,
+}) {
   const profileName = profile?.name || "";
   const profilePhone = profile?.phoneNumber || "";
   const profileAddress = profile?.address || "";
 
-  useEffect(() => {
-    if (!profile) return;
-    setName(profileName);
-    setPhoneNumber(profilePhone);
-    setAddress(profileAddress);
-    setSaved(false);
-    setIsEditing(false);
-  }, [profile]);
+  const [name, setName] = useState(profileName);
+  const [phoneNumber, setPhoneNumber] = useState(profilePhone);
+  const [address, setAddress] = useState(profileAddress);
+  const [saved, setSaved] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const onSave = async (e) => {
     e.preventDefault();
@@ -65,32 +103,10 @@ export default function AccountProfilePage() {
     setSaved(false);
   };
 
-  const loadErrMsg = error?.data?.message || error?.error;
   const saveErrMsg = saveError?.data?.message || saveError?.error;
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="h-8 w-1 rounded-full bg-violet-500" aria-hidden="true" />
-          <div>
-            <div className="text-2xl font-semibold text-slate-900">Profile</div>
-            <div className="mt-1 text-sm text-slate-600">
-              Keep your contact details up to date.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        {isLoading ? (
-          <div className="text-sm text-slate-600">Loading...</div>
-        ) : isError ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-            {loadErrMsg || "Failed to load profile."}
-          </div>
-        ) : (
-          <form onSubmit={onSave} className="space-y-6">
+    <form onSubmit={onSave} className="space-y-6">
             <div className="flex justify-end">
               <button
                 type="button"
@@ -188,8 +204,5 @@ export default function AccountProfilePage() {
               ) : null}
             </div>
           </form>
-        )}
-      </div>
-    </div>
   );
 }

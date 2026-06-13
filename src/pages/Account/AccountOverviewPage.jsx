@@ -218,8 +218,6 @@ export default function AccountOverviewPage() {
     invoiceSummaryQuery.error;
 
   const quotes = quotesQuery.data?.data || [];
-  const orders = ordersQuery.data?.data || [];
-  const invoices = invoicesQuery.data?.items || [];
   const invoiceSummary = invoiceSummaryQuery.data || {};
 
   const processingQuotes = quotes.filter((q) => q.status === "Processing");

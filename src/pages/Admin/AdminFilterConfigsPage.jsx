@@ -88,8 +88,11 @@ export default function AdminFilterConfigsPage() {
   const [deleteFilterConfig, { isLoading: isDeleting }] =
     useDeleteFilterConfigMutation();
 
-  const configs = configsData ?? [];
-  const productTypes = metaData?.productTypes ?? [];
+  const configs = useMemo(() => configsData ?? [], [configsData]);
+  const productTypes = useMemo(
+    () => metaData?.productTypes ?? [],
+    [metaData?.productTypes]
+  );
 
   const configuredTypes = useMemo(
     () => new Set(configs.map((cfg) => cfg.productType)),
@@ -339,7 +342,7 @@ export default function AdminFilterConfigsPage() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => handleDelete(config)}
+                      onClick={() => openDeleteModal(config)}
                       disabled={row.isDeletingRow}
                       className={[
                         "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 transition",

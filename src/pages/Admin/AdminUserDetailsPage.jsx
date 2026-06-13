@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
 import { toast } from "react-toastify";
@@ -99,14 +99,16 @@ export default function AdminUserDetailsPage() {
   const [approvalModalNote, setApprovalModalNote] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [loadedUserKey, setLoadedUserKey] = useState("");
 
   const [newRule, setNewRule] = useState("");
   const [newPriceStr, setNewPriceStr] = useState("");
   const [editRowId, setEditRowId] = useState(null);
   const [editPriceStr, setEditPriceStr] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
+  const userKey = user ? `${userId || ""}:${user.updatedAt || ""}` : "";
+
+  if (user && loadedUserKey !== userKey) {
     setName(user.name || "");
     setEmail(user.email || "");
     setPhoneNumber(user.phoneNumber || "");
@@ -122,22 +124,13 @@ export default function AdminUserDetailsPage() {
     setApprovalModalNote("");
     setPassword("");
     setConfirmPassword("");
-  }, [user?._id, user?.id]);
-
-  useEffect(() => {
-    if (!userId) return;
     setActiveTab("info");
     setNewRule("");
     setNewPriceStr("");
     setEditRowId(null);
     setEditPriceStr("");
-  }, [userId]);
-
-  useEffect(() => {
-    if (isAdmin) {
-      setApprovalStatus("Approved");
-    }
-  }, [isAdmin]);
+    setLoadedUserKey(userKey);
+  }
 
   const shouldLoadPricing = Boolean(userId) && activeTab === "pricing";
 
@@ -153,13 +146,25 @@ export default function AdminUserDetailsPage() {
     error: rulesError,
   } = useGetPriceRulesQuery(undefined, { skip: !shouldLoadPricing });
 
-  const userPrices = userPricesResult?.data || [];
-  const priceRules = priceRulesResult?.data || [];
+  const userPrices = useMemo(
+    () => userPricesResult?.data || [],
+    [userPricesResult?.data]
+  );
+  const priceRules = useMemo(
+    () => priceRulesResult?.data || [],
+    [priceRulesResult?.data]
+  );
 
   const availableRules = useMemo(() => {
     const used = new Set(userPrices.map((p) => p.priceRule));
     return priceRules.filter((rule) => rule?.code && !used.has(rule.code));
   }, [userPrices, priceRules]);
+  const activeNewRule =
+    newRule && availableRules.some((rule) => rule.code === newRule)
+      ? newRule
+      : "";
+  const activeEditRowId =
+    editRowId && userPrices.some((p) => p._id === editRowId) ? editRowId : null;
 
   const hasInfoChanges = useMemo(() => {
     if (!user) return false;
@@ -182,25 +187,13 @@ export default function AdminUserDetailsPage() {
 
   const canUpdateInfo = hasInfoChanges && !isSaving;
   const approvalBase = String(user?.approvalStatus || "Approved");
-  const hasApprovalChanges = approvalStatus !== approvalBase;
+  const effectiveApprovalStatus = isAdmin ? "Approved" : approvalStatus;
+  const hasApprovalChanges = effectiveApprovalStatus !== approvalBase;
   const canUpdateApproval =
     Boolean(userId) && hasApprovalChanges && !isUpdatingApproval && !isAdmin;
   const hasAdminNoteChanges = String(adminNote || "").trim() !== adminNoteBase;
   const canSaveAdminNote =
     Boolean(userId) && hasAdminNoteChanges && !isSavingAdminNote;
-
-  useEffect(() => {
-    if (newRule && !availableRules.some((rule) => rule.code === newRule)) {
-      setNewRule("");
-    }
-  }, [newRule, availableRules]);
-
-  useEffect(() => {
-    if (editRowId && !userPrices.some((p) => p._id === editRowId)) {
-      setEditRowId(null);
-      setEditPriceStr("");
-    }
-  }, [editRowId, userPrices]);
 
   const isPricingBusy =
     isUserPricesLoading || isRulesLoading || isUpserting || isDeleting;
@@ -263,14 +256,14 @@ export default function AdminUserDetailsPage() {
   const onUpdateApproval = async () => {
     if (!userId || !canUpdateApproval) return;
 
-    if (approvalStatus === "Approved" && approvalBase !== "Approved") {
+    if (effectiveApprovalStatus === "Approved" && approvalBase !== "Approved") {
       setApprovalModalNote(adminNote);
       setApprovalModalOpen(true);
       return;
     }
 
     try {
-      await submitApprovalStatus(approvalStatus);
+      await submitApprovalStatus(effectiveApprovalStatus);
     } catch {
       // ErrorMessage handles it
     }
@@ -325,12 +318,12 @@ export default function AdminUserDetailsPage() {
 
   const onAddPrice = async () => {
     const price = parsePrice(newPriceStr);
-    if (!userId || !newRule || price == null) return;
+    if (!userId || !activeNewRule || price == null) return;
 
     try {
       await upsertUserPrice({
         userId,
-        priceRule: newRule,
+        priceRule: activeNewRule,
         unitPrice: price,
       }).unwrap();
       setNewRule("");
@@ -529,7 +522,14 @@ export default function AdminUserDetailsPage() {
                 id="user-admin-toggle"
                 type="checkbox"
                 checked={isAdmin}
-                onChange={(e) => setIsAdmin(e.target.checked)}
+                onChange={(e) => {
+                  const nextIsAdmin = e.target.checked;
+                  setIsAdmin(nextIsAdmin);
+                  if (nextIsAdmin) {
+                    setApprovalStatus("Approved");
+                    setApprovalSaved(false);
+                  }
+                }}
                 className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20"
               />
               <label
@@ -794,7 +794,7 @@ export default function AdminUserDetailsPage() {
                   </tr>
                 ) : (
                   userPrices.map((row) => {
-                    const isEditing = editRowId === row._id;
+                    const isEditing = activeEditRowId === row._id;
                     const editPrice = parsePrice(editPriceStr);
                     return (
                       <tr key={row._id} className="hover:bg-slate-50">
@@ -877,7 +877,7 @@ export default function AdminUserDetailsPage() {
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <select
-                value={newRule}
+                value={activeNewRule}
                 onChange={(e) => setNewRule(e.target.value)}
                 className="min-w-[220px] rounded-xl bg-white px-2 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 disabled={isPricingBusy || availableRules.length === 0}
@@ -906,13 +906,13 @@ export default function AdminUserDetailsPage() {
                 onClick={onAddPrice}
                 disabled={
                   isPricingBusy ||
-                  !newRule ||
+                  !activeNewRule ||
                   newPrice == null
                 }
                 className={[
                   "rounded-xl px-3 py-2 text-xs font-semibold text-white",
                   isPricingBusy ||
-                  !newRule ||
+                  !activeNewRule ||
                   newPrice == null
                     ? "cursor-not-allowed bg-slate-300"
                     : "bg-slate-900 hover:bg-slate-800",
