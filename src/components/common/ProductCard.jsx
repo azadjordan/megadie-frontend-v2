@@ -130,6 +130,9 @@ export default function ProductCard({ product }) {
   const showSourcingBadge =
     availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL &&
     availability.shortageQty > 0
+  const showZeroStockBadge =
+    availability.status === PRODUCT_AVAILABILITY_STATUS.MAYBE &&
+    availability.availableNow === 0
 
   const handleAddToCart = () => {
     if (isAdded || isUnavailable) return
@@ -142,6 +145,11 @@ export default function ProductCard({ product }) {
 
   const availabilityBadge = isChecking ? null : (
     <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
+      {showZeroStockBadge ? (
+        <span className="inline-flex max-w-full items-center rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold leading-none text-amber-800 shadow-sm ring-1 ring-amber-200">
+          <span className="truncate">Current stock: 0</span>
+        </span>
+      ) : null}
       <span
         className={[
           'inline-flex max-w-full items-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none shadow-sm ring-1',

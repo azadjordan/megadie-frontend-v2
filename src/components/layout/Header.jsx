@@ -358,7 +358,21 @@ export default function Header() {
                 <div className="border-t border-slate-200 pt-2" />
 
                 {/* Account */}
-                {!isInitialized ? null : isAuthed ? (
+                {!isInitialized ? (
+                  <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm ring-1 ring-slate-200">
+                    <div className="flex items-center gap-3 text-slate-700">
+                      <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                      <span className="flex flex-col">
+                        <span className="font-semibold text-slate-900">
+                          Opening your account
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          Loading your session...
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                ) : isAuthed ? (
                   <NavLink
                     to="/account"
                     className={(props) => `${drawerLink(props)} items-start`}

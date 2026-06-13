@@ -241,8 +241,16 @@ export default function CartPage() {
                   const showSourcingBadge =
                     availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL &&
                     availability.shortageQty > 0;
+                  const showZeroStockBadge =
+                    availability.status === PRODUCT_AVAILABILITY_STATUS.MAYBE &&
+                    availability.availableNow === 0;
                   const availabilityBadge = showAvailabilityBadge ? (
                     <div className="flex max-w-full shrink-0 flex-col items-start gap-1 lg:items-end">
+                      {showZeroStockBadge ? (
+                        <span className="inline-flex max-w-full items-center rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold leading-none text-amber-800 ring-1 ring-amber-200">
+                          <span className="truncate">Current stock: 0</span>
+                        </span>
+                      ) : null}
                       <span
                         className={[
                           "inline-flex max-w-full items-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none ring-1",

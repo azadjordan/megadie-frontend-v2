@@ -63,7 +63,7 @@ export default function LoginPage() {
 
     if (intendedPath) return intendedPath
 
-    return '/account/overview'
+    return '/'
   }, [getSafeFromPath])
 
   useEffect(() => {
