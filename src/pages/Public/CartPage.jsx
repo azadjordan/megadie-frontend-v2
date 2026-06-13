@@ -359,6 +359,7 @@ export default function CartPage() {
                                     setQuantity={(val) => setQty(productId, val)}
                                     min={1}
                                     size="sm"
+                                    variant="shop"
                                     className="w-full max-w-[140px]"
                                   />
                                   {availabilityBadge}
@@ -415,6 +416,7 @@ export default function CartPage() {
                             setQuantity={(val) => setQty(productId, val)}
                             min={1}
                             size="sm"
+                            variant="shop"
                             className="w-full max-w-[140px]"
                           />
                           {availabilityBadge}

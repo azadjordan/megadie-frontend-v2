@@ -99,6 +99,7 @@ export default function ShopPage() {
     defaultProductType: DEFAULT_PRODUCT_TYPE,
     defaultLimit: PAGE_LIMIT,
   });
+  const resultsRef = useRef(null);
 
   // 1) Filter configs
   const configsQ = useGetFilterConfigsQuery();
@@ -230,6 +231,25 @@ export default function ShopPage() {
       total !== 1 ? "s" : ""
     }`;
   }, [pagination, products.length, productsQueryParams?.limit]);
+
+  const handlePageChange = (nextPage) => {
+    setPage(nextPage);
+    requestAnimationFrame(() => {
+      const node = resultsRef.current;
+      if (!node) return;
+
+      const styles = window.getComputedStyle(document.documentElement);
+      const headerHeight =
+        parseFloat(styles.getPropertyValue("--app-header-h")) || 64;
+      const top =
+        node.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+
+      window.scrollTo({
+        top: Math.max(0, top),
+        behavior: "smooth",
+      });
+    });
+  };
 
   useEffect(() => {
     return () => {
@@ -400,7 +420,7 @@ export default function ShopPage() {
         </aside>
 
         {/* Results */}
-        <section className="space-y-4 lg:col-span-9">
+        <section ref={resultsRef} className="space-y-4 lg:col-span-9">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {productsQ.isLoading ? (
               <span
@@ -413,14 +433,31 @@ export default function ShopPage() {
               </span>
             )}
             {!productsQ.isLoading && pagination ? (
-              <Pagination
-                pagination={pagination}
-                onPageChange={setPage}
-                variant="compact"
-                showSummary={false}
-                showNumbers={false}
-                tone="violet"
-              />
+              <div className="w-full sm:w-auto">
+                <div className="sm:hidden">
+                  <Pagination
+                    pagination={pagination}
+                    onPageChange={handlePageChange}
+                    variant="compact"
+                    showSummary={false}
+                    showNumbers={false}
+                    showPageLabel
+                    compactLabelPosition="middle"
+                    density="comfortable"
+                    tone="violet"
+                  />
+                </div>
+                <div className="hidden sm:block">
+                  <Pagination
+                    pagination={pagination}
+                    onPageChange={handlePageChange}
+                    variant="full"
+                    showSummary={false}
+                    density="comfortable"
+                    tone="violet"
+                  />
+                </div>
+              </div>
             ) : null}
           </div>
 
@@ -439,11 +476,13 @@ export default function ShopPage() {
           )}
 
           {!productsQ.isLoading ? (
-            <div className="flex justify-end">
+            <div className="flex justify-center">
               <Pagination
                 variant="full"
                 pagination={pagination}
-                onPageChange={setPage}
+                onPageChange={handlePageChange}
+                showSummary={false}
+                density="comfortable"
                 tone="violet"
               />
             </div>

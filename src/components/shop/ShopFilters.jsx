@@ -14,6 +14,8 @@ export default function ShopFilters({
   hasActiveFilters = false,
 }) {
   if (!config) return null
+  const canClearFilters =
+    hasActiveFilters && !disabled && typeof onClearAll === 'function'
 
   const fields = (config.fields || [])
     .slice()
@@ -33,16 +35,16 @@ export default function ShopFilters({
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-slate-900">Filters</h2>
 
-        {hasActiveFilters && typeof onClearAll === 'function' && (
+        {typeof onClearAll === 'function' && (
           <button
             type="button"
-            disabled={disabled}
-            onClick={onClearAll}
+            disabled={!canClearFilters}
+            onClick={canClearFilters ? onClearAll : undefined}
             className={[
               'rounded-md px-2 py-1 text-xs font-semibold transition',
-              disabled
-                ? 'cursor-not-allowed text-slate-400'
-                : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700',
+              canClearFilters
+                ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+                : 'cursor-not-allowed text-slate-300 hover:bg-transparent',
             ].join(' ')}
           >
             Reset Filters

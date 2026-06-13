@@ -266,6 +266,7 @@ export default function ProductCard({ product }) {
             setQuantity={setQuantity}
             min={minQty}
             size="sm"
+            variant="shop"
             disabled={isUnavailable}
             className="w-full lg:w-auto"
           />

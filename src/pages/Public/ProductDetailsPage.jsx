@@ -314,6 +314,7 @@ export default function ProductDetailsPage() {
                 setQuantity={setQuantity}
                 min={minQty}
                 size="md"
+                variant="shop"
                 disabled={!isAvailable}
                 className="flex-1 min-w-[180px] sm:max-w-[180px]"
               />

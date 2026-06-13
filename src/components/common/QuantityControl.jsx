@@ -18,6 +18,7 @@ export default function QuantityControl({
   max,
   size = "md",
   compact = false,
+  variant = "default",
   disabled = false,
   className = "",
 }) {
@@ -51,6 +52,47 @@ export default function QuantityControl({
 
   const sizeStyle = sizes[size] || sizes.md;
   const inputStyle = compact ? sizeStyle.inputCompact : sizeStyle.input;
+  const isShop = variant === "shop";
+
+  const containerClass = isShop
+    ? [
+        "inline-flex items-center overflow-hidden bg-slate-50/90 ring-1 ring-slate-200 transition",
+        "focus-within:bg-white focus-within:ring-2 focus-within:ring-violet-300/70",
+      ].join(" ")
+    : [
+        "inline-flex items-center overflow-hidden bg-white ring-1 ring-slate-300 shadow-sm transition",
+        "focus-within:ring-2 focus-within:ring-violet-400/60",
+      ].join(" ");
+
+  const buttonClass = (isDisabled) =>
+    isShop
+      ? [
+          "flex h-full items-center justify-center transition",
+          "active:scale-[0.96]",
+          sizeStyle.btn,
+          isDisabled
+            ? "cursor-default text-slate-300"
+            : "cursor-pointer text-slate-600 hover:bg-white hover:text-violet-700 active:bg-violet-50",
+        ].join(" ")
+      : [
+          "flex h-full items-center justify-center text-slate-600 transition",
+          "active:scale-[0.98]",
+          sizeStyle.btn,
+          isDisabled
+            ? "cursor-default bg-slate-100 text-slate-400"
+            : "cursor-pointer bg-white hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100",
+        ].join(" ");
+
+  const inputClass = [
+    "min-w-0 flex-1 text-center font-semibold text-slate-900 outline-none appearance-none",
+    isShop ? "bg-transparent focus:bg-white/60" : "border-x border-slate-300 bg-slate-50 focus:bg-white",
+    inputStyle,
+    disabled
+      ? isShop
+        ? "text-slate-400"
+        : "bg-slate-50 text-slate-400"
+      : "",
+  ].join(" ");
 
   const handleDecrease = () => {
     if (disabled || !canDecrease) return;
@@ -98,8 +140,7 @@ export default function QuantityControl({
   return (
     <div
       className={[
-        "inline-flex items-center overflow-hidden bg-white ring-1 ring-slate-300 shadow-sm transition",
-        "focus-within:ring-2 focus-within:ring-violet-400/60",
+        containerClass,
         sizeStyle.container,
         disabled ? "opacity-60" : "",
         className,
@@ -109,14 +150,7 @@ export default function QuantityControl({
         type="button"
         onClick={handleDecrease}
         disabled={disabled || !canDecrease}
-        className={[
-          "flex h-full items-center justify-center text-slate-600 transition",
-          "active:scale-[0.98]",
-          sizeStyle.btn,
-          disabled || !canDecrease
-            ? "cursor-default bg-slate-100 text-slate-400"
-            : "cursor-pointer bg-white hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100",
-        ].join(" ")}
+        className={buttonClass(disabled || !canDecrease)}
         aria-label="Decrease quantity"
       >
         <FiMinus className={sizeStyle.icon} />
@@ -140,13 +174,7 @@ export default function QuantityControl({
           }
         }}
         disabled={disabled}
-        className={[
-          "min-w-0 flex-1 text-center font-semibold text-slate-900 outline-none appearance-none",
-          "border-x border-slate-300 bg-slate-50",
-          "focus:bg-white",
-          inputStyle,
-          disabled ? "bg-slate-50 text-slate-400" : "",
-        ].join(" ")}
+        className={inputClass}
         inputMode="numeric"
         pattern="[0-9]*"
         aria-label="Quantity"
@@ -156,14 +184,7 @@ export default function QuantityControl({
         type="button"
         onClick={handleIncrease}
         disabled={disabled || !canIncrease}
-        className={[
-          "flex h-full items-center justify-center text-slate-600 transition",
-          "active:scale-[0.98]",
-          sizeStyle.btn,
-          disabled || !canIncrease
-            ? "cursor-default bg-slate-100 text-slate-400"
-            : "cursor-pointer bg-white hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100",
-        ].join(" ")}
+        className={buttonClass(disabled || !canIncrease)}
         aria-label="Increase quantity"
       >
         <FiPlus className={sizeStyle.icon} />

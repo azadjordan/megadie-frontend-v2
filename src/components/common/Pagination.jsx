@@ -1,9 +1,14 @@
+import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
+
 export default function Pagination({
   pagination,
   onPageChange,
   variant = "full", // "full" | "compact"
   showNumbers,
   showSummary,
+  showPageLabel,
+  compactLabelPosition = "start", // "start" | "middle"
+  density = "compact", // "compact" | "comfortable"
   tone = "neutral",
 }) {
   if (!pagination) return null;
@@ -16,6 +21,9 @@ export default function Pagination({
     typeof showNumbers === "boolean" ? showNumbers : !isCompact;
   const _showSummary =
     typeof showSummary === "boolean" ? showSummary : !isCompact;
+  const _showPageLabel =
+    typeof showPageLabel === "boolean" ? showPageLabel : isCompact;
+  const isComfortable = density === "comfortable";
 
   const clamp = (n) => Math.min(Math.max(n, 1), totalPages);
 
@@ -29,10 +37,18 @@ export default function Pagination({
   const focusRingClass = isViolet
     ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2"
     : "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2";
+  const buttonSizeClass = isComfortable
+    ? "min-h-10 px-3.5 text-sm sm:px-4"
+    : "h-8 px-3 text-sm";
+  const numberSizeClass = isComfortable
+    ? "h-10 min-w-10 px-2 text-sm"
+    : "h-8 w-8 text-sm";
+  const gapClass = isComfortable ? "gap-2.5" : "gap-2";
 
   const btnClass = (disabled) =>
     [
-      "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold transition",
+      "inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition",
+      buttonSizeClass,
       "border border-slate-200 bg-white text-slate-700",
       focusRingClass,
       disabled
@@ -42,7 +58,8 @@ export default function Pagination({
 
   const numClass = (active) =>
     [
-      "inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm font-semibold transition",
+      "inline-flex items-center justify-center rounded-lg font-semibold transition",
+      numberSizeClass,
       "border",
       active
         ? isViolet
@@ -74,8 +91,10 @@ export default function Pagination({
       onClick={() => goTo(page - 1)}
       disabled={!hasPrev}
       className={btnClass(!hasPrev)}
+      aria-label="Previous page"
     >
-      Prev
+      <FiChevronLeft className="h-4 w-4" aria-hidden="true" />
+      {isComfortable ? "Previous" : "Prev"}
     </button>
   );
 
@@ -85,8 +104,10 @@ export default function Pagination({
       onClick={() => goTo(page + 1)}
       disabled={!hasNext}
       className={btnClass(!hasNext)}
+      aria-label="Next page"
     >
       Next
+      <FiChevronRight className="h-4 w-4" aria-hidden="true" />
     </button>
   );
 
@@ -104,17 +125,30 @@ export default function Pagination({
   return (
     <div
       className={[
-        "flex flex-wrap items-center gap-2",
+        "flex flex-wrap items-center",
+        gapClass,
         isCompact ? "justify-start" : "",
       ].join(" ")}
     >
       {showCompactLabelFirst ? (
-        <>
-          {pageLabel}
-          {separator}
-          {prevButton}
-          {nextButton}
-        </>
+        compactLabelPosition === "middle" && _showPageLabel ? (
+          <>
+            {prevButton}
+            {pageLabel}
+            {nextButton}
+          </>
+        ) : (
+          <>
+            {_showPageLabel ? (
+              <>
+                {pageLabel}
+                {separator}
+              </>
+            ) : null}
+            {prevButton}
+            {nextButton}
+          </>
+        )
       ) : (
         <>
           {prevButton}
@@ -132,6 +166,7 @@ export default function Pagination({
                     onClick={() => goTo(p)}
                     className={numClass(p === page)}
                     aria-current={p === page ? "page" : undefined}
+                    aria-label={`Go to page ${p}`}
                   >
                     {p}
                   </button>
