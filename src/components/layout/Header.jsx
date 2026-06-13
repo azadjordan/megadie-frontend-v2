@@ -13,7 +13,10 @@ import {
 } from "react-icons/fa";
 
 import { apiSlice } from "../../app/apiSlice";
-import { logout as logoutAction } from "../../features/auth/authSlice";
+import {
+  logout as logoutAction,
+  restartSessionCheck,
+} from "../../features/auth/authSlice";
 import { useLogoutMutation } from "../../features/auth/usersApiSlice";
 
 const desktopLink = ({ isActive }) =>
@@ -76,9 +79,12 @@ export default function Header() {
   );
 
   // Auth state
-  const { userInfo, isInitialized } = useSelector((state) => state.auth);
+  const { userInfo, isInitialized, sessionCheckError } = useSelector(
+    (state) => state.auth,
+  );
   const isAuthed = !!userInfo;
   const isAdmin = !!userInfo?.isAdmin;
+  const hasSessionCheckError = !!sessionCheckError && !isAuthed;
   const isPendingApproval = !isAdmin && userInfo?.approvalStatus === "Pending";
 
   const firstName = (() => {
@@ -158,6 +164,10 @@ export default function Header() {
     }
   };
 
+  const handleRetrySession = () => {
+    dispatch(restartSessionCheck());
+  };
+
   return (
     <>
       <header
@@ -200,7 +210,16 @@ export default function Header() {
             </NavLink>
 
             {/* Auth (desktop) */}
-            {!isInitialized ? null : isAuthed ? (
+            {!isInitialized ? null : hasSessionCheckError ? (
+              <button
+                onClick={handleRetrySession}
+                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-violet-700 transition hover:bg-violet-50"
+                type="button"
+              >
+                <FaUser size={18} />
+                Try again
+              </button>
+            ) : isAuthed ? (
               <>
                 <NavLink to="/account" className={desktopLink}>
                   <FaUser size={18} />
@@ -370,6 +389,35 @@ export default function Header() {
                           Loading your session...
                         </span>
                       </span>
+                    </div>
+                  </div>
+                ) : hasSessionCheckError ? (
+                  <div className="rounded-xl bg-violet-50 px-3 py-3 text-sm ring-1 ring-violet-100">
+                    <div className="flex items-start gap-3 text-violet-900">
+                      <FaUser size={20} className="mt-0.5 shrink-0" />
+                      <span className="flex flex-1 flex-col">
+                        <span className="font-semibold">
+                          Couldn't confirm session
+                        </span>
+                        <span className="text-xs text-violet-700/80">
+                          Try again, or sign in if it continues.
+                        </span>
+                      </span>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRetrySession}
+                        className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white transition hover:bg-violet-700"
+                      >
+                        Try again
+                      </button>
+                      <NavLink
+                        to="/login"
+                        className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg border border-violet-200 bg-white px-3 text-xs font-semibold text-violet-700 transition hover:bg-violet-50"
+                      >
+                        Sign in
+                      </NavLink>
                     </div>
                   </div>
                 ) : isAuthed ? (

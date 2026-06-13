@@ -1,6 +1,8 @@
 // src/features/auth/usersApiSlice.js
 import { apiSlice } from "../../app/apiSlice";
 
+const PROFILE_SESSION_TIMEOUT_MS = 12000;
+
 export const usersApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation({
@@ -31,7 +33,10 @@ export const usersApiSlice = apiSlice.injectEndpoints({
 
     // Profile (auto + lazy hooks are both generated from this single query)
     getMyProfile: builder.query({
-      query: () => "/users/account/profile",
+      query: () => ({
+        url: "/users/account/profile",
+        timeout: PROFILE_SESSION_TIMEOUT_MS,
+      }),
       providesTags: (result) => [
         { type: "User", id: "ME" },
         ...(result?.data?._id ? [{ type: "User", id: result.data._id }] : []),
@@ -44,7 +49,7 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         method: "PUT",
         body,
       }),
-      invalidatesTags: (_result) => [{ type: "User", id: "ME" }],
+      invalidatesTags: () => [{ type: "User", id: "ME" }],
     }),
 
 // ✅ Admin: list users (for assigning quote owner, etc.)

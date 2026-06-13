@@ -5,14 +5,21 @@ import { FiShield } from 'react-icons/fi'
 
 import RouteStatePage from '../common/RouteStatePage'
 import DelayedRouteProgress from './DelayedRouteProgress'
+import SessionCheckFailed from './SessionCheckFailed'
 
 export default function RequireAdmin() {
   const location = useLocation()
-  const { userInfo, isInitialized } = useSelector((state) => state.auth)
+  const { userInfo, isInitialized, sessionCheckError } = useSelector(
+    (state) => state.auth,
+  )
 
   // Wait for AuthBootstrap to finish
   if (!isInitialized) {
     return <DelayedRouteProgress />
+  }
+
+  if (!userInfo && sessionCheckError) {
+    return <SessionCheckFailed />
   }
 
   // Not logged in → go to login, preserve intended destination
