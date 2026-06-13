@@ -13,7 +13,7 @@ export default function SearchFilter({
   const [isOpen, setIsOpen] = useState(false)
   const blurTimeoutRef = useRef(null)
 
-  const values = field?.allowedValues ?? []
+  const values = useMemo(() => field?.allowedValues ?? [], [field?.allowedValues])
   const multi = field?.multi !== false
   const hasSelection = selected.length > 0
 

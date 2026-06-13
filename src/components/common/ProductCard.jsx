@@ -104,10 +104,14 @@ export default function ProductCard({ product }) {
     typeof quantity === 'number' ? quantity : parseInt(quantity, 10) || 1
   const safeQty = Math.max(qtyNum, minQty)
   const availability = resolveProductAvailability(item, safeQty)
+  const isChecking =
+    availability.status === PRODUCT_AVAILABILITY_STATUS.CHECKING
   const isUnavailable =
     availability.status === PRODUCT_AVAILABILITY_STATUS.UNAVAILABLE
 
   const availabilityClass = {
+    [PRODUCT_AVAILABILITY_STATUS.CHECKING]:
+      'bg-white/95 text-slate-600 ring-slate-200',
     [PRODUCT_AVAILABILITY_STATUS.AVAILABLE]:
       'bg-emerald-50 text-emerald-700 ring-emerald-200',
     [PRODUCT_AVAILABILITY_STATUS.PARTIAL]:
@@ -136,7 +140,7 @@ export default function ProductCard({ product }) {
     setQuantity(minQty)
   }
 
-  const availabilityBadge = (
+  const availabilityBadge = isChecking ? null : (
     <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
       <span
         className={[

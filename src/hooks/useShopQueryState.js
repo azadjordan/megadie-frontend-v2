@@ -58,24 +58,34 @@ export default function useShopQueryState(options = {}) {
   const setPage = useCallback(
     (nextPage) => {
       const p = Math.max(Number(nextPage) || 1, 1);
-      const next = new URLSearchParams(searchParams);
-      next.set("page", String(p));
-      setSearchParams(next, { replace: true });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("page", String(p));
+          return next;
+        },
+        { replace: true }
+      );
     },
-    [searchParams, setSearchParams]
+    [setSearchParams]
   );
 
   const setProductType = useCallback(
     (nextProductType) => {
-      const next = new URLSearchParams();
-      next.set("productType", String(nextProductType || defaultProductType));
-      next.set("page", "1");
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams();
+          next.set("productType", String(nextProductType || defaultProductType));
+          next.set("page", "1");
 
-      const sort = searchParams.get("sort");
-      if (sort) next.set("sort", sort);
-      setSearchParams(next, { replace: true });
+          const sort = prev.get("sort");
+          if (sort) next.set("sort", sort);
+          return next;
+        },
+        { replace: true }
+      );
     },
-    [searchParams, setSearchParams, defaultProductType]
+    [setSearchParams, defaultProductType]
   );
 
   const toggleFilterValue = useCallback(
@@ -85,54 +95,71 @@ export default function useShopQueryState(options = {}) {
       const v = String(value || "").trim();
       if (!v) return;
 
-      const curr = parseList(searchParams.get(key));
+      setSearchParams(
+        (prev) => {
+          const curr = parseList(prev.get(key));
 
-      let nextList = [];
-      if (multi) {
-        nextList = curr.includes(v) ? curr.filter((x) => x !== v) : [...curr, v];
-      } else {
-        const isSelected = curr.length === 1 && curr[0] === v;
-        nextList = isSelected ? [] : [v];
-      }
+          let nextList = [];
+          if (multi) {
+            nextList = curr.includes(v)
+              ? curr.filter((x) => x !== v)
+              : [...curr, v];
+          } else {
+            const isSelected = curr.length === 1 && curr[0] === v;
+            nextList = isSelected ? [] : [v];
+          }
 
-      const next = new URLSearchParams(searchParams);
-      const csv = toCsv(nextList);
+          const next = new URLSearchParams(prev);
+          const csv = toCsv(nextList);
 
-      if (csv) next.set(key, csv);
-      else next.delete(key);
+          if (csv) next.set(key, csv);
+          else next.delete(key);
 
-      next.set("page", "1"); // reset pagination on filter change
-      setSearchParams(next, { replace: true });
+          next.set("page", "1"); // reset pagination on filter change
+          return next;
+        },
+        { replace: true }
+      );
     },
-    [searchParams, setSearchParams]
+    [setSearchParams]
   );
 
   const setFilter = useCallback(
     (key, values) => {
       if (!key || CONTROL_KEYS.has(key)) return;
 
-      const next = new URLSearchParams(searchParams);
-      const csv = toCsv(values);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const csv = toCsv(values);
 
-      if (csv) next.set(key, csv);
-      else next.delete(key);
+          if (csv) next.set(key, csv);
+          else next.delete(key);
 
-      next.set("page", "1");
-      setSearchParams(next, { replace: true });
+          next.set("page", "1");
+          return next;
+        },
+        { replace: true }
+      );
     },
-    [searchParams, setSearchParams]
+    [setSearchParams]
   );
 
   const clearAllFilters = useCallback(() => {
-    const next = new URLSearchParams(searchParams);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
 
-    for (const k of Array.from(next.keys())) {
-      if (!CONTROL_KEYS.has(k)) next.delete(k);
-    }
+        for (const k of Array.from(next.keys())) {
+          if (!CONTROL_KEYS.has(k)) next.delete(k);
+        }
 
-    next.set("page", "1");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+        next.set("page", "1");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
 
   // This is what you pass into useGetProductsQuery(...)
   const productsQueryParams = useMemo(() => {

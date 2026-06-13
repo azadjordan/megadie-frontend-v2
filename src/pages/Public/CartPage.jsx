@@ -34,6 +34,8 @@ const resolveProduct = (raw) => {
 };
 
 const availabilityClassByStatus = {
+  [PRODUCT_AVAILABILITY_STATUS.CHECKING]:
+    "bg-white text-slate-600 ring-slate-200",
   [PRODUCT_AVAILABILITY_STATUS.AVAILABLE]:
     "bg-emerald-50 text-emerald-700 ring-emerald-200",
   [PRODUCT_AVAILABILITY_STATUS.PARTIAL]:
@@ -234,10 +236,12 @@ export default function CartPage() {
                   const availabilityLabel = getAvailabilityLabel(availability);
                   const availabilityClass =
                     availabilityClassByStatus[availability.status];
+                  const showAvailabilityBadge =
+                    availability.status !== PRODUCT_AVAILABILITY_STATUS.CHECKING;
                   const showSourcingBadge =
                     availability.status === PRODUCT_AVAILABILITY_STATUS.PARTIAL &&
                     availability.shortageQty > 0;
-                  const availabilityBadge = (
+                  const availabilityBadge = showAvailabilityBadge ? (
                     <div className="flex max-w-full shrink-0 flex-col items-start gap-1 lg:items-end">
                       <span
                         className={[
@@ -255,7 +259,7 @@ export default function CartPage() {
                         </span>
                       ) : null}
                     </div>
-                  );
+                  ) : null;
                   const image =
                     item?.images?.[0] || item?.imageUrl || placeholder;
                   const name = item?.name || "Untitled product";

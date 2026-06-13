@@ -4,6 +4,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { FiShield } from 'react-icons/fi'
 
 import RouteStatePage from '../common/RouteStatePage'
+import DelayedRouteProgress from './DelayedRouteProgress'
 
 export default function RequireAdmin() {
   const location = useLocation()
@@ -11,14 +12,7 @@ export default function RequireAdmin() {
 
   // Wait for AuthBootstrap to finish
   if (!isInitialized) {
-    return (
-      <div className="mx-auto max-w-[1360px] px-4 py-10">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="text-sm font-medium text-slate-900">Checking session…</div>
-          <div className="mt-1 text-sm text-slate-600">Please wait.</div>
-        </div>
-      </div>
-    )
+    return <DelayedRouteProgress />
   }
 
   // Not logged in → go to login, preserve intended destination

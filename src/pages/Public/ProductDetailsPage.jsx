@@ -127,6 +127,8 @@ export default function ProductDetailsPage() {
   const safeSelectedQty = Math.max(qtyNum, minQty);
   const availability = resolveProductAvailability(product, safeSelectedQty);
   const availabilityClass = {
+    [PRODUCT_AVAILABILITY_STATUS.CHECKING]:
+      "bg-white text-slate-600 ring-slate-200",
     [PRODUCT_AVAILABILITY_STATUS.AVAILABLE]:
       "bg-emerald-50 text-emerald-700 ring-emerald-200",
     [PRODUCT_AVAILABILITY_STATUS.PARTIAL]:

@@ -1,4 +1,5 @@
 export const PRODUCT_AVAILABILITY_STATUS = {
+  CHECKING: "CHECKING",
   AVAILABLE: "AVAILABLE",
   PARTIAL: "PARTIAL",
   MAYBE: "MAYBE",
@@ -37,6 +38,18 @@ export const resolveProductAvailability = (product, selectedQty = 1) => {
       availableNow,
       requestedQty,
       shortageQty: requestedQty,
+    };
+  }
+
+  if (product?.availability === null) {
+    return {
+      status: PRODUCT_AVAILABILITY_STATUS.CHECKING,
+      label: "Checking",
+      summary: "Checking",
+      detail: "Checking availability",
+      availableNow,
+      requestedQty,
+      shortageQty: 0,
     };
   }
 

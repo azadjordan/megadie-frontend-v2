@@ -3,11 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
 import { FaFilter } from "react-icons/fa";
 
-import { useGetProductsQuery } from "../../features/products/productsApiSlice";
+import {
+  useGetProductsAvailabilityQuery,
+  useGetProductsQuery,
+} from "../../features/products/productsApiSlice";
 import { useGetFilterConfigsQuery } from "../../features/filters/filterConfigsApiSlice";
 import { useGetCategoriesQuery } from "../../features/categories/categoriesApiSlice";
 
-import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import ProductCard from "../../components/common/ProductCard";
 import Pagination from "../../components/common/Pagination";
@@ -18,6 +20,68 @@ import useShopQueryState from "../../hooks/useShopQueryState";
 
 const DEFAULT_PRODUCT_TYPE = "Ribbon";
 const PAGE_LIMIT = 16;
+const EMPTY_ARRAY = [];
+const SKELETON_CARD_COUNT = 8;
+
+function ProductCardSkeleton() {
+  return (
+    <article
+      aria-hidden="true"
+      className="flex h-full flex-col overflow-hidden rounded-2xl bg-white/90 shadow-sm ring-1 ring-slate-200/80"
+    >
+      <div className="h-40 w-full animate-pulse bg-slate-100" />
+
+      <div className="flex flex-1 flex-col gap-2 px-3 pb-3 pt-3">
+        <div className="space-y-2">
+          <div className="h-3.5 w-11/12 animate-pulse rounded-full bg-slate-200" />
+          <div className="h-3.5 w-7/12 animate-pulse rounded-full bg-slate-100" />
+        </div>
+
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          <div className="h-5 w-14 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-5 w-20 animate-pulse rounded-full bg-slate-100" />
+        </div>
+
+        <div className="mt-auto flex flex-col gap-2 pt-2 lg:flex-row lg:items-center">
+          <div className="h-9 w-full animate-pulse rounded-lg bg-slate-100 lg:w-24" />
+          <div className="h-9 w-full animate-pulse rounded-lg bg-slate-100 lg:w-24" />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ProductGridSkeleton() {
+  return (
+    <div role="status" aria-live="polite">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: SKELETON_CARD_COUNT }, (_, index) => (
+          <ProductCardSkeleton key={index} />
+        ))}
+      </div>
+      <span className="sr-only">Loading products</span>
+    </div>
+  );
+}
+
+function FilterPanelSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="space-y-5 rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="h-3.5 w-16 animate-pulse rounded-full bg-slate-200" />
+        <div className="h-3 w-12 animate-pulse rounded-full bg-slate-100" />
+      </div>
+      <div className="space-y-3">
+        <div className="h-9 w-full animate-pulse rounded-lg bg-slate-100" />
+        <div className="h-9 w-10/12 animate-pulse rounded-lg bg-slate-100" />
+        <div className="h-9 w-11/12 animate-pulse rounded-lg bg-slate-100" />
+      </div>
+    </div>
+  );
+}
 
 export default function ShopPage() {
   const location = useLocation();
@@ -38,7 +102,7 @@ export default function ShopPage() {
 
   // 1) Filter configs
   const configsQ = useGetFilterConfigsQuery();
-  const filterConfigs = configsQ.data ?? [];
+  const filterConfigs = configsQ.data ?? EMPTY_ARRAY;
 
   const productTypes = useMemo(
     () => filterConfigs.map((c) => c.productType),
@@ -62,7 +126,7 @@ export default function ShopPage() {
     { skip: !needsCategories }
   );
 
-  const categories = categoriesQ.data ?? [];
+  const categories = categoriesQ.data ?? EMPTY_ARRAY;
 
   // Map category key -> label (and only for allowed values if provided)
   const categoryLabelByKey = useMemo(() => {
@@ -83,18 +147,55 @@ export default function ShopPage() {
   }, [needsCategories, categories, activeFilterConfig]);
 
   // 3) Products
-  const shouldSkipProducts =
-    configsQ.isLoading ||
-    configsQ.isError ||
-    (needsCategories && (categoriesQ.isLoading || categoriesQ.isError));
+  const productsQ = useGetProductsQuery({
+    ...productsQueryParams,
+    featuredFirst: true,
+    includeAvailability: false,
+  });
 
-  const productsQ = useGetProductsQuery(
-    { ...productsQueryParams, featuredFirst: true },
-    { skip: shouldSkipProducts }
-  );
-
-  const products = productsQ.data?.products ?? [];
+  const rawProducts = productsQ.data?.products ?? EMPTY_ARRAY;
   const pagination = productsQ.data?.pagination ?? null;
+  const productIds = useMemo(
+    () =>
+      rawProducts
+        .map((product) => product?._id || product?.id)
+        .filter(Boolean)
+        .map(String),
+    [rawProducts]
+  );
+  const availabilityQ = useGetProductsAvailabilityQuery(productIds, {
+    skip: productIds.length === 0,
+  });
+  const availabilityRows = availabilityQ.currentData ?? EMPTY_ARRAY;
+  const availabilityByProductId = useMemo(
+    () =>
+      new Map(
+        availabilityRows
+          .filter((row) => row?.productId)
+          .map((row) => [String(row.productId), row])
+      ),
+    [availabilityRows]
+  );
+  const products = useMemo(
+    () =>
+      rawProducts.map((product) => {
+        const productId = String(product?._id || product?.id || "");
+        const availabilityRow = productId
+          ? availabilityByProductId.get(productId)
+          : null;
+
+        if (!availabilityRow) {
+          return { ...product, availability: null };
+        }
+
+        return {
+          ...product,
+          isAvailable: availabilityRow.isAvailable,
+          availability: availabilityRow.availability,
+        };
+      }),
+    [rawProducts, availabilityByProductId]
+  );
 
   const scrollKey = `shop-scroll:${location.pathname}${location.search}`;
   const hasRestoredScroll = useRef(false);
@@ -175,28 +276,51 @@ export default function ShopPage() {
     scrollKey,
   ]);
 
-  // ---- Early returns (kept predictable) ----
-  if (configsQ.isLoading || (needsCategories && categoriesQ.isLoading)) {
-    return <Loader />;
-  }
+  const renderFilterNotice = (message) => (
+    <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
+      <p className="text-sm text-slate-500">{message}</p>
+    </div>
+  );
 
-  if (configsQ.isError) {
-    const msg =
-      configsQ.error?.data?.message ||
-      configsQ.error?.error ||
-      "Failed to load filter configurations.";
-    return <ErrorMessage message={msg} />;
-  }
+  const renderFilterControls = ({ stacked = false } = {}) => {
+    if (configsQ.isLoading) {
+      return <FilterPanelSkeleton />;
+    }
 
-  if (needsCategories && categoriesQ.isError) {
-    const msg =
-      categoriesQ.error?.data?.message ||
-      categoriesQ.error?.error ||
-      "Failed to load categories.";
-    return <ErrorMessage message={msg} />;
-  }
+    if (configsQ.isError) {
+      return renderFilterNotice("Filters could not load.");
+    }
 
-  if (productsQ.isLoading) return <Loader />;
+    return (
+      <>
+        <ProductTypeNav
+          productTypes={productTypes}
+          value={productType}
+          onChange={(v) => {
+            setProductType(v);
+          }}
+          stacked={stacked}
+        />
+
+        {activeFilterConfig ? (
+          <ShopFilters
+            config={activeFilterConfig}
+            selectedFilters={filters}
+            onToggle={toggleFilterValue}
+            valueLabelMaps={{ categoryKeys: categoryLabelByKey }}
+            onClearAll={clearAllFilters}
+            hasActiveFilters={hasActiveFilters}
+          />
+        ) : (
+          renderFilterNotice("No filters available.")
+        )}
+
+        {needsCategories && categoriesQ.isError
+          ? renderFilterNotice("Some category labels could not load.")
+          : null}
+      </>
+    );
+  };
 
   if (productsQ.isError) {
     const msg =
@@ -251,34 +375,7 @@ export default function ShopPage() {
             </div>
 
             <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-4 py-4">
-              <ProductTypeNav
-                productTypes={productTypes}
-                value={productType}
-                onChange={(v) => {
-                  setPage(1);
-                  setProductType(v);
-                }}
-                disabled={productsQ.isFetching}
-                stacked
-              />
-
-              {activeFilterConfig ? (
-                <ShopFilters
-                  config={activeFilterConfig}
-                  selectedFilters={filters}
-                  onToggle={toggleFilterValue}
-                  disabled={productsQ.isFetching}
-                  valueLabelMaps={{ categoryKeys: categoryLabelByKey }}
-                  onClearAll={clearAllFilters}
-                  hasActiveFilters={hasActiveFilters}
-                />
-              ) : (
-                <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
-                  <p className="text-sm text-slate-500">
-                    No filters available.
-                  </p>
-                </div>
-              )}
+              {renderFilterControls({ stacked: true })}
             </div>
 
             <div className="shrink-0 border-t border-slate-200 bg-white p-3">
@@ -298,42 +395,24 @@ export default function ShopPage() {
         {/* Filters + product types (left rail) */}
         <aside className="hidden space-y-4 lg:col-span-3 lg:block">
           <div className="space-y-4 lg:sticky lg:top-16 lg:self-start">
-            <ProductTypeNav
-              productTypes={productTypes}
-              value={productType}
-              onChange={(v) => {
-                // keep page stable / avoid stale results
-                setPage(1);
-                setProductType(v);
-              }}
-              disabled={productsQ.isFetching}
-            />
-
-            {activeFilterConfig ? (
-              <ShopFilters
-                config={activeFilterConfig}
-                selectedFilters={filters}
-                onToggle={toggleFilterValue}
-                disabled={productsQ.isFetching}
-                valueLabelMaps={{ categoryKeys: categoryLabelByKey }}
-                onClearAll={clearAllFilters}
-                hasActiveFilters={hasActiveFilters}
-              />
-            ) : (
-              <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
-                <p className="text-sm text-slate-500">No filters available.</p>
-              </div>
-            )}
+            {renderFilterControls()}
           </div>
         </aside>
 
         {/* Results */}
         <section className="space-y-4 lg:col-span-9">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="whitespace-nowrap text-xs text-slate-500">
-              {showingText}
-            </span>
-            {pagination ? (
+            {productsQ.isLoading ? (
+              <span
+                aria-hidden="true"
+                className="h-3.5 w-32 animate-pulse rounded-full bg-slate-200"
+              />
+            ) : (
+              <span className="whitespace-nowrap text-xs text-slate-500">
+                {showingText}
+              </span>
+            )}
+            {!productsQ.isLoading && pagination ? (
               <Pagination
                 pagination={pagination}
                 onPageChange={setPage}
@@ -345,7 +424,9 @@ export default function ShopPage() {
             ) : null}
           </div>
 
-          {products.length === 0 ? (
+          {productsQ.isLoading ? (
+            <ProductGridSkeleton />
+          ) : products.length === 0 ? (
             <div className="rounded-2xl bg-white/90 p-4 text-sm text-slate-500 ring-1 ring-slate-200/80">
               No products available for this selection.
             </div>
@@ -357,14 +438,16 @@ export default function ShopPage() {
             </div>
           )}
 
-          <div className="flex justify-end">
-            <Pagination
-              variant="full"
-              pagination={pagination}
-              onPageChange={setPage}
-              tone="violet"
-            />
-          </div>
+          {!productsQ.isLoading ? (
+            <div className="flex justify-end">
+              <Pagination
+                variant="full"
+                pagination={pagination}
+                onPageChange={setPage}
+                tone="violet"
+              />
+            </div>
+          ) : null}
 
           {productsQ.isFetching && !productsQ.isLoading ? (
             <p className="text-[11px] text-right text-slate-400">
