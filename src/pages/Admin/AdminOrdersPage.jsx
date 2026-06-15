@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   FiChevronDown,
   FiChevronUp,
+  FiFileText,
   FiRefreshCw,
   FiSend,
   FiSettings,
@@ -35,7 +36,10 @@ import {
   useMarkOrderDeliveredMutation,
   useUpdateOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
-import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
+import {
+  useCreateInvoiceFromOrderMutation,
+  useLazyGetInvoicePdfQuery,
+} from "../../features/invoices/invoicesApiSlice";
 import { useFinalizeOrderAllocationsMutation } from "../../features/orderAllocations/orderAllocationsApiSlice";
 import { useAddPaymentToInvoiceMutation } from "../../features/payments/paymentsApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
@@ -239,6 +243,46 @@ function formatBillingBalance(billing) {
   )}`;
 }
 
+function InvoicePdfButton({
+  billing,
+  isBusy = false,
+  isActive = false,
+  iconOnly = false,
+  onClick,
+}) {
+  if (!billing?.hasInvoice || !billing.invoiceId) return null;
+
+  const disabled = isBusy || isActive;
+  const label = isActive ? "PDF.." : "PDF";
+  const className = iconOnly
+    ? [
+        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 transition hover:bg-indigo-100",
+        disabled
+          ? "cursor-not-allowed border-slate-200 bg-white text-slate-300 hover:bg-white"
+          : "",
+      ].join(" ")
+    : [
+        "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-full px-2.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+        disabled
+          ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+          : "bg-indigo-50 text-indigo-700 ring-indigo-200 hover:bg-indigo-100",
+      ].join(" ");
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title="Open invoice PDF"
+      aria-label={`Open PDF for invoice ${billing.invoiceLabel}`}
+      className={className}
+    >
+      <FiFileText className="h-3.5 w-3.5" aria-hidden="true" />
+      {iconOnly ? <span className="sr-only">{label}</span> : label}
+    </button>
+  );
+}
+
 function PrimaryActionControl({
   action,
   order,
@@ -301,22 +345,22 @@ function PrimaryActionControl({
   );
 }
 
-function PaymentActionControl({
-  paymentAction,
+function BillingActionControl({
+  action,
   order,
   compact = false,
   isBusy = false,
   onAction,
 }) {
-  if (!paymentAction?.visible) return null;
-  const enabled = paymentAction.enabled !== false && !isBusy;
+  if (!action?.visible) return null;
+  const enabled = action.enabled !== false && !isBusy;
 
   if (enabled) {
     return (
       <button
         type="button"
-        onClick={() => onAction?.(order)}
-        title={paymentAction.reason || paymentAction.label}
+        onClick={() => onAction?.(order, action)}
+        title={action.reason || action.label}
         className={[
           compact
             ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
@@ -324,7 +368,7 @@ function PaymentActionControl({
           "bg-white font-semibold uppercase tracking-wider text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50",
         ].join(" ")}
       >
-        {isBusy ? "Saving..." : paymentAction.label}
+        {isBusy ? "Working..." : action.label}
       </button>
     );
   }
@@ -333,7 +377,7 @@ function PaymentActionControl({
     <button
       type="button"
       disabled
-      title={paymentAction.reason || paymentAction.label}
+      title={action.reason || action.label}
       className={[
         compact
           ? "inline-flex h-8 items-center justify-center rounded-lg px-3 text-[11px]"
@@ -341,7 +385,7 @@ function PaymentActionControl({
         "cursor-not-allowed bg-white font-semibold uppercase tracking-wider text-slate-400 ring-1 ring-inset ring-slate-200",
       ].join(" ")}
     >
-      {paymentAction.label}
+      {action.label}
     </button>
   );
 }
@@ -386,6 +430,7 @@ export default function AdminOrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copyId, setCopyId] = useState(null);
+  const [pdfId, setPdfId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [busyOrderId, setBusyOrderId] = useState("");
   const [deliverTarget, setDeliverTarget] = useState(null);
@@ -425,6 +470,8 @@ export default function AdminOrdersPage() {
   ] = useMarkOrderDeliveredMutation();
   const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
     useCreateInvoiceFromOrderMutation();
+  const [getInvoicePdf, { isFetching: isPdfLoading }] =
+    useLazyGetInvoicePdfQuery();
   const [finalizeAllocations, { isLoading: isFinalizing }] =
     useFinalizeOrderAllocationsMutation();
   const [addPaymentToInvoice, { isLoading: isAddingPayment, error: addPaymentError }] =
@@ -462,6 +509,40 @@ export default function AdminOrdersPage() {
       toast.error("Failed to copy order.");
     } finally {
       setCopyId(null);
+    }
+  }
+
+  async function onInvoicePdf(order) {
+    const invoice =
+      order?.invoice && typeof order.invoice === "object" ? order.invoice : null;
+    const invoiceId =
+      invoice?._id || (typeof order?.invoice === "string" ? order.invoice : "");
+
+    if (!invoiceId || pdfId || isPdfLoading) return;
+
+    try {
+      setPdfId(invoiceId);
+      const blob = await getInvoicePdf(invoiceId).unwrap();
+      const fileName = invoice?.invoiceNumber
+        ? `invoice-${invoice.invoiceNumber}.pdf`
+        : `invoice-${invoiceId}.pdf`;
+      const url = window.URL.createObjectURL(blob);
+      const newTab = window.open(url, "_blank", "noopener,noreferrer");
+
+      if (!newTab) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      toast.error(friendlyApiError(err, "Failed to open invoice PDF."));
+    } finally {
+      setPdfId(null);
     }
   }
 
@@ -718,11 +799,22 @@ export default function AdminOrdersPage() {
       case ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED:
         openDeliverModal(order);
         break;
+      case ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK:
+        onFinalizeStock(order);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function onBillingAction(order, action) {
+    if (!order?._id || !action?.id) return;
+    switch (action.id) {
       case ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE:
         openCreateModal(order);
         break;
-      case ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK:
-        onFinalizeStock(order);
+      case ADMIN_ORDER_ACTION_IDS.ADD_PAYMENT:
+        openAddPayment(order);
         break;
       default:
         break;
@@ -926,23 +1018,31 @@ export default function AdminOrdersPage() {
           </div>
 
           <div className="border-t border-slate-100 pt-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Billing
-                </div>
-                <div className="mt-1 truncate text-xs font-semibold text-slate-900">
-                  {billing.invoiceLabel}
-                </div>
-                <div className="text-xs text-slate-500">
-                  {formatBillingBalance(billing)}
-                </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Billing
               </div>
+              <InvoicePdfButton
+                billing={billing}
+                isBusy={isPdfLoading}
+                isActive={pdfId === billing.invoiceId}
+                onClick={() => onInvoicePdf(o)}
+              />
+            </div>
+            <div className="mt-1 min-w-0">
+              <span className="block truncate text-xs font-semibold text-slate-900">
+                {billing.invoiceLabel}
+              </span>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <PaymentBadge
                 status={billing.paymentStatus}
                 hasInvoice={billing.hasInvoice}
                 size="compact"
               />
+              <span className="text-xs text-slate-500">
+                {formatBillingBalance(billing)}
+              </span>
             </div>
           </div>
         </div>
@@ -970,11 +1070,14 @@ export default function AdminOrdersPage() {
             isBusy={busyOrderId === o._id}
             onAction={onPrimaryAction}
           />
-          <PaymentActionControl
-            paymentAction={state.paymentAction}
+          <BillingActionControl
+            action={state.billingAction}
             order={o}
-            isBusy={isAddingPayment && paymentTarget?.order?._id === o._id}
-            onAction={openAddPayment}
+            isBusy={
+              (isAddingPayment && paymentTarget?.order?._id === o._id) ||
+              (isCreating && createTarget?._id === o._id)
+            }
+            onAction={onBillingAction}
           />
           <button
             type="button"
@@ -1090,8 +1193,10 @@ export default function AdminOrdersPage() {
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="text-xs font-semibold text-slate-900">
-                            {billing.invoiceLabel}
+                          <div className="min-w-0">
+                            <span className="block truncate text-xs font-semibold text-slate-900">
+                              {billing.invoiceLabel}
+                            </span>
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <PaymentBadge
@@ -1123,12 +1228,22 @@ export default function AdminOrdersPage() {
                               onAction={onPrimaryAction}
                               compact
                             />
-                            <PaymentActionControl
-                              paymentAction={state.paymentAction}
+                            <BillingActionControl
+                              action={state.billingAction}
                               order={o}
-                              isBusy={isAddingPayment && paymentTarget?.order?._id === o._id}
-                              onAction={openAddPayment}
+                              isBusy={
+                                (isAddingPayment && paymentTarget?.order?._id === o._id) ||
+                                (isCreating && createTarget?._id === o._id)
+                              }
+                              onAction={onBillingAction}
                               compact
+                            />
+                            <InvoicePdfButton
+                              billing={billing}
+                              isBusy={isPdfLoading}
+                              isActive={pdfId === billing.invoiceId}
+                              onClick={() => onInvoicePdf(o)}
+                              iconOnly
                             />
                             <button
                               type="button"

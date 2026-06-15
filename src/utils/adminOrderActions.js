@@ -9,17 +9,19 @@ export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
   RESERVE_STOCK: "reserve-stock",
   MARK_DELIVERED: "mark-delivered",
   CREATE_INVOICE: "create-invoice",
+  ADD_PAYMENT: "add-payment",
   FINALIZE_STOCK: "finalize-stock",
   OPEN_ORDER: "open-order",
 });
 
 export const ADMIN_ORDER_ACTION_LABELS = Object.freeze({
-  [ADMIN_ORDER_ACTION_IDS.MARK_SHIPPING]: "Mark Shipping",
-  [ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK]: "Reserve Stock",
-  [ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED]: "Mark Delivered",
-  [ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE]: "Create Invoice",
-  [ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK]: "Finalize Stock",
-  [ADMIN_ORDER_ACTION_IDS.OPEN_ORDER]: "Open Order",
+  [ADMIN_ORDER_ACTION_IDS.MARK_SHIPPING]: "Ship",
+  [ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK]: "Reserve",
+  [ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED]: "Deliver",
+  [ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE]: "Invoice",
+  [ADMIN_ORDER_ACTION_IDS.ADD_PAYMENT]: "Pay",
+  [ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK]: "Deduct",
+  [ADMIN_ORDER_ACTION_IDS.OPEN_ORDER]: "Open",
 });
 
 const ALLOCATION_LABELS = {
@@ -105,7 +107,6 @@ export function getAdminOrderBillingState(order) {
 
 export function getAdminOrderPrimaryAction(order) {
   const fulfillment = getAdminOrderFulfillmentState(order);
-  const billing = getAdminOrderBillingState(order);
 
   if (fulfillment.isCancelled) return null;
 
@@ -132,10 +133,6 @@ export function getAdminOrderPrimaryAction(order) {
   }
 
   if (fulfillment.isDelivered) {
-    if (!billing.hasInvoice) {
-      return buildAction(ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE);
-    }
-
     if (!fulfillment.stockFinalized) {
       if (!fulfillment.isAllocated) {
         return buildAction(ADMIN_ORDER_ACTION_IDS.OPEN_ORDER, {
@@ -151,16 +148,29 @@ export function getAdminOrderPrimaryAction(order) {
   return null;
 }
 
-export function getAdminOrderPaymentAction(order) {
+export function getAdminOrderBillingAction(order) {
+  const fulfillment = getAdminOrderFulfillmentState(order);
   const billing = getAdminOrderBillingState(order);
+
+  if (fulfillment.isCancelled) return null;
+
+  if (!billing.hasInvoice) {
+    return buildAction(ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE, {
+      visible: true,
+      reason: "Create and send an invoice for this order.",
+    });
+  }
+
   const visible =
     billing.hasInvoice &&
     billing.paymentStatus !== "Paid" &&
     billing.invoice?.status !== "Cancelled";
 
+  if (!visible) return null;
+
   return {
-    id: "add-payment",
-    label: "Add Payment",
+    id: ADMIN_ORDER_ACTION_IDS.ADD_PAYMENT,
+    label: ADMIN_ORDER_ACTION_LABELS[ADMIN_ORDER_ACTION_IDS.ADD_PAYMENT],
     visible,
     enabled: visible && billing.payable,
     reason: !billing.hasInvoice
@@ -184,6 +194,6 @@ export function getAdminOrderActionState(order) {
     fulfillment,
     billing,
     primaryAction: getAdminOrderPrimaryAction(order),
-    paymentAction: getAdminOrderPaymentAction(order),
+    billingAction: getAdminOrderBillingAction(order),
   };
 }
