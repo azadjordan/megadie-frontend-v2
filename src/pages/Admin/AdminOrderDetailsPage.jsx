@@ -12,6 +12,11 @@ import StepCard from "./request-details/StepCard";
 import OrderSummaryPanel from "./order-details/SummaryPanel";
 import { StatusBadge, StockBadge } from "./order-details/Badges";
 import { getOrderTotals } from "../../utils/orderTotals";
+import {
+  canCreateOrderInvoice,
+  getCreateInvoiceReason,
+  isOrderStockFinalized,
+} from "../../utils/adminOrderWorkflow";
 
 import {
   useGetOrderByIdQuery,
@@ -169,13 +174,8 @@ export default function AdminOrderDetailsPage() {
       ? "Fees are locked once the order is cancelled."
       : "Fees are locked once an invoice exists."
     : "";
-  const canCreateInvoice =
-    ["Processing", "Shipping", "Delivered"].includes(orderStatus) && !hasInvoice;
-  const createInvoiceReason = hasInvoice
-    ? "Invoice attached."
-    : isCancelled
-    ? "Invoices cannot be created for cancelled orders."
-    : "";
+  const canCreateInvoice = canCreateOrderInvoice(order, hasInvoice);
+  const createInvoiceReason = getCreateInvoiceReason(order, hasInvoice);
   const shouldLoadAllocations =
     Boolean(orderId) &&
     (orderStatus === "Shipping" ||
@@ -286,8 +286,7 @@ export default function AdminOrderDetailsPage() {
     return { hasAllocations, hasReservedAllocations, isFullyDeducted };
   }, [allocations, items]);
 
-  const isStockFinalized =
-    Boolean(order?.stockFinalizedAt) || allocationMetrics.isFullyDeducted;
+  const isStockFinalized = isOrderStockFinalized(order, allocationMetrics);
   const releaseAllowed =
     orderStatus === "Shipping" &&
     !isStockFinalized &&

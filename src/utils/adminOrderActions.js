@@ -3,6 +3,11 @@ import {
   hasInvoiceBalanceFields,
   isInvoicePayable,
 } from "./invoiceMoney";
+import {
+  canCreateOrderInvoice,
+  getOrderStatusFlags,
+  isOrderStockFinalized,
+} from "./adminOrderWorkflow";
 
 export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
   MARK_SHIPPING: "mark-shipping",
@@ -63,20 +68,16 @@ function buildAction(id, overrides = {}) {
 }
 
 export function getAdminOrderFulfillmentState(order) {
-  const status = order?.status || "Processing";
+  const statusFlags = getOrderStatusFlags(order);
   const allocationStatus = order?.allocationStatus || "Unallocated";
-  const stockFinalized = Boolean(order?.stockFinalizedAt);
+  const stockFinalized = isOrderStockFinalized(order);
 
   return {
-    status,
+    ...statusFlags,
     allocationStatus,
     allocationLabel: ALLOCATION_LABELS[allocationStatus] || allocationStatus,
     stockFinalized,
     stockLabel: stockFinalized ? "Stock deducted" : "Stock not deducted",
-    isProcessing: status === "Processing",
-    isShipping: status === "Shipping",
-    isDelivered: status === "Delivered",
-    isCancelled: status === "Cancelled",
     isAllocated: allocationStatus === "Allocated",
   };
 }
@@ -154,7 +155,7 @@ export function getAdminOrderBillingAction(order) {
 
   if (fulfillment.isCancelled) return null;
 
-  if (!billing.hasInvoice) {
+  if (!billing.hasInvoice && canCreateOrderInvoice(order, billing.hasInvoice)) {
     return buildAction(ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE, {
       visible: true,
       reason: "Create and send an invoice for this order.",
