@@ -170,11 +170,11 @@ export default function AdminOrderDetailsPage() {
       : "Fees are locked once an invoice exists."
     : "";
   const canCreateInvoice =
-    ["Shipping", "Delivered"].includes(orderStatus) && !hasInvoice;
+    ["Processing", "Shipping", "Delivered"].includes(orderStatus) && !hasInvoice;
   const createInvoiceReason = hasInvoice
     ? "Invoice attached."
-    : !["Shipping", "Delivered"].includes(orderStatus)
-    ? "Invoices can be created once the order is Shipping or Delivered."
+    : isCancelled
+    ? "Invoices cannot be created for cancelled orders."
     : "";
   const shouldLoadAllocations =
     Boolean(orderId) &&
@@ -960,9 +960,9 @@ export default function AdminOrderDetailsPage() {
               </button>
             </div>
 
-            {orderStatus === "Shipping" && canCreateInvoice ? (
+            {canCreateInvoice && orderStatus !== "Delivered" ? (
               <div className="mt-3 text-[11px] text-slate-500">
-                Invoice is typically created after delivery.
+                Invoice can be created before or after delivery.
               </div>
             ) : null}
           </StepCard>

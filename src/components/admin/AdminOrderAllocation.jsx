@@ -69,6 +69,77 @@ const ALLOCATION_STATUS_STYLES = {
 const normalizeAllocationStatus = (status) =>
   status === "Deducted" || status === "Cancelled" ? status : "Reserved";
 
+function getSlotLabel(allocation) {
+  return allocation?.slot?.label || "Unknown slot";
+}
+
+function buildSlotAllocationRows(allocations = []) {
+  const map = new Map();
+
+  for (const allocation of allocations || []) {
+    const qty = Number(allocation?.qty) || 0;
+    if (qty <= 0) continue;
+
+    const slotId = resolveEntityId(allocation?.slot) || getSlotLabel(allocation);
+    const existing = map.get(slotId);
+    if (existing) {
+      existing.qty += qty;
+    } else {
+      map.set(slotId, {
+        id: slotId,
+        label: getSlotLabel(allocation),
+        qty,
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function formatSlotAllocationText(rows = [], limit = 2) {
+  if (!rows.length) return "-";
+  const visibleRows = rows.slice(0, limit);
+  const extraCount = Math.max(0, rows.length - visibleRows.length);
+  const text = visibleRows.map((row) => `${row.label} x${row.qty}`).join(", ");
+  return extraCount > 0 ? `${text} +${extraCount} more` : text;
+}
+
+function SlotAllocationSummary({ label = "Reserved from", rows = [], maxVisible = 4 }) {
+  const visibleRows = rows.slice(0, maxVisible);
+  const extraCount = Math.max(0, rows.length - visibleRows.length);
+
+  return (
+    <div className="mt-3 border-t border-slate-100 pt-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        {label}
+      </div>
+      {rows.length ? (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {visibleRows.map((row) => (
+            <span
+              key={row.id}
+              className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700"
+              title={`${row.label} x${row.qty}`}
+            >
+              {row.label}{" "}
+              <span className="ml-1 tabular-nums text-slate-900">
+                x{row.qty}
+              </span>
+            </span>
+          ))}
+          {extraCount > 0 ? (
+            <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200">
+              +{extraCount} more
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mt-1 text-xs font-semibold text-slate-500">-</div>
+      )}
+    </div>
+  );
+}
+
 function SlotItemsPanel({
   orderId,
   productId,
@@ -1119,6 +1190,20 @@ function AllocationItemCard({
   const orderedQty = Number(item?.qty) || 0;
   const reservedQty = Number(allocationInfo?.total) || 0;
   const isFullyReserved = orderedQty > 0 && reservedQty === orderedQty;
+  const reservedSlotRows = buildSlotAllocationRows(allocationInfo?.list);
+  const deductedSlotRows = buildSlotAllocationRows(
+    (allocationSummary || []).filter(
+      (row) => normalizeAllocationStatus(row?.status) === "Deducted"
+    )
+  );
+  const slotSummaryRows = reservedSlotRows.length
+    ? reservedSlotRows
+    : deductedSlotRows;
+  const slotSummaryLabel = reservedSlotRows.length
+    ? "Reserved from"
+    : deductedSlotRows.length
+    ? "Deducted from"
+    : "Reserved from";
 
   const [availability, setAvailability] = useState({
     status: "idle",
@@ -1191,6 +1276,11 @@ function AllocationItemCard({
             );
           })}
         </div>
+
+        <SlotAllocationSummary
+          label={slotSummaryLabel}
+          rows={slotSummaryRows}
+        />
       </div>
 
       {showSlotActions ? (
@@ -1351,6 +1441,20 @@ export default function AdminOrderAllocation({
       const hasDeductedForItem = allocationSummary.some(
         (row) => normalizeAllocationStatus(row?.status) === "Deducted"
       );
+      const reservedSlotRows = buildSlotAllocationRows(allocationInfo.list);
+      const deductedSlotRows = buildSlotAllocationRows(
+        allocationSummary.filter(
+          (row) => normalizeAllocationStatus(row?.status) === "Deducted"
+        )
+      );
+      const slotSummaryRows = reservedSlotRows.length
+        ? reservedSlotRows
+        : deductedSlotRows;
+      const slotSummaryLabel = reservedSlotRows.length
+        ? "Reserved from"
+        : deductedSlotRows.length
+        ? "Deducted from"
+        : "Reserved from";
       let status = "Unreserved";
       if (hasDeductedForItem || deductedQty > 0) {
         status = "Deducted";
@@ -1374,6 +1478,8 @@ export default function AdminOrderAllocation({
         reservedPct,
         status,
         hasDeductedForItem,
+        slotSummaryRows,
+        slotSummaryLabel,
       };
     });
   }, [rows, allocationsByProduct, allocationSummaryByProduct, deductedByProduct]);
@@ -1643,6 +1749,16 @@ export default function AdminOrderAllocation({
                             Fully reserved
                           </div>
                         )}
+                        <div
+                          className="mt-1 truncate text-[10px] text-slate-500"
+                          title={`${row.slotSummaryLabel}: ${formatSlotAllocationText(
+                            row.slotSummaryRows,
+                            row.slotSummaryRows.length || 1
+                          )}`}
+                        >
+                          {row.slotSummaryLabel}:{" "}
+                          {formatSlotAllocationText(row.slotSummaryRows)}
+                        </div>
                       </button>
                     );
                   })}
