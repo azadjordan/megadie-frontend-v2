@@ -1646,6 +1646,21 @@ export default function AdminOrderAllocation({
                           {row.status}
                         </span>
                       </div>
+                      {row.slotSummaryRows.length ? (
+                        <div
+                          className={[
+                            "mt-1 text-[10px] leading-snug break-words",
+                            isActive ? "text-slate-200" : "text-slate-500",
+                          ].join(" ")}
+                          title={`${row.slotSummaryLabel}: ${formatSlotAllocationText(
+                            row.slotSummaryRows,
+                            row.slotSummaryRows.length || 1
+                          )}`}
+                        >
+                          {row.slotSummaryLabel}:{" "}
+                          {formatSlotAllocationText(row.slotSummaryRows)}
+                        </div>
+                      ) : null}
                     </button>
                   );
                 })}
