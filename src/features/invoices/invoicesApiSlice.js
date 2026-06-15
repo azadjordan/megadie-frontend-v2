@@ -183,6 +183,7 @@ export const {
   useGetMyInvoicesQuery,
   useGetMyInvoiceSummaryQuery,
   useGetInvoiceByIdQuery,
+  useLazyGetInvoiceByIdQuery,
   useLazyGetInvoicePdfQuery,
   useLazyGetStatementOfAccountPdfQuery,
   useUpdateInvoiceByAdminMutation,

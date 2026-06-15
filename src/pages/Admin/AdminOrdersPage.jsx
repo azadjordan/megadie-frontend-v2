@@ -38,6 +38,7 @@ import {
 } from "../../features/orders/ordersApiSlice";
 import {
   useCreateInvoiceFromOrderMutation,
+  useLazyGetInvoiceByIdQuery,
   useLazyGetInvoicePdfQuery,
 } from "../../features/invoices/invoicesApiSlice";
 import { useFinalizeOrderAllocationsMutation } from "../../features/orderAllocations/orderAllocationsApiSlice";
@@ -470,6 +471,7 @@ export default function AdminOrdersPage() {
   ] = useMarkOrderDeliveredMutation();
   const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
     useCreateInvoiceFromOrderMutation();
+  const [getInvoiceById] = useLazyGetInvoiceByIdQuery();
   const [getInvoicePdf, { isFetching: isPdfLoading }] =
     useLazyGetInvoicePdfQuery();
   const [finalizeAllocations, { isLoading: isFinalizing }] =
@@ -502,9 +504,28 @@ export default function AdminOrdersPage() {
     if (!order || copyId) return;
     try {
       setCopyId(order._id);
-      const text = buildAdminOrderShareText(order);
+      const invoice =
+        order?.invoice && typeof order.invoice === "object" ? order.invoice : null;
+      const invoiceId =
+        invoice?._id || (typeof order?.invoice === "string" ? order.invoice : "");
+      let invoiceDetails = null;
+      let missedInvoiceDetails = false;
+
+      if (invoiceId) {
+        try {
+          invoiceDetails = await getInvoiceById(invoiceId).unwrap();
+        } catch {
+          missedInvoiceDetails = true;
+        }
+      }
+
+      const text = buildAdminOrderShareText(order, { invoiceDetails });
       await copyTextToClipboard(text);
-      toast.success("Order copied to clipboard.");
+      if (missedInvoiceDetails) {
+        toast.warning("Order copied without payment receiver details.");
+      } else {
+        toast.success("Order copied to clipboard.");
+      }
     } catch {
       toast.error("Failed to copy order.");
     } finally {

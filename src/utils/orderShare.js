@@ -1,6 +1,11 @@
 import { getOrderLineTotal, getOrderTotals } from "./orderTotals";
 
 const ZWSP = "\u200B";
+const STATUS_MARKS = {
+  done: "✓",
+  missing: "✕",
+  progress: "•",
+};
 
 const preventAutoLink = (text) => {
   if (!text) return text;
@@ -43,29 +48,67 @@ const formatPaymentStatus = (status) => {
   return status;
 };
 
-export const buildAdminOrderShareText = (order) => {
+const getInvoiceFromOrder = (order, invoiceDetails) => {
+  if (invoiceDetails && typeof invoiceDetails === "object") return invoiceDetails;
+  const invoiceValue = order?.invoice;
+  return invoiceValue && typeof invoiceValue === "object" ? invoiceValue : null;
+};
+
+const getInvoiceIdFromOrder = (order) => {
+  const invoiceValue = order?.invoice;
+  return typeof invoiceValue === "string" ? invoiceValue : invoiceValue?._id || "";
+};
+
+const getPaymentReceivers = (invoice) => {
+  const payments = Array.isArray(invoice?.payments) ? invoice.payments : [];
+  const receivers = payments
+    .map((payment) => String(payment?.receivedBy || "").trim())
+    .filter(Boolean);
+
+  return [...new Set(receivers)].join(", ") || "-";
+};
+
+const getOrderStatusMark = (status) => {
+  if (status === "Delivered") return STATUS_MARKS.done;
+  if (status === "Cancelled") return STATUS_MARKS.missing;
+  return STATUS_MARKS.progress;
+};
+
+const getPaymentStatusMark = (status) => {
+  if (status === "Paid") return STATUS_MARKS.done;
+  if (status === "PartiallyPaid") return STATUS_MARKS.progress;
+  return STATUS_MARKS.missing;
+};
+
+export const buildAdminOrderShareText = (order, { invoiceDetails } = {}) => {
   const createdAt = order?.createdAt ? formatShareDate(order.createdAt) : "-";
   const orderNumber = order?.orderNumber || order?._id || "-";
-  const invoiceValue = order?.invoice;
-  const invoiceId =
-    typeof invoiceValue === "string" ? invoiceValue : invoiceValue?._id || "";
-  const invoiceNumber =
-    order?.invoiceNumber ||
-    (invoiceValue && typeof invoiceValue === "object"
-      ? invoiceValue.invoiceNumber
-      : "");
+  const invoice = getInvoiceFromOrder(order, invoiceDetails);
+  const invoiceId = getInvoiceIdFromOrder(order) || invoice?._id || "";
+  const invoiceNumber = order?.invoiceNumber || invoice?.invoiceNumber || "";
   const invoiceLabel = invoiceNumber || invoiceId || "-";
-  const paymentStatus =
-    invoiceValue && typeof invoiceValue === "object"
-      ? invoiceValue.paymentStatus
-      : "";
+  const paymentStatus = invoice?.paymentStatus || "";
+  const paymentReceivers = getPaymentReceivers(invoice);
   const clientName = order?.user?.name || "Unnamed";
   const clientEmail = order?.user?.email || "-";
   const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
   const status = order?.status || "-";
   const deliveredBy = order?.deliveredBy || "-";
   const stockFinalized = Boolean(order?.stockFinalizedAt);
-  const stockStatus = stockFinalized ? "Finalized" : "Not Finalized";
+  const stockStatus = stockFinalized ? "Deducted" : "Not deducted";
+  const hasPaymentReceiver = paymentReceivers !== "-";
+  const orderStatusMark = getOrderStatusMark(status);
+  const paymentStatusMark = getPaymentStatusMark(paymentStatus);
+  const paymentReceiverMark = hasPaymentReceiver
+    ? STATUS_MARKS.done
+    : STATUS_MARKS.missing;
+  const stockStatusMark = stockFinalized ? STATUS_MARKS.done : STATUS_MARKS.missing;
+  const deliveredByMark =
+    deliveredBy !== "-"
+      ? STATUS_MARKS.done
+      : status === "Delivered"
+      ? STATUS_MARKS.missing
+      : STATUS_MARKS.progress;
 
   const safeDate = preventAutoLink(createdAt);
   const safeOrderNumber = preventAutoLink(orderNumber);
@@ -77,8 +120,17 @@ export const buildAdminOrderShareText = (order) => {
   lines.push(`Order #: ${safeOrderNumber}`);
   lines.push(`Invoice #: ${safeInvoiceLabel}`);
   lines.push(`Date: ${safeDate}`);
-  lines.push(`Client: ${clientName}`);
+  lines.push("");
+  lines.push("Client:");
+  lines.push(`Name: ${clientName}`);
   lines.push(`Email: ${safeEmail}`);
+  lines.push("");
+  lines.push("Status:");
+  lines.push(`${orderStatusMark} Order: ${status}`);
+  lines.push(`${paymentStatusMark} Payment: ${formatPaymentStatus(paymentStatus)}`);
+  lines.push(`${paymentReceiverMark} Payment received by: ${paymentReceivers}`);
+  lines.push(`${stockStatusMark} Stock: ${stockStatus}`);
+  lines.push(`${deliveredByMark} Delivered by: ${deliveredBy}`);
   lines.push("");
   lines.push("Items:");
   if (!items.length) {
@@ -88,7 +140,9 @@ export const buildAdminOrderShareText = (order) => {
       const qty = Number(item?.qty) || 0;
       const label = item?.productName || item?.product?.name || "Unnamed";
       const lineTotal = getOrderLineTotal(item);
-      lines.push(`${idx + 1}. *${label}* Qty: ${qty}, ${money(lineTotal)}`);
+      lines.push(`${idx + 1}. *${label}*`);
+      lines.push(`   Qty: ${qty}`);
+      lines.push(`   Line total: ${money(lineTotal)}`);
       if (idx < items.length - 1) {
         lines.push("");
       }
@@ -97,12 +151,7 @@ export const buildAdminOrderShareText = (order) => {
   lines.push("");
   lines.push(`Delivery Charge: ${money(order?.deliveryCharge)}`);
   lines.push(`Extra Fee: ${money(order?.extraFee)}`);
-  lines.push(`Total Price: ${money(getOrderTotals(order).total)}`);
-  lines.push("");
-  lines.push(`Payment Status: ${formatPaymentStatus(paymentStatus)}`);
-  lines.push(`Status: ${status}`);
-  lines.push(`Stock Status: ${stockStatus}`);
-  lines.push(`Delivered By: ${deliveredBy}`);
+  lines.push(`Total: ${money(getOrderTotals(order).total)}`);
 
   return lines.join("\n");
 };
