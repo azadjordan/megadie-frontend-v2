@@ -45,6 +45,23 @@ export const slotItemsApiSlice = apiSlice.injectEndpoints({
         { type: "Slot", id: "LIST" },
       ],
     }),
+    correctSlotItemCount: builder.mutation({
+      query: (body) => ({
+        url: "/slot-items/correct-count",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "SlotItem", id: arg?.productId },
+        { type: "SlotItem", id: `slot-${arg?.slotId}` },
+        { type: "SlotItem", id: "LIST" },
+        { type: "InventoryProduct", id: arg?.productId },
+        { type: "InventoryProduct", id: "LIST" },
+        { type: "InventoryMovement", id: "LIST" },
+        { type: "Slot", id: arg?.slotId },
+        { type: "Slot", id: "LIST" },
+      ],
+    }),
     moveSlotItems: builder.mutation({
       query: (body) => ({
         url: "/slot-items/move",
@@ -82,6 +99,7 @@ export const {
   useLazyGetSlotItemsByProductQuery,
   useGetSlotItemsBySlotQuery,
   useAdjustSlotItemMutation,
+  useCorrectSlotItemCountMutation,
   useMoveSlotItemsMutation,
   useClearSlotItemsMutation,
 } = slotItemsApiSlice;

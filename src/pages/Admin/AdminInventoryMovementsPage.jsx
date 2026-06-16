@@ -115,6 +115,16 @@ const renderSlotLink = (slot) => {
   );
 };
 
+const getCorrectionText = (meta) => {
+  if (!meta?.correction) return "";
+  const previousQty = Number(meta.previousQty);
+  const actualQty = Number(meta.actualQty);
+  if (Number.isFinite(previousQty) && Number.isFinite(actualQty)) {
+    return `Count correction: ${formatQty(previousQty)} -> ${formatQty(actualQty)}`;
+  }
+  return "Count correction";
+};
+
 const getMovementRowMeta = (row) => {
   const type = row?.type || "";
   const productName = row?.product?.name || "Unknown product";
@@ -127,6 +137,7 @@ const getMovementRowMeta = (row) => {
   const orderNumber = order?.orderNumber || orderId || "-";
   const { name: actorName, email: actorEmail } = resolveActor(row?.actor);
   const note = row?.note || "-";
+  const correctionText = getCorrectionText(row?.meta);
   const eventAt = row?.eventAt || row?.createdAt;
   return {
     type,
@@ -141,6 +152,7 @@ const getMovementRowMeta = (row) => {
     actorName,
     actorEmail,
     note,
+    correctionText,
     eventAt,
   };
 };
@@ -555,6 +567,12 @@ export default function AdminInventoryMovementsPage() {
                     </div>
                   </div>
 
+                  {meta.correctionText ? (
+                    <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                      {meta.correctionText}
+                    </div>
+                  ) : null}
+
                   {meta.note && meta.note !== "-" ? (
                     <div className="mt-3 text-xs text-slate-500">
                       Note: {meta.note}
@@ -665,7 +683,22 @@ export default function AdminInventoryMovementsPage() {
                           {formatDateTime(meta.eventAt)}
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-600">
-                          {meta.note}
+                          {meta.correctionText ? (
+                            <div className="font-semibold text-slate-700">
+                              {meta.correctionText}
+                            </div>
+                          ) : null}
+                          {meta.note && meta.note !== "-" ? (
+                            <div
+                              className={
+                                meta.correctionText ? "mt-1 text-slate-500" : ""
+                              }
+                            >
+                              {meta.note}
+                            </div>
+                          ) : meta.correctionText ? null : (
+                            "-"
+                          )}
                         </td>
                       </tr>
                     );
@@ -684,4 +717,3 @@ export default function AdminInventoryMovementsPage() {
     </div>
   );
 }
-

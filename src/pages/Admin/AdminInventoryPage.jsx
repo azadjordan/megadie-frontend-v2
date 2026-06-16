@@ -11,11 +11,13 @@ import { toast } from "react-toastify";
 import Pagination from "../../components/common/Pagination";
 import AdminInventoryTabs from "../../components/admin/AdminInventoryTabs";
 import InventoryLocateModal from "../../components/admin/InventoryLocateModal";
+import InventoryCountAdjustModal from "../../components/admin/InventoryCountAdjustModal";
 import InventoryProductStockModal from "../../components/admin/InventoryProductStockModal";
 import { useGetInventoryProductsQuery } from "../../features/inventory/inventoryApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import {
   useAdjustSlotItemMutation,
+  useCorrectSlotItemCountMutation,
   useLazyGetSlotItemsByProductQuery,
 } from "../../features/slotItems/slotItemsApiSlice";
 import { useLazyGetSlotsQuery } from "../../features/slots/slotsApiSlice";
@@ -91,6 +93,8 @@ export default function AdminInventoryPage() {
   const [stockSubmitSuccess, setStockSubmitSuccess] = useState("");
   const [stockSubmitFailures, setStockSubmitFailures] = useState([]);
   const [stockSubmitting, setStockSubmitting] = useState(false);
+  const [countAdjustItem, setCountAdjustItem] = useState(null);
+  const [countAdjustError, setCountAdjustError] = useState("");
 
   const trimmedSearch = q.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -141,6 +145,8 @@ export default function AdminInventoryPage() {
   ] = useLazyGetSlotItemsByProductQuery();
   const [getSlots] = useLazyGetSlotsQuery();
   const [adjustSlotItem] = useAdjustSlotItemMutation();
+  const [correctSlotItemCount, { isLoading: isCorrectingCount }] =
+    useCorrectSlotItemCountMutation();
   const [deleteProduct, { isLoading: isDeleting }] =
     useDeleteProductMutation();
   const [deletingId, setDeletingId] = useState(null);
@@ -289,6 +295,8 @@ export default function AdminInventoryPage() {
     setStockSubmitError("");
     setStockSubmitSuccess("");
     setStockSubmitFailures([]);
+    setCountAdjustItem(null);
+    setCountAdjustError("");
     getSlotItemsByProduct(row.id);
   };
 
@@ -303,6 +311,8 @@ export default function AdminInventoryPage() {
     setStockSubmitError("");
     setStockSubmitSuccess("");
     setStockSubmitFailures([]);
+    setCountAdjustItem(null);
+    setCountAdjustError("");
   };
 
   const handleStockStoreChange = (value) => {
@@ -368,6 +378,41 @@ export default function AdminInventoryPage() {
 
   const handleClearExistingAdds = () => {
     setStockExistingAdds({});
+  };
+
+  const openCountAdjustModal = (item) => {
+    setCountAdjustItem(item);
+    setCountAdjustError("");
+  };
+
+  const closeCountAdjustModal = () => {
+    if (isCorrectingCount) return;
+    setCountAdjustItem(null);
+    setCountAdjustError("");
+  };
+
+  const handleCountAdjustSubmit = async (payload) => {
+    if (!stockProduct) return;
+
+    try {
+      setCountAdjustError("");
+      const response = await correctSlotItemCount(payload).unwrap();
+      const deltaQty = Number(response?.data?.deltaQty || 0);
+      const movementType = response?.data?.movementType;
+      const movementLabel =
+        movementType === "ADJUST_OUT"
+          ? `Adjusted out ${formatQty(Math.abs(deltaQty))}.`
+          : movementType === "ADJUST_IN"
+          ? `Adjusted in ${formatQty(deltaQty)}.`
+          : "Count already matched.";
+      toast.success(movementLabel);
+      setCountAdjustItem(null);
+      getSlotItemsByProduct(stockProduct.id || stockProduct._id);
+    } catch (err) {
+      setCountAdjustError(
+        err?.data?.message || err?.error || "Unable to correct count."
+      );
+    }
   };
 
   const handleStockSubmit = async () => {
@@ -1045,6 +1090,7 @@ export default function AdminInventoryPage() {
         existingSlotsErrorMessage={slotItemsErrorMessage}
         existingAdditions={stockExistingAdds}
         onExistingQtyChange={handleExistingQtyChange}
+        onAdjustExistingSlot={openCountAdjustModal}
         onClearExisting={handleClearExistingAdds}
         selectedSlots={stockSelected}
         onToggleSlot={toggleStockSlot}
@@ -1057,6 +1103,16 @@ export default function AdminInventoryPage() {
         submitError={stockSubmitError}
         submitSuccess={stockSubmitSuccess}
         submitFailures={stockSubmitFailures}
+      />
+
+      <InventoryCountAdjustModal
+        open={Boolean(countAdjustItem)}
+        product={stockProduct}
+        slotItem={countAdjustItem}
+        onClose={closeCountAdjustModal}
+        onSubmit={handleCountAdjustSubmit}
+        submitting={isCorrectingCount}
+        submitError={countAdjustError}
       />
     </div>
   );

@@ -22,6 +22,7 @@ function InventoryProductStockModalContent({
   existingSlotsErrorMessage,
   existingAdditions,
   onExistingQtyChange,
+  onAdjustExistingSlot,
   onClearExisting,
   selectedSlots,
   onToggleSlot,
@@ -272,23 +273,41 @@ function InventoryProductStockModalContent({
                             </div>
                             <div className="text-[11px] text-slate-500 sm:text-xs">
                               Current qty: {item.qty ?? 0}
+                              {Number(item.reservedQty || 0) > 0 ? (
+                                <>
+                                  {" "}
+                                  | Reserved: {item.reservedQty}
+                                </>
+                              ) : null}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                              Add
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                Add
+                              </div>
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={addQty}
+                                onChange={(e) =>
+                                  onExistingQtyChange(key, e.target.value)
+                                }
+                                placeholder="0"
+                                className="w-full max-w-[100px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                              />
                             </div>
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={addQty}
-                              onChange={(e) =>
-                                onExistingQtyChange(key, e.target.value)
+                            <button
+                              type="button"
+                              onClick={() =>
+                                typeof onAdjustExistingSlot === "function" &&
+                                onAdjustExistingSlot(item)
                               }
-                              placeholder="0"
-                              className="w-full max-w-[120px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                            />
+                              className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                            >
+                              Adjust
+                            </button>
                           </div>
                         </div>
                       );

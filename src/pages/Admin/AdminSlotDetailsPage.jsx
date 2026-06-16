@@ -8,10 +8,12 @@ import {
 import {
   useGetSlotItemsBySlotQuery,
   useAdjustSlotItemMutation,
+  useCorrectSlotItemCountMutation,
   useMoveSlotItemsMutation,
   useClearSlotItemsMutation,
 } from "../../features/slotItems/slotItemsApiSlice";
 import { useLazyGetInventoryProductsQuery } from "../../features/inventory/inventoryApiSlice";
+import InventoryCountAdjustModal from "../../components/admin/InventoryCountAdjustModal";
 import InventoryMoveModal from "../../components/admin/InventoryMoveModal";
 import InventorySlotStockModal from "../../components/admin/InventorySlotStockModal";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
@@ -77,6 +79,8 @@ export default function AdminSlotDetailsPage() {
   const [stockSubmitSuccess, setStockSubmitSuccess] = useState("");
   const [stockSubmitFailures, setStockSubmitFailures] = useState([]);
   const [stockSubmitting, setStockSubmitting] = useState(false);
+  const [countAdjustItem, setCountAdjustItem] = useState(null);
+  const [countAdjustError, setCountAdjustError] = useState("");
   const selectAllRef = useRef(null);
 
   const {
@@ -100,6 +104,8 @@ export default function AdminSlotDetailsPage() {
   const [loadInventoryProducts, { isFetching: stockSearchLoading }] =
     useLazyGetInventoryProductsQuery();
   const [adjustSlotItem] = useAdjustSlotItemMutation();
+  const [correctSlotItemCount, { isLoading: isCorrectingCount }] =
+    useCorrectSlotItemCountMutation();
 
   const slotItems = useMemo(
     () => slotItemsResult?.data ?? [],
@@ -164,7 +170,7 @@ export default function AdminSlotDetailsPage() {
   const moveTargetSlotId = moveTargetSlot
     ? String(moveTargetSlot._id || moveTargetSlot.id)
     : "";
-  const isActionBusy = movingSlotItems || clearingSlotItems;
+  const isActionBusy = movingSlotItems || clearingSlotItems || isCorrectingCount;
   const moveValidation = useMemo(() => {
     const errors = {};
     let totalUnits = 0;
@@ -415,6 +421,29 @@ export default function AdminSlotDetailsPage() {
     setStockSubmitError("");
     setStockSubmitSuccess("");
     setStockSubmitFailures([]);
+  };
+
+  const openCountAdjustModal = (item) => {
+    setCountAdjustItem({ ...item, slot });
+    setCountAdjustError("");
+  };
+
+  const closeCountAdjustModal = () => {
+    if (isCorrectingCount) return;
+    setCountAdjustItem(null);
+    setCountAdjustError("");
+  };
+
+  const handleCountAdjustSubmit = async (payload) => {
+    try {
+      setCountAdjustError("");
+      await correctSlotItemCount(payload).unwrap();
+      setCountAdjustItem(null);
+    } catch (err) {
+      setCountAdjustError(
+        err?.data?.message || err?.error || "Unable to correct count."
+      );
+    }
   };
 
   const closeStockModal = () => {
@@ -916,6 +945,7 @@ export default function AdminSlotDetailsPage() {
                     <th className="px-4 py-3 text-right">Qty</th>
                     <th className="px-4 py-3 text-right">CBM</th>
                     <th className="px-4 py-3 text-right">Updated</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -951,12 +981,32 @@ export default function AdminSlotDetailsPage() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {formatQty(item.qty)}
+                          {Number(item.reservedQty || 0) > 0 ? (
+                            <div className="text-[10px] text-slate-500">
+                              Reserved {formatQty(item.reservedQty)}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {formatNumber(item.cbm, 3)}
                         </td>
                         <td className="px-4 py-3 text-right text-xs text-slate-500">
                           {formatDate(item.updatedAt)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openCountAdjustModal(item)}
+                            disabled={slotItemsBusy || isActionBusy}
+                            className={[
+                              "rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition",
+                              slotItemsBusy || isActionBusy
+                                ? "cursor-not-allowed bg-slate-100 text-slate-400"
+                                : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50",
+                            ].join(" ")}
+                          >
+                            Adjust
+                          </button>
                         </td>
                       </tr>
                     );
@@ -1015,6 +1065,16 @@ export default function AdminSlotDetailsPage() {
         moveError={moveError}
         onClose={closeMoveModal}
         formatQty={formatQty}
+      />
+
+      <InventoryCountAdjustModal
+        open={Boolean(countAdjustItem)}
+        product={countAdjustItem?.product}
+        slotItem={countAdjustItem}
+        onClose={closeCountAdjustModal}
+        onSubmit={handleCountAdjustSubmit}
+        submitting={isCorrectingCount}
+        submitError={countAdjustError}
       />
 
       {clearModalOpen ? (
