@@ -24,14 +24,23 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
     }),
 
     // ✅ Admin: all orders list (paginated, newest first)
-    // Backend enforces limit=20
     getOrdersAdmin: builder.query({
-      query: ({ page = 1, status = "all", search = "" } = {}) => {
+      query: ({
+        page = 1,
+        limit,
+        status = "all",
+        paymentStatus = "all",
+        search = "",
+      } = {}) => {
         const params = new URLSearchParams();
         params.set("page", String(page));
+        if (Number.isFinite(limit)) params.set("limit", String(limit));
 
         if (status && status !== "all" && ADMIN_ORDER_STATUSES.includes(status)) {
           params.set("status", status);
+        }
+        if (paymentStatus && paymentStatus !== "all") {
+          params.set("paymentStatus", paymentStatus);
         }
         if (search) params.set("search", search);
 
@@ -131,4 +140,3 @@ export const {
   useCancelOrderByAdminMutation,
   useDeleteOrderByAdminMutation,
 } = ordersApiSlice;
-

@@ -407,6 +407,16 @@ const ORDER_STATUS_FILTER_VALUES = new Set([
   "Delivered",
   "Cancelled",
 ]);
+const ORDER_PAYMENT_FILTER_VALUES = new Set([
+  "all",
+  "noInvoice",
+  "notFullyPaid",
+  "Unpaid",
+  "PartiallyPaid",
+  "Paid",
+]);
+const ORDER_LIMIT_VALUES = new Set([20, 50, 100]);
+const DEFAULT_ORDER_LIMIT = 20;
 
 function parsePositiveInt(raw, fallback = 1) {
   const n = Number.parseInt(String(raw ?? ""), 10);
@@ -414,12 +424,22 @@ function parsePositiveInt(raw, fallback = 1) {
   return n;
 }
 
+function parseOrderLimit(raw) {
+  const value = parsePositiveInt(raw, DEFAULT_ORDER_LIMIT);
+  return ORDER_LIMIT_VALUES.has(value) ? value : DEFAULT_ORDER_LIMIT;
+}
+
 function readOrderListState(searchParams) {
   const page = parsePositiveInt(searchParams.get("page"), 1);
   const search = searchParams.get("search") || "";
   const statusRaw = searchParams.get("status") || "all";
   const status = ORDER_STATUS_FILTER_VALUES.has(statusRaw) ? statusRaw : "all";
-  return { page, search, status };
+  const paymentStatusRaw = searchParams.get("paymentStatus") || "all";
+  const paymentStatus = ORDER_PAYMENT_FILTER_VALUES.has(paymentStatusRaw)
+    ? paymentStatusRaw
+    : "all";
+  const limit = parseOrderLimit(searchParams.get("limit"));
+  return { page, search, status, paymentStatus, limit };
 }
 
 function buildOrderListSearchParams(nextState = {}) {
@@ -427,10 +447,14 @@ function buildOrderListSearchParams(nextState = {}) {
   const page = parsePositiveInt(nextState.page, 1);
   const search = String(nextState.search || "");
   const status = String(nextState.status || "all");
+  const paymentStatus = String(nextState.paymentStatus || "all");
+  const limit = parseOrderLimit(nextState.limit);
 
   if (page > 1) params.set("page", String(page));
   if (search) params.set("search", search);
   if (status !== "all") params.set("status", status);
+  if (paymentStatus !== "all") params.set("paymentStatus", paymentStatus);
+  if (limit !== DEFAULT_ORDER_LIMIT) params.set("limit", String(limit));
 
   return params;
 }
@@ -466,7 +490,7 @@ export default function AdminOrdersPage() {
   const [paymentFieldErrors, setPaymentFieldErrors] = useState({});
 
   const listState = readOrderListState(searchParams);
-  const { page, search, status } = listState;
+  const { page, search, status, paymentStatus, limit } = listState;
   const listQueryString = buildOrderListSearchParams(listState).toString();
   const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
     const next = {
@@ -516,7 +540,9 @@ export default function AdminOrdersPage() {
     error,
   } = useGetOrdersAdminQuery({
     page,
+    limit,
     status,
+    paymentStatus,
     search: searchParam,
   });
   const rows = useMemo(() => ordersRes?.data || [], [ordersRes]);
@@ -984,7 +1010,7 @@ export default function AdminOrdersPage() {
       </div>
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_200px_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_160px_180px_130px_auto] md:items-end">
           <div className="flex items-end gap-2 md:contents">
             <div className="flex-1">
               <label
@@ -1052,6 +1078,57 @@ export default function AdminOrdersPage() {
                 <option value="Shipping">Shipping</option>
                 <option value="Delivered">Delivered</option>
                 <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="orders-payment-status"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Payment
+              </label>
+              <select
+                id="orders-payment-status"
+                value={paymentStatus}
+                onChange={(e) => {
+                  updateListState(
+                    { paymentStatus: e.target.value },
+                    { resetPage: true, replace: true }
+                  );
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="all">All payments</option>
+                <option value="noInvoice">No invoice</option>
+                <option value="notFullyPaid">Not fully paid</option>
+                <option value="Unpaid">Unpaid</option>
+                <option value="PartiallyPaid">Partially paid</option>
+                <option value="Paid">Paid</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="orders-limit"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Per page
+              </label>
+              <select
+                id="orders-limit"
+                value={limit}
+                onChange={(e) => {
+                  updateListState(
+                    { limit: Number(e.target.value) || DEFAULT_ORDER_LIMIT },
+                    { resetPage: true, replace: true }
+                  );
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value={20}>20 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
               </select>
             </div>
 
