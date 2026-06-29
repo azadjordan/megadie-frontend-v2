@@ -43,6 +43,7 @@ export const usersApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: (_result, _error, arg) => [
         { type: "User", id: "LIST" },
         { type: "User", id: arg?.id },
+        { type: "Order", id: "LIST" },
       ],
     }),
     updateUserApprovalStatus: builder.mutation({

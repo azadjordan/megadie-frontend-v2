@@ -87,7 +87,10 @@ export default function AdminUserDetailsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [secondaryPhoneNumber, setSecondaryPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [deliveryGoogleMapsUrl, setDeliveryGoogleMapsUrl] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState("Approved");
   const [adminNote, setAdminNote] = useState("");
@@ -112,7 +115,10 @@ export default function AdminUserDetailsPage() {
     setName(user.name || "");
     setEmail(user.email || "");
     setPhoneNumber(user.phoneNumber || "");
+    setSecondaryPhoneNumber(user.secondaryPhoneNumber || "");
     setAddress(user.address || "");
+    setDeliveryGoogleMapsUrl(user.deliveryGoogleMapsUrl || "");
+    setDeliveryNotes(user.deliveryNotes || "");
     setIsAdmin(Boolean(user.isAdmin));
     setApprovalStatus(user.approvalStatus || "Approved");
     setAdminNote(user.adminNote || "");
@@ -172,18 +178,34 @@ export default function AdminUserDetailsPage() {
       name: String(user.name || "").trim(),
       email: String(user.email || "").trim().toLowerCase(),
       phoneNumber: String(user.phoneNumber || "").trim(),
+      secondaryPhoneNumber: String(user.secondaryPhoneNumber || "").trim(),
       address: String(user.address || "").trim(),
+      deliveryGoogleMapsUrl: String(user.deliveryGoogleMapsUrl || "").trim(),
+      deliveryNotes: String(user.deliveryNotes || "").trim(),
       isAdmin: Boolean(user.isAdmin),
     };
     const current = {
       name: String(name || "").trim(),
       email: String(email || "").trim().toLowerCase(),
       phoneNumber: String(phoneNumber || "").trim(),
+      secondaryPhoneNumber: String(secondaryPhoneNumber || "").trim(),
       address: String(address || "").trim(),
+      deliveryGoogleMapsUrl: String(deliveryGoogleMapsUrl || "").trim(),
+      deliveryNotes: String(deliveryNotes || "").trim(),
       isAdmin: Boolean(isAdmin),
     };
     return Object.keys(base).some((key) => base[key] !== current[key]);
-  }, [user, name, email, phoneNumber, address, isAdmin]);
+  }, [
+    user,
+    name,
+    email,
+    phoneNumber,
+    secondaryPhoneNumber,
+    address,
+    deliveryGoogleMapsUrl,
+    deliveryNotes,
+    isAdmin,
+  ]);
 
   const canUpdateInfo = hasInfoChanges && !isSaving;
   const approvalBase = String(user?.approvalStatus || "Approved");
@@ -216,7 +238,10 @@ export default function AdminUserDetailsPage() {
       name: name.trim(),
       email: email.trim(),
       phoneNumber: phoneNumber.trim(),
+      secondaryPhoneNumber: secondaryPhoneNumber.trim(),
       address: address.trim(),
+      deliveryGoogleMapsUrl: deliveryGoogleMapsUrl.trim(),
+      deliveryNotes: deliveryNotes.trim(),
       isAdmin,
     };
 
@@ -494,7 +519,7 @@ export default function AdminUserDetailsPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Phone
+                  Primary phone
                 </label>
                 <input
                   type="text"
@@ -506,13 +531,50 @@ export default function AdminUserDetailsPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Address
+                  Secondary phone
                 </label>
                 <input
                   type="text"
+                  value={secondaryPhoneNumber}
+                  onChange={(e) => setSecondaryPhoneNumber(e.target.value)}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-semibold text-slate-600">
+                  Address
+                </label>
+                <textarea
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                  rows={2}
+                  className="w-full resize-none rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-semibold text-slate-600">
+                  Google Maps location
+                </label>
+                <input
+                  type="text"
+                  value={deliveryGoogleMapsUrl}
+                  onChange={(e) => setDeliveryGoogleMapsUrl(e.target.value)}
+                  placeholder="https://maps..."
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-semibold text-slate-600">
+                  Delivery notes
+                </label>
+                <textarea
+                  value={deliveryNotes}
+                  onChange={(e) => setDeliveryNotes(e.target.value)}
+                  rows={3}
+                  className="w-full resize-none rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 />
               </div>
             </div>

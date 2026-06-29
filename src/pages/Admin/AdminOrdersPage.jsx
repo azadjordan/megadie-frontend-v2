@@ -9,6 +9,7 @@ import {
   FiSend,
   FiSettings,
   FiTrash2,
+  FiTruck,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 
@@ -17,8 +18,15 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
 import AddPaymentModal from "../../components/admin/AddPaymentModal";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
+import CourierDetailsModal from "../../components/admin/CourierDetailsModal";
 import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
 import { copyTextToClipboard } from "../../utils/clipboard";
+import {
+  buildCourierShareText,
+  getCourierDeliveryProfile,
+  getCourierMissingFields,
+  hasCourierProfileChanges,
+} from "../../utils/orderCourierShare";
 import { buildAdminOrderShareText } from "../../utils/orderShare";
 import { getOrderTotals } from "../../utils/orderTotals";
 import {
@@ -43,6 +51,7 @@ import {
 } from "../../features/invoices/invoicesApiSlice";
 import { useFinalizeOrderAllocationsMutation } from "../../features/orderAllocations/orderAllocationsApiSlice";
 import { useAddPaymentToInvoiceMutation } from "../../features/payments/paymentsApiSlice";
+import { useUpdateUserMutation } from "../../features/users/usersApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 function formatDateTime(iso) {
@@ -433,6 +442,13 @@ export default function AdminOrdersPage() {
   const [copyId, setCopyId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [courierTarget, setCourierTarget] = useState(null);
+  const [courierBaseForm, setCourierBaseForm] = useState(() =>
+    getCourierDeliveryProfile()
+  );
+  const [courierForm, setCourierForm] = useState(() =>
+    getCourierDeliveryProfile()
+  );
   const [busyOrderId, setBusyOrderId] = useState("");
   const [deliverTarget, setDeliverTarget] = useState(null);
   const [deliveredBy, setDeliveredBy] = useState("");
@@ -478,6 +494,14 @@ export default function AdminOrdersPage() {
     useFinalizeOrderAllocationsMutation();
   const [addPaymentToInvoice, { isLoading: isAddingPayment, error: addPaymentError }] =
     useAddPaymentToInvoiceMutation();
+  const [
+    updateUserDelivery,
+    {
+      isLoading: isSavingCourier,
+      error: courierSaveError,
+      reset: resetCourierSaveError,
+    },
+  ] = useUpdateUserMutation();
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -499,6 +523,37 @@ export default function AdminOrdersPage() {
   const pagination = ordersRes?.pagination;
   const totalItems =
     typeof pagination?.total === "number" ? pagination.total : rows.length;
+  const courierMissingFields = useMemo(
+    () => getCourierMissingFields(courierForm),
+    [courierForm]
+  );
+  const courierHasChanges = useMemo(
+    () => hasCourierProfileChanges(courierBaseForm, courierForm),
+    [courierBaseForm, courierForm]
+  );
+  const courierPreviewOrder = useMemo(() => {
+    if (!courierTarget) return null;
+    const user =
+      courierTarget.user && typeof courierTarget.user === "object"
+        ? courierTarget.user
+        : {};
+    return {
+      ...courierTarget,
+      user: {
+        ...user,
+        ...courierForm,
+      },
+    };
+  }, [courierTarget, courierForm]);
+  const courierPreviewText = useMemo(
+    () =>
+      courierPreviewOrder
+        ? buildCourierShareText(courierPreviewOrder, {
+            deliveryProfile: courierForm,
+          })
+        : "",
+    [courierPreviewOrder, courierForm]
+  );
 
   async function onCopy(order) {
     if (!order || copyId) return;
@@ -530,6 +585,81 @@ export default function AdminOrdersPage() {
       toast.error("Failed to copy order.");
     } finally {
       setCopyId(null);
+    }
+  }
+
+  function openCourierModal(order) {
+    if (!order?._id || isSavingCourier) return;
+    const form = getCourierDeliveryProfile(order.user || {});
+    resetCourierSaveError();
+    setCourierTarget(order);
+    setCourierBaseForm(form);
+    setCourierForm(form);
+  }
+
+  function closeCourierModal() {
+    if (isSavingCourier) return;
+    resetCourierSaveError();
+    setCourierTarget(null);
+    setCourierBaseForm(getCourierDeliveryProfile());
+    setCourierForm(getCourierDeliveryProfile());
+  }
+
+  function updateCourierField(field, value) {
+    setCourierForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
+
+  async function submitCourierDetails() {
+    if (!courierTarget || isSavingCourier) return;
+    if (courierMissingFields.length) {
+      toast.warning("Add the required delivery fields first.");
+      return;
+    }
+
+    try {
+      let finalOrder = courierPreviewOrder;
+
+      if (courierHasChanges) {
+        const user = courierTarget.user;
+        const userId =
+          user && typeof user === "object" ? user._id : String(user || "");
+
+        if (!userId) {
+          toast.error("Client details are missing for this order.");
+          return;
+        }
+
+        const normalizedForm = getCourierDeliveryProfile(courierForm);
+        const res = await updateUserDelivery({
+          id: userId,
+          ...normalizedForm,
+        }).unwrap();
+        const updatedUser = res?.data || {};
+        finalOrder = {
+          ...courierTarget,
+          user: {
+            ...(user && typeof user === "object" ? user : {}),
+            ...normalizedForm,
+            ...updatedUser,
+          },
+        };
+      }
+
+      const text = buildCourierShareText(finalOrder, {
+        deliveryProfile: finalOrder?.user || courierForm,
+      });
+      await copyTextToClipboard(text);
+      toast.success(
+        courierHasChanges
+          ? "Courier details saved and copied."
+          : "Courier details copied."
+      );
+      closeCourierModal();
+    } catch (err) {
+      toast.error(friendlyApiError(err, "Failed to copy courier details."));
     }
   }
 
@@ -979,11 +1109,12 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
       <div className="space-y-3">
-<div className="grid grid-cols-1 gap-3 md:hidden">
-  {rows.map((o) => {
-    const row = getOrderRowMeta(o);
-    const rowCopy = copyId === o._id;
-    const rowDelete = deleteId === o._id;
+	<div className="grid grid-cols-1 gap-3 md:hidden">
+	  {rows.map((o) => {
+	    const row = getOrderRowMeta(o);
+	    const rowCopy = copyId === o._id;
+	    const rowCourier = courierTarget?._id === o._id;
+	    const rowDelete = deleteId === o._id;
     const state = row.actionState;
     const fulfillment = state.fulfillment;
     const billing = state.billing;
@@ -1100,10 +1231,25 @@ export default function AdminOrdersPage() {
             }
             onAction={onBillingAction}
           />
-          <button
-            type="button"
-            className={[
-              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+	          <button
+	            type="button"
+	            className={[
+	              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
+	              rowCourier && isSavingCourier
+	                ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
+	                : "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100",
+	            ].join(" ")}
+	            disabled={rowCourier && isSavingCourier}
+	            onClick={() => openCourierModal(o)}
+	            title="Courier details"
+	          >
+	            <FiTruck className="h-3.5 w-3.5" />
+	            Courier
+	          </button>
+	          <button
+	            type="button"
+	            className={[
+	              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
               rowCopy
                 ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                 : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
@@ -1161,10 +1307,11 @@ export default function AdminOrdersPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-200">
-                  {rows.map((o) => {
-                    const row = getOrderRowMeta(o);
-                    const rowCopy = copyId === o._id;
-                    const rowDelete = deleteId === o._id;
+	                  {rows.map((o) => {
+	                    const row = getOrderRowMeta(o);
+	                    const rowCopy = copyId === o._id;
+	                    const rowCourier = courierTarget?._id === o._id;
+	                    const rowDelete = deleteId === o._id;
                     const state = row.actionState;
                     const fulfillment = state.fulfillment;
                     const billing = state.billing;
@@ -1259,16 +1406,31 @@ export default function AdminOrdersPage() {
                               onAction={onBillingAction}
                               compact
                             />
-                            <InvoicePdfButton
-                              billing={billing}
-                              isBusy={isPdfLoading}
-                              isActive={pdfId === billing.invoiceId}
-                              onClick={() => onInvoicePdf(o)}
-                              iconOnly
-                            />
-                            <button
-                              type="button"
-                              className={[
+	                            <InvoicePdfButton
+	                              billing={billing}
+	                              isBusy={isPdfLoading}
+	                              isActive={pdfId === billing.invoiceId}
+	                              onClick={() => onInvoicePdf(o)}
+	                              iconOnly
+	                            />
+	                            <button
+	                              type="button"
+	                              className={[
+	                                "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+	                                rowCourier && isSavingCourier
+	                                  ? "cursor-not-allowed border-slate-200 bg-white text-slate-300 hover:bg-white"
+	                                  : "",
+	                              ].join(" ")}
+	                              disabled={rowCourier && isSavingCourier}
+	                              onClick={() => openCourierModal(o)}
+	                              aria-label="Courier details"
+	                              title="Courier details"
+	                            >
+	                              <FiTruck className="h-4 w-4" />
+	                            </button>
+	                            <button
+	                              type="button"
+	                              className={[
                                 "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
                                 rowCopy ? "cursor-not-allowed text-slate-300" : "",
                               ].join(" ")}
@@ -1347,6 +1509,20 @@ export default function AdminOrdersPage() {
         form={paymentForm}
         onFieldChange={updatePaymentForm}
         fieldErrors={paymentFieldErrors}
+      />
+
+      <CourierDetailsModal
+        open={Boolean(courierTarget)}
+        order={courierTarget}
+        form={courierForm}
+        missingFields={courierMissingFields}
+        hasChanges={courierHasChanges}
+        previewText={courierPreviewText}
+        onFieldChange={updateCourierField}
+        onClose={closeCourierModal}
+        onSubmit={submitCourierDetails}
+        isSaving={isSavingCourier}
+        error={courierSaveError}
       />
     </div>
   );
