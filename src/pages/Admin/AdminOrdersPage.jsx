@@ -54,6 +54,7 @@ import { useFinalizeOrderAllocationsMutation } from "../../features/orderAllocat
 import { useAddPaymentToInvoiceMutation } from "../../features/payments/paymentsApiSlice";
 import { useUpdateUserMutation } from "../../features/users/usersApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
+import useMediaQuery from "../../hooks/useMediaQuery";
 
 function formatDateTime(iso) {
   if (!iso) return "-";
@@ -416,8 +417,8 @@ const ORDER_PAYMENT_FILTER_VALUES = new Set([
   "PartiallyPaid",
   "Paid",
 ]);
-const ORDER_LIMIT_VALUES = new Set([20, 50, 100]);
-const DEFAULT_ORDER_LIMIT = 20;
+const ORDER_LIMIT_VALUES = new Set([10, 20, 50, 100]);
+const DEFAULT_ORDER_LIMIT = 10;
 
 function getDefaultCourierInstructionNotes() {
   if (Array.isArray(courierPickupConfig.courierNotes)) {
@@ -506,6 +507,7 @@ export default function AdminOrdersPage() {
   const listState = readOrderListState(searchParams);
   const { page, search, status, paymentStatus, limit } = listState;
   const listQueryString = buildOrderListSearchParams(listState).toString();
+  const isDesktopOrdersLayout = useMediaQuery("(min-width: 768px)");
   const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
     const next = {
       ...listState,
@@ -1160,6 +1162,7 @@ export default function AdminOrdersPage() {
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
+                <option value={10}>10 / page</option>
                 <option value={20}>20 / page</option>
                 <option value={50}>50 / page</option>
                 <option value={100}>100 / page</option>
@@ -1219,8 +1222,9 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       ) : (
-      <div className="space-y-3">
-	<div className="grid grid-cols-1 gap-3 md:hidden">
+        <div className="space-y-3">
+          {!isDesktopOrdersLayout ? (
+            <div className="grid grid-cols-1 gap-3">
 	  {rows.map((o) => {
 	    const row = getOrderRowMeta(o);
 	    const rowCopy = copyId === o._id;
@@ -1401,9 +1405,8 @@ export default function AdminOrdersPage() {
     );
   })}
 </div>
-
-
-          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-slate-200 md:block">
+          ) : (
+            <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200">
             <div className="overflow-x-auto bg-white">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
@@ -1583,7 +1586,8 @@ export default function AdminOrdersPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
