@@ -42,6 +42,7 @@ import { buildPaymentDefaults } from "../../utils/paymentFormDefaults";
 import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
+  useGetOrdersWorkSummaryQuery,
   useMarkOrderDeliveredMutation,
   useUpdateOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
@@ -402,6 +403,70 @@ function BillingActionControl({
   );
 }
 
+function ActionNeededStrip({
+  activeWork = "all",
+  counts = {},
+  isLoading = false,
+  isFetching = false,
+  onSelect,
+}) {
+  return (
+    <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">
+            Action needed
+          </div>
+          <div className="text-xs text-slate-500">
+            Daily order queues that need attention.
+          </div>
+        </div>
+        {isFetching && !isLoading ? (
+          <div className="text-xs font-medium text-slate-400">Updating</div>
+        ) : null}
+      </div>
+
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        {ORDER_WORK_QUEUE_ITEMS.map((item) => {
+          const active = activeWork === item.key;
+          const rawCount = counts?.[item.key];
+          const count =
+            typeof rawCount === "number" && Number.isFinite(rawCount)
+              ? rawCount
+              : 0;
+          const faded = !active && count === 0;
+
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onSelect?.(active ? "all" : item.key)}
+              title={item.title}
+              className={[
+                "inline-flex min-w-[8.5rem] shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs ring-1 ring-inset transition",
+                active
+                  ? "bg-slate-900 text-white ring-slate-900"
+                  : "bg-slate-50 text-slate-700 ring-slate-200 hover:bg-white hover:text-slate-900",
+                faded ? "opacity-55" : "",
+              ].join(" ")}
+            >
+              <span className="font-semibold">{item.label}</span>
+              <span
+                className={[
+                  "rounded-full px-2 py-0.5 text-xs font-bold",
+                  active ? "bg-white/15 text-white" : "bg-white text-slate-900",
+                ].join(" ")}
+              >
+                {isLoading ? "-" : count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 const ORDER_STATUS_FILTER_VALUES = new Set([
   "all",
   "Processing",
@@ -417,8 +482,43 @@ const ORDER_PAYMENT_FILTER_VALUES = new Set([
   "PartiallyPaid",
   "Paid",
 ]);
+const ORDER_WORK_QUEUE_ITEMS = [
+  {
+    key: "noInvoice",
+    label: "No Invoice",
+    title: "Active orders without an invoice.",
+  },
+  {
+    key: "paymentDue",
+    label: "Not Paid",
+    title: "Active orders with unpaid or partially paid invoices.",
+  },
+  {
+    key: "needsReservation",
+    label: "Reserve Stock",
+    title: "Shipping orders that are not fully reserved.",
+  },
+  {
+    key: "readyToDeliver",
+    label: "Deliver",
+    title: "Shipping orders that are fully reserved and ready to deliver.",
+  },
+  {
+    key: "needsStockDeduction",
+    label: "Deduct Stock",
+    title: "Delivered orders that still need stock deducted.",
+  },
+];
+const ORDER_WORK_FILTER_VALUES = new Set([
+  "all",
+  ...ORDER_WORK_QUEUE_ITEMS.map((item) => item.key),
+]);
 const ORDER_LIMIT_VALUES = new Set([10, 20, 50, 100]);
 const DEFAULT_ORDER_LIMIT = 10;
+
+function getOrderWorkLabel(work) {
+  return ORDER_WORK_QUEUE_ITEMS.find((item) => item.key === work)?.label || "";
+}
 
 function getDefaultCourierInstructionNotes() {
   if (Array.isArray(courierPickupConfig.courierNotes)) {
@@ -444,14 +544,20 @@ function parseOrderLimit(raw) {
 function readOrderListState(searchParams) {
   const page = parsePositiveInt(searchParams.get("page"), 1);
   const search = searchParams.get("search") || "";
+  const workRaw = searchParams.get("work") || "all";
+  const work = ORDER_WORK_FILTER_VALUES.has(workRaw) ? workRaw : "all";
   const statusRaw = searchParams.get("status") || "all";
-  const status = ORDER_STATUS_FILTER_VALUES.has(statusRaw) ? statusRaw : "all";
+  const status =
+    work === "all" && ORDER_STATUS_FILTER_VALUES.has(statusRaw)
+      ? statusRaw
+      : "all";
   const paymentStatusRaw = searchParams.get("paymentStatus") || "all";
-  const paymentStatus = ORDER_PAYMENT_FILTER_VALUES.has(paymentStatusRaw)
-    ? paymentStatusRaw
-    : "all";
+  const paymentStatus =
+    work === "all" && ORDER_PAYMENT_FILTER_VALUES.has(paymentStatusRaw)
+      ? paymentStatusRaw
+      : "all";
   const limit = parseOrderLimit(searchParams.get("limit"));
-  return { page, search, status, paymentStatus, limit };
+  return { page, search, status, paymentStatus, work, limit };
 }
 
 function buildOrderListSearchParams(nextState = {}) {
@@ -460,12 +566,14 @@ function buildOrderListSearchParams(nextState = {}) {
   const search = String(nextState.search || "");
   const status = String(nextState.status || "all");
   const paymentStatus = String(nextState.paymentStatus || "all");
+  const work = String(nextState.work || "all");
   const limit = parseOrderLimit(nextState.limit);
 
   if (page > 1) params.set("page", String(page));
   if (search) params.set("search", search);
   if (status !== "all") params.set("status", status);
   if (paymentStatus !== "all") params.set("paymentStatus", paymentStatus);
+  if (work !== "all") params.set("work", work);
   if (limit !== DEFAULT_ORDER_LIMIT) params.set("limit", String(limit));
 
   return params;
@@ -505,7 +613,7 @@ export default function AdminOrdersPage() {
   const [paymentFieldErrors, setPaymentFieldErrors] = useState({});
 
   const listState = readOrderListState(searchParams);
-  const { page, search, status, paymentStatus, limit } = listState;
+  const { page, search, status, paymentStatus, work, limit } = listState;
   const listQueryString = buildOrderListSearchParams(listState).toString();
   const isDesktopOrdersLayout = useMediaQuery("(min-width: 768px)");
   const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
@@ -515,6 +623,16 @@ export default function AdminOrdersPage() {
     };
     if (resetPage) next.page = 1;
     setSearchParams(buildOrderListSearchParams(next), { replace });
+  };
+  const updateWorkQueue = (nextWork) => {
+    updateListState(
+      {
+        work: nextWork,
+        status: "all",
+        paymentStatus: "all",
+      },
+      { resetPage: true, replace: true }
+    );
   };
 
   const [deleteOrderByAdmin, { isLoading: isDeleting }] =
@@ -559,12 +677,20 @@ export default function AdminOrdersPage() {
     limit,
     status,
     paymentStatus,
+    work,
     search: searchParam,
   });
+  const {
+    data: workSummaryRes,
+    isLoading: isWorkSummaryLoading,
+    isFetching: isWorkSummaryFetching,
+  } = useGetOrdersWorkSummaryQuery();
   const rows = useMemo(() => ordersRes?.data || [], [ordersRes]);
+  const workSummary = workSummaryRes?.data || {};
   const pagination = ordersRes?.pagination;
   const totalItems =
     typeof pagination?.total === "number" ? pagination.total : rows.length;
+  const activeWorkLabel = getOrderWorkLabel(work);
   const courierMissingFields = useMemo(
     () => getCourierMissingFields(courierForm),
     [courierForm]
@@ -1045,6 +1171,14 @@ export default function AdminOrdersPage() {
         </div>
       </div>
 
+      <ActionNeededStrip
+        activeWork={work}
+        counts={workSummary}
+        isLoading={isWorkSummaryLoading}
+        isFetching={isWorkSummaryFetching}
+        onSelect={updateWorkQueue}
+      />
+
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,1fr)_160px_180px_130px_auto] md:items-end">
           <div className="flex items-end gap-2 md:contents">
@@ -1103,7 +1237,7 @@ export default function AdminOrdersPage() {
                 value={status}
                 onChange={(e) => {
                   updateListState(
-                    { status: e.target.value },
+                    { status: e.target.value, work: "all" },
                     { resetPage: true, replace: true }
                   );
                 }}
@@ -1129,7 +1263,7 @@ export default function AdminOrdersPage() {
                 value={paymentStatus}
                 onChange={(e) => {
                   updateListState(
-                    { paymentStatus: e.target.value },
+                    { paymentStatus: e.target.value, work: "all" },
                     { resetPage: true, replace: true }
                   );
                 }}
@@ -1195,6 +1329,15 @@ export default function AdminOrdersPage() {
             <span className="font-semibold text-slate-900">{rows.length}</span> of{" "}
             <span className="font-semibold text-slate-900">{totalItems}</span>{" "}
             items
+            {activeWorkLabel ? (
+              <>
+                {" "}
+                in{" "}
+                <span className="font-semibold text-slate-900">
+                  {activeWorkLabel}
+                </span>
+              </>
+            ) : null}
             {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
             {isFetching ? <span className="ml-2">(Updating)</span> : null}
           </div>
@@ -1218,7 +1361,7 @@ export default function AdminOrdersPage() {
         <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
           <div className="text-sm font-semibold text-slate-900">No orders found</div>
           <div className="mt-1 text-sm text-slate-500">
-            Try changing the status filter or clearing the user filter.
+            Try changing the filters or clearing the action queue.
           </div>
         </div>
       ) : (

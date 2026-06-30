@@ -100,7 +100,14 @@ function getDefaultDueDate() {
   return `${year}-${month}-${day}`;
 }
 
-const ORDER_LIST_QUERY_KEYS = ["page", "search", "status", "paymentStatus", "limit"];
+const ORDER_LIST_QUERY_KEYS = [
+  "page",
+  "search",
+  "status",
+  "paymentStatus",
+  "work",
+  "limit",
+];
 
 function buildOrdersListHref(rawSearch = "") {
   const source = new URLSearchParams(rawSearch);

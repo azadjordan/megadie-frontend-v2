@@ -2,6 +2,13 @@
 import { apiSlice } from "../../app/apiSlice";
 
 const ADMIN_ORDER_STATUSES = ["Processing", "Shipping", "Delivered", "Cancelled"];
+const ADMIN_ORDER_WORK_FILTERS = [
+  "noInvoice",
+  "paymentDue",
+  "needsReservation",
+  "readyToDeliver",
+  "needsStockDeduction",
+];
 
 export const ordersApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
@@ -30,6 +37,7 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
         limit,
         status = "all",
         paymentStatus = "all",
+        work = "all",
         search = "",
       } = {}) => {
         const params = new URLSearchParams();
@@ -42,6 +50,9 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
         if (paymentStatus && paymentStatus !== "all") {
           params.set("paymentStatus", paymentStatus);
         }
+        if (work && work !== "all" && ADMIN_ORDER_WORK_FILTERS.includes(work)) {
+          params.set("work", work);
+        }
         if (search) params.set("search", search);
 
         return `/orders?${params.toString()}`;
@@ -51,6 +62,11 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
         const rows = result?.data || [];
         return [listTag, ...rows.map((o) => ({ type: "Order", id: o._id }))];
       },
+    }),
+
+    getOrdersWorkSummary: builder.query({
+      query: () => "/orders/work-summary",
+      providesTags: () => [{ type: "Order", id: "LIST" }],
     }),
 
     // =========================
@@ -134,6 +150,7 @@ export const {
   useLazyGetOrderByIdQuery,
   useGetMyOrdersQuery,
   useGetOrdersAdminQuery,
+  useGetOrdersWorkSummaryQuery,
   useCreateOrderFromQuoteMutation,
   useUpdateOrderByAdminMutation,
   useMarkOrderDeliveredMutation,
