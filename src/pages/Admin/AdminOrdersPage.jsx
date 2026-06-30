@@ -20,6 +20,7 @@ import AddPaymentModal from "../../components/admin/AddPaymentModal";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
 import CourierDetailsModal from "../../components/admin/CourierDetailsModal";
 import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
+import { courierPickupConfig } from "../../config/courierConfig";
 import { copyTextToClipboard } from "../../utils/clipboard";
 import {
   buildCourierShareText,
@@ -418,6 +419,16 @@ const ORDER_PAYMENT_FILTER_VALUES = new Set([
 const ORDER_LIMIT_VALUES = new Set([20, 50, 100]);
 const DEFAULT_ORDER_LIMIT = 20;
 
+function getDefaultCourierInstructionNotes() {
+  if (Array.isArray(courierPickupConfig.courierNotes)) {
+    return courierPickupConfig.courierNotes.map((note) => String(note || ""));
+  }
+  if (courierPickupConfig.courierNote) {
+    return [String(courierPickupConfig.courierNote || "")];
+  }
+  return [];
+}
+
 function parsePositiveInt(raw, fallback = 1) {
   const n = Number.parseInt(String(raw ?? ""), 10);
   if (!Number.isFinite(n) || n < 1) return fallback;
@@ -472,6 +483,9 @@ export default function AdminOrdersPage() {
   );
   const [courierForm, setCourierForm] = useState(() =>
     getCourierDeliveryProfile()
+  );
+  const [courierInstructionNotes, setCourierInstructionNotes] = useState(() =>
+    getDefaultCourierInstructionNotes()
   );
   const [busyOrderId, setBusyOrderId] = useState("");
   const [deliverTarget, setDeliverTarget] = useState(null);
@@ -576,9 +590,13 @@ export default function AdminOrdersPage() {
       courierPreviewOrder
         ? buildCourierShareText(courierPreviewOrder, {
             deliveryProfile: courierForm,
+            pickupConfig: {
+              ...courierPickupConfig,
+              courierNotes: courierInstructionNotes,
+            },
           })
         : "",
-    [courierPreviewOrder, courierForm]
+    [courierPreviewOrder, courierForm, courierInstructionNotes]
   );
 
   async function onCopy(order) {
@@ -621,6 +639,7 @@ export default function AdminOrdersPage() {
     setCourierTarget(order);
     setCourierBaseForm(form);
     setCourierForm(form);
+    setCourierInstructionNotes(getDefaultCourierInstructionNotes());
   }
 
   function closeCourierModal() {
@@ -629,6 +648,7 @@ export default function AdminOrdersPage() {
     setCourierTarget(null);
     setCourierBaseForm(getCourierDeliveryProfile());
     setCourierForm(getCourierDeliveryProfile());
+    setCourierInstructionNotes(getDefaultCourierInstructionNotes());
   }
 
   function updateCourierField(field, value) {
@@ -636,6 +656,16 @@ export default function AdminOrdersPage() {
       ...prev,
       [field]: value,
     }));
+  }
+
+  function updateCourierInstructionNote(index, value) {
+    setCourierInstructionNotes((prev) =>
+      prev.map((note, noteIndex) => (noteIndex === index ? value : note))
+    );
+  }
+
+  function resetCourierInstructionNotes() {
+    setCourierInstructionNotes(getDefaultCourierInstructionNotes());
   }
 
   async function submitCourierDetails() {
@@ -676,6 +706,10 @@ export default function AdminOrdersPage() {
 
       const text = buildCourierShareText(finalOrder, {
         deliveryProfile: finalOrder?.user || courierForm,
+        pickupConfig: {
+          ...courierPickupConfig,
+          courierNotes: courierInstructionNotes,
+        },
       });
       await copyTextToClipboard(text);
       toast.success(
@@ -1594,8 +1628,11 @@ export default function AdminOrdersPage() {
         form={courierForm}
         missingFields={courierMissingFields}
         hasChanges={courierHasChanges}
+        courierNotes={courierInstructionNotes}
         previewText={courierPreviewText}
         onFieldChange={updateCourierField}
+        onCourierNoteChange={updateCourierInstructionNote}
+        onCourierNotesReset={resetCourierInstructionNotes}
         onClose={closeCourierModal}
         onSubmit={submitCourierDetails}
         isSaving={isSavingCourier}
