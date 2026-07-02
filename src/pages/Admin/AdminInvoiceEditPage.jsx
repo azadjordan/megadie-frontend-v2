@@ -18,6 +18,7 @@ import {
   getInvoiceBalanceDueMinor as balanceDueMinor,
   isInvoiceOverdue as isOverdue,
 } from "../../utils/invoiceMoney";
+import { getInvoiceDateValue } from "../../utils/invoiceDates";
 import { buildPaymentDefaults } from "../../utils/paymentFormDefaults";
 
 function formatDateTime(iso) {
@@ -139,6 +140,7 @@ export default function AdminInvoiceEditPage() {
     { isLoading: isAddingPayment, error: addPaymentError },
   ] = useAddPaymentToInvoiceMutation();
 
+  const [invoiceDate, setInvoiceDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [status, setStatus] = useState("Issued");
   const [adminNote, setAdminNote] = useState("");
@@ -156,6 +158,7 @@ export default function AdminInvoiceEditPage() {
     : "";
 
   if (invoice && loadedInvoiceKey !== invoiceFormKey) {
+    setInvoiceDate(toDateInputValue(getInvoiceDateValue(invoice)));
     setDueDate(toDateInputValue(invoice.dueDate));
     setStatus(invoice.status || "Issued");
     setAdminNote(invoice.adminNote || "");
@@ -254,9 +257,20 @@ export default function AdminInvoiceEditPage() {
     if (!invoice?._id && !invoice?.id) return;
     setSaved(false);
 
+    if (!invoiceDate) {
+      toast.error("Invoice date is required.");
+      return;
+    }
+
+    if (!dueDate) {
+      toast.error("Due date is required.");
+      return;
+    }
+
     const payload = {
       id: invoice._id || invoice.id,
-      dueDate: dueDate || null,
+      invoiceDate,
+      dueDate,
       adminNote,
       status,
       cancelReason: status === "Cancelled" ? cancelReason : "",
@@ -397,8 +411,11 @@ export default function AdminInvoiceEditPage() {
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
               <SmallStatusPill status={invoice.status} />
               {invoice.status === "Cancelled" ? null : (
-                <span>{formatDateTime(invoice.createdAt)}</span>
+                <span>{formatDateTime(getInvoiceDateValue(invoice))}</span>
               )}
+              <span className="text-xs text-slate-400">
+                Created in system: {formatDateTime(invoice.createdAt)}
+              </span>
             </div>
           </div>
 
@@ -430,10 +447,22 @@ export default function AdminInvoiceEditPage() {
               Invoice settings
             </div>
             <div className="mt-1 text-sm text-slate-500">
-              Update due date, status, and internal notes.
+              Update invoice date, due date, status, and internal notes.
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">
+                  Invoice date
+                </label>
+                <input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   Due date
@@ -445,7 +474,7 @@ export default function AdminInvoiceEditPage() {
                   className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 />
                 <div className="mt-1 text-xs text-slate-500">
-                  Leave empty to clear.
+                  Required for payment follow-up.
                 </div>
               </div>
 

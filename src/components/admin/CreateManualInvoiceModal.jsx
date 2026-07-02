@@ -108,14 +108,30 @@ export default function CreateManualInvoiceModal({
 
             <div className="md:col-span-3">
               <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Due date (required)
+                Invoice date
+              </label>
+              <input
+                type="date"
+                value={form.invoiceDate}
+                onChange={(e) => onFieldChange("invoiceDate", e.target.value)}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="mb-1 block text-xs font-semibold text-slate-600">
+                Due date
               </label>
               <input
                 type="date"
                 value={form.dueDate}
-                onChange={(e) => onFieldChange("dueDate", e.target.value)}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                readOnly
+                disabled
+                className="w-full rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"
               />
+              <div className="mt-1 text-[11px] text-slate-500">
+                Auto: one month after invoice date.
+              </div>
             </div>
 
             <div className="md:col-span-3">
@@ -131,7 +147,7 @@ export default function CreateManualInvoiceModal({
               />
             </div>
 
-            <div className="md:col-span-12">
+            <div className="md:col-span-9">
               <label className="mb-1 block text-xs font-semibold text-slate-600">
                 Admin note
               </label>

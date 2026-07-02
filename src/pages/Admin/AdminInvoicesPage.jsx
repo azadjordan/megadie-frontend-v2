@@ -14,6 +14,11 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import Pagination from "../../components/common/Pagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import CreateManualInvoiceModal from "../../components/admin/CreateManualInvoiceModal";
+import {
+  addCalendarMonthsClampedInput,
+  getInvoiceDateValue,
+  getTodayDateInputValue,
+} from "../../utils/invoiceDates";
 
 import {
   useGetInvoicesAdminQuery,
@@ -33,15 +38,6 @@ function formatDate(iso) {
   } catch {
     return iso;
   }
-}
-
-function getDefaultDueDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 35);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function moneyMinorRounded(amountMinor, currency = "AED", factor = 100) {
@@ -233,13 +229,15 @@ function buildInvoiceListSearchParams(nextState = {}) {
 }
 
 export default function AdminInvoicesPage() {
+  const defaultInvoiceDate = getTodayDateInputValue();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualError, setManualError] = useState("");
   const [manualForm, setManualForm] = useState({
     userId: "",
-    dueDate: getDefaultDueDate(),
+    invoiceDate: defaultInvoiceDate,
+    dueDate: addCalendarMonthsClampedInput(defaultInvoiceDate),
     currency: "AED",
     minorUnitFactor: 100,
     adminNote: "",
@@ -361,9 +359,11 @@ export default function AdminInvoicesPage() {
   }
 
   const resetManualForm = () => {
+    const invoiceDate = getTodayDateInputValue();
     setManualForm({
       userId: "",
-      dueDate: getDefaultDueDate(),
+      invoiceDate,
+      dueDate: addCalendarMonthsClampedInput(invoiceDate),
       currency: "AED",
       minorUnitFactor: 100,
       adminNote: "",
@@ -383,7 +383,16 @@ export default function AdminInvoicesPage() {
   };
 
   const updateManualField = (field, value) => {
-    setManualForm((prev) => ({ ...prev, [field]: value }));
+    setManualForm((prev) => {
+      if (field === "invoiceDate") {
+        return {
+          ...prev,
+          invoiceDate: value,
+          dueDate: addCalendarMonthsClampedInput(value),
+        };
+      }
+      return { ...prev, [field]: value };
+    });
     setManualError("");
   };
 
@@ -427,8 +436,13 @@ export default function AdminInvoicesPage() {
       return;
     }
 
+    if (!manualForm.invoiceDate) {
+      setManualError("Invoice date is required.");
+      return;
+    }
+
     if (!manualForm.dueDate) {
-      setManualError("Due date is required.");
+      setManualError("Due date could not be calculated.");
       return;
     }
 
@@ -479,6 +493,7 @@ export default function AdminInvoicesPage() {
     try {
       await createManualInvoice({
         userId,
+        invoiceDate: manualForm.invoiceDate,
         dueDate: manualForm.dueDate,
         currency: manualForm.currency?.trim() || undefined,
         minorUnitFactor: factor,
@@ -761,7 +776,7 @@ export default function AdminInvoicesPage() {
                 {row.issuedLabel}
               </span>
               {inv.status === "Cancelled" ? null : (
-                <span> • {formatDate(inv.createdAt)}</span>
+                <span> • {formatDate(getInvoiceDateValue(inv))}</span>
               )}
             </div>
           </div>
@@ -881,7 +896,7 @@ export default function AdminInvoicesPage() {
                               {row.issuedLabel}
                             </span>
                             {inv.status === "Cancelled" ? null : (
-                              <span>{formatDate(inv.createdAt)}</span>
+                              <span>{formatDate(getInvoiceDateValue(inv))}</span>
                             )}
                           </div>
                           <div className="mt-0.5 font-semibold text-slate-900">

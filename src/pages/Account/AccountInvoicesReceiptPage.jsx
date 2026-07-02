@@ -10,6 +10,7 @@ import {
   useGetMyInvoicesQuery,
   useLazyGetInvoicePdfQuery,
 } from "../../features/invoices/invoicesApiSlice";
+import { getInvoiceDateValue } from "../../utils/invoiceDates";
 
 function formatDate(iso) {
   if (!iso) return "-";
@@ -271,7 +272,11 @@ export default function AccountInvoicesReceiptPage() {
                 >
                   <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                     <span>{cancelled ? "Cancelled" : "Issued"}</span>
-                    {!cancelled ? <span>{formatDate(inv.createdAt)}</span> : <span />}
+                    {!cancelled ? (
+                      <span>{formatDate(getInvoiceDateValue(inv))}</span>
+                    ) : (
+                      <span />
+                    )}
                   </div>
                   <div className="mt-1 text-lg font-semibold text-slate-900">
                     {inv.invoiceNumber || `Invoice ${inv._id.slice(-6)}`}

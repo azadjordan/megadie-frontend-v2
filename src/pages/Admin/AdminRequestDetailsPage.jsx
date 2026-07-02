@@ -25,6 +25,10 @@ import { useLazyGetUserPricesQuery } from "../../features/userPrices/userPricesA
 import { useLazyGetPriceRulesQuery } from "../../features/priceRules/priceRulesApiSlice";
 import { useCreateManualInvoiceMutation } from "../../features/invoices/invoicesApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
+import {
+  addCalendarMonthsClampedInput,
+  getTodayDateInputValue,
+} from "../../utils/invoiceDates";
 
 import OwnerStep from "./request-details/OwnerStep";
 import QuantitiesStep from "./request-details/QuantitiesStep";
@@ -54,18 +58,10 @@ const buildDeliveryOptions = (currentValue) => {
   return options.sort((a, b) => a - b);
 };
 
-function getDefaultDueDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 35);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 export default function AdminRequestDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const defaultManualInvoiceDate = getTodayDateInputValue();
 
   const {
     data: quoteResult,
@@ -142,7 +138,8 @@ export default function AdminRequestDetailsPage() {
   const [manualError, setManualError] = useState("");
   const [manualForm, setManualForm] = useState({
     userId: "",
-    dueDate: getDefaultDueDate(),
+    invoiceDate: defaultManualInvoiceDate,
+    dueDate: addCalendarMonthsClampedInput(defaultManualInvoiceDate),
     currency: DEFAULT_MANUAL_CURRENCY,
     minorUnitFactor: 100,
     adminNote: "",
@@ -1086,9 +1083,11 @@ export default function AdminRequestDetailsPage() {
     if (!quote) return;
     const quoteUserId = getId(quote.user);
     const quoteNumber = quote?.quoteNumber || quote?._id || "";
+    const invoiceDate = getTodayDateInputValue();
     setManualForm({
       userId: quoteUserId || "",
-      dueDate: getDefaultDueDate(),
+      invoiceDate,
+      dueDate: addCalendarMonthsClampedInput(invoiceDate),
       currency: DEFAULT_MANUAL_CURRENCY,
       minorUnitFactor: 100,
       adminNote: quoteNumber ? `Manual invoice from quote ${quoteNumber}` : "",
@@ -1105,7 +1104,16 @@ export default function AdminRequestDetailsPage() {
   };
 
   const updateManualField = (field, value) => {
-    setManualForm((prev) => ({ ...prev, [field]: value }));
+    setManualForm((prev) => {
+      if (field === "invoiceDate") {
+        return {
+          ...prev,
+          invoiceDate: value,
+          dueDate: addCalendarMonthsClampedInput(value),
+        };
+      }
+      return { ...prev, [field]: value };
+    });
     setManualError("");
   };
 
@@ -1147,8 +1155,13 @@ export default function AdminRequestDetailsPage() {
       return;
     }
 
+    if (!manualForm.invoiceDate) {
+      setManualError("Invoice date is required.");
+      return;
+    }
+
     if (!manualForm.dueDate) {
-      setManualError("Due date is required.");
+      setManualError("Due date could not be calculated.");
       return;
     }
 
@@ -1199,6 +1212,7 @@ export default function AdminRequestDetailsPage() {
     try {
       await createManualInvoice({
         userId,
+        invoiceDate: manualForm.invoiceDate,
         dueDate: manualForm.dueDate,
         currency: manualForm.currency?.trim() || undefined,
         minorUnitFactor: factor,
