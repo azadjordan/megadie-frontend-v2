@@ -1,7 +1,12 @@
 export async function copyTextToClipboard(text) {
-  if (navigator?.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Some mobile browsers reject navigator.clipboard even after a tap.
+      // Fall through to the selection-based copy path before reporting failure.
+    }
   }
 
   const textarea = document.createElement("textarea");
