@@ -274,7 +274,7 @@ function getRowMeta(q, state = {}) {
   const { deletingId, pdfId, copyId } = state;
   const hasOrder = Boolean(q.order);
   const canPdf = q.status === "Quoted";
-  const canCopy = q.status === "Quoted" || q.status === "Confirmed";
+  const canCopy = Boolean(q?._id);
   const isCancelled = q.status === "Cancelled";
   const isMergedSource = Boolean(q.mergedIntoQuote);
   const mergedFromSnapshots = Array.isArray(q.mergedFromQuoteSnapshots)
@@ -752,15 +752,15 @@ export default function AdminRequestsPage() {
 
   async function onCopy(q) {
     try {
-      if (q.status !== "Quoted" && q.status !== "Confirmed") return;
+      if (!q?._id) return;
       setCopyId(q._id);
       const res = await getQuoteShare(q._id).unwrap();
       const quote = res?.data ?? res ?? q;
       const text = buildAdminQuoteShareText(quote);
       await copyTextToClipboard(text);
-      toast.success("Quote copied to clipboard.");
+      toast.success("Request copied to clipboard.");
     } catch {
-      toast.error("Failed to copy quote.");
+      toast.error("Failed to copy request.");
     } finally {
       setCopyId(null);
     }
@@ -1051,11 +1051,7 @@ export default function AdminRequestsPage() {
                       ].join(" ")}
                       disabled={!row.canCopy || row.rowCopy}
                       onClick={() => onCopy(q)}
-                      title={
-                        row.canCopy
-                          ? "Copy quote"
-                          : "Copy is available for Quoted or Confirmed requests only"
-                      }
+                      title={row.canCopy ? "Copy request" : "Copy request is unavailable"}
                     >
                       <FiSend className="h-3.5 w-3.5" />
                       Copy
@@ -1241,9 +1237,7 @@ export default function AdminRequestsPage() {
                               disabled={!row.canCopy || row.rowCopy}
                               onClick={() => onCopy(q)}
                               title={
-                                row.canCopy
-                                  ? "Copy quote"
-                                  : "Copy is available for Quoted or Confirmed requests only"
+                                row.canCopy ? "Copy request" : "Copy request is unavailable"
                               }
                             >
                               <FiSend className="h-3.5 w-3.5" />

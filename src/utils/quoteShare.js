@@ -42,6 +42,11 @@ const money = (amount, currency = "AED") => {
   }
 };
 
+const positiveAmount = (amount) => {
+  const n = Number(amount);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
 export const buildClientQuoteLink = (quoteId, originOverride) => {
   const id = String(quoteId || "").trim();
   if (!id) return "";
@@ -69,21 +74,44 @@ export const buildClientShareMessage = (quote, originOverride) => {
   return parts.join(" ");
 };
 
-export const buildAdminQuoteShareText = (quote, originOverride) => {
+export const buildAdminQuoteShareText = (quote) => {
   const quoteNo = quote?.quoteNumber || quote?._id || "-";
   const createdAt = quote?.createdAt ? formatShareDate(quote.createdAt) : "-";
+  const status = quote?.status || "-";
   const clientName = quote?.user?.name || "Unnamed";
   const clientEmail = quote?.user?.email || "-";
   const items = Array.isArray(quote?.requestedItems) ? quote.requestedItems : [];
-  const quoteId = quote?._id || quote?.id;
-  const link = buildClientQuoteLink(quoteId, originOverride);
   const safeQuoteNo = preventAutoLink(quoteNo);
   const safeCreatedAt = preventAutoLink(createdAt);
+  const safeStatus = preventAutoLink(status);
   const safeClientEmail = preventAutoLink(clientEmail);
+  const pricedItems = items
+    .map((item) => {
+      const qty = Math.max(0, Number(item?.qty) || 0);
+      const unitPrice = positiveAmount(item?.unitPrice);
+      return {
+        item,
+        qty,
+        unitPrice,
+        lineTotal: unitPrice * qty,
+        hasPrice: unitPrice > 0,
+      };
+    })
+    .filter(({ hasPrice }) => hasPrice);
+  const deliveryCharge = positiveAmount(quote?.deliveryCharge);
+  const extraFee = positiveAmount(quote?.extraFee);
+  const explicitTotal = positiveAmount(quote?.totalPrice);
+  const calculatedTotal =
+    pricedItems.reduce((sum, item) => sum + item.lineTotal, 0) +
+    deliveryCharge +
+    extraFee;
+  const totalPrice = explicitTotal || calculatedTotal;
+  const hasPricing = totalPrice > 0 || pricedItems.length > 0;
 
   const lines = [];
-  lines.push("Quote Details");
-  lines.push(`Quote #: ${safeQuoteNo}`);
+  lines.push("Request Details");
+  lines.push(`Request #: ${safeQuoteNo}`);
+  lines.push(`Status: ${safeStatus}`);
   lines.push(`Date: ${safeCreatedAt}`);
   lines.push(`Client: ${clientName}`);
   lines.push(`Email: ${safeClientEmail}`);
@@ -95,31 +123,26 @@ export const buildAdminQuoteShareText = (quote, originOverride) => {
   } else {
     items.forEach((item, idx) => {
       const qty = Number(item?.qty) || 0;
-      const unit = Number(item?.unitPrice) || 0;
-      const lineTotal = Math.max(0, unit * qty);
+      const unitPrice = positiveAmount(item?.unitPrice);
+      const lineTotal = Math.max(0, unitPrice * qty);
       const label = item?.product?.name || "Unnamed";
-      lines.push(`${idx + 1}. *${label}* Qty: ${qty}, ${money(lineTotal)}`);
+      const priceText = unitPrice > 0 ? `, ${money(lineTotal)}` : "";
+      lines.push(`${idx + 1}. *${label}* Qty: ${qty}${priceText}`);
       if (idx < items.length - 1) {
         lines.push("");
       }
     });
   }
 
-  lines.push("");
-  lines.push(`Delivery Charge: ${money(quote?.deliveryCharge)}`);
-  lines.push(`Extra Fee: ${money(quote?.extraFee)}`);
-  lines.push(`Total Price: ${money(quote?.totalPrice)}`);
-  lines.push("");
-  lines.push("Please review your request.");
-  lines.push(
-    "If everything looks correct, reply with *Confirm* or confirm using the link below:"
-  );
-  lines.push("يرجى مراجعة طلبك.");
-  lines.push(
-    "إذا كان كل شيء صحيحًا، يرجى الرد بكلمة *تأكيد* أو يمكنك التأكيد عبر الرابط أدناه:"
-  );
-  if (link) {
-    lines.push(link);
+  if (hasPricing) {
+    lines.push("");
+    if (deliveryCharge > 0) {
+      lines.push(`Delivery Charge: ${money(deliveryCharge)}`);
+    }
+    if (extraFee > 0) {
+      lines.push(`Extra Fee: ${money(extraFee)}`);
+    }
+    lines.push(`Total Price: ${money(totalPrice)}`);
   }
 
   return lines.join("\n");

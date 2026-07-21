@@ -68,6 +68,15 @@ const getPaymentReceivers = (invoice) => {
   return [...new Set(receivers)].join(", ") || "-";
 };
 
+const getPaymentMethods = (invoice) => {
+  const payments = Array.isArray(invoice?.payments) ? invoice.payments : [];
+  const methods = payments
+    .map((payment) => String(payment?.paymentMethod || "").trim())
+    .filter(Boolean);
+
+  return [...new Set(methods)];
+};
+
 const getOrderStatusMark = (status) => {
   if (status === "Delivered") return STATUS_MARKS.done;
   if (status === "Cancelled") return STATUS_MARKS.missing;
@@ -89,6 +98,7 @@ export const buildAdminOrderShareText = (order, { invoiceDetails } = {}) => {
   const invoiceLabel = invoiceNumber || invoiceId || "-";
   const paymentStatus = invoice?.paymentStatus || "";
   const paymentReceivers = getPaymentReceivers(invoice);
+  const paymentMethods = getPaymentMethods(invoice);
   const clientName = order?.user?.name || "Unnamed";
   const clientEmail = order?.user?.email || "-";
   const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
@@ -128,6 +138,11 @@ export const buildAdminOrderShareText = (order, { invoiceDetails } = {}) => {
   lines.push("Status:");
   lines.push(`${orderStatusMark} Order: ${status}`);
   lines.push(`${paymentStatusMark} Payment: ${formatPaymentStatus(paymentStatus)}`);
+  if (paymentMethods.length) {
+    const methodLabel =
+      paymentMethods.length === 1 ? "Payment method" : "Payment methods";
+    lines.push(`${STATUS_MARKS.done} ${methodLabel}: ${paymentMethods.join(", ")}`);
+  }
   lines.push(`${paymentReceiverMark} Payment received by: ${paymentReceivers}`);
   lines.push(`${stockStatusMark} Stock: ${stockStatus}`);
   lines.push(`${deliveredByMark} Delivered by: ${deliveredBy}`);
