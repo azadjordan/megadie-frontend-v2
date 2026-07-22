@@ -15,6 +15,7 @@ const MOVEMENT_TYPE_OPTIONS = [
   { value: "RESERVE", label: "Reserve" },
   { value: "RELEASE", label: "Release" },
   { value: "DEDUCT", label: "Deduct" },
+  { value: "RESTORE", label: "Restore" },
 ];
 
 const TYPE_LABELS = {
@@ -24,6 +25,7 @@ const TYPE_LABELS = {
   RESERVE: "Reserve",
   RELEASE: "Release",
   DEDUCT: "Deduct",
+  RESTORE: "Restore",
 };
 
 const TYPE_STYLES = {
@@ -33,6 +35,7 @@ const TYPE_STYLES = {
   RESERVE: "bg-amber-50 text-amber-700 ring-amber-200",
   RELEASE: "bg-orange-50 text-orange-700 ring-orange-200",
   DEDUCT: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  RESTORE: "bg-teal-50 text-teal-700 ring-teal-200",
 };
 
 const formatQty = (value) => {
@@ -82,7 +85,9 @@ const resolveTypeLabel = (type) => TYPE_LABELS[type] || type || "Unknown";
 
 const formatQtyWithSign = (type, qty) => {
   const formatted = formatQty(qty);
-  if (type === "ADJUST_IN" || type === "RESERVE") return `+${formatted}`;
+  if (type === "ADJUST_IN" || type === "RESERVE" || type === "RESTORE") {
+    return `+${formatted}`;
+  }
   if (type === "ADJUST_OUT" || type === "RELEASE" || type === "DEDUCT") {
     return `-${formatted}`;
   }
@@ -202,6 +207,7 @@ export default function AdminInventoryMovementsPage() {
       RESERVE: 0,
       RELEASE: 0,
       DEDUCT: 0,
+      RESTORE: 0,
     };
     for (const row of movements) {
       const key = row?.type;
