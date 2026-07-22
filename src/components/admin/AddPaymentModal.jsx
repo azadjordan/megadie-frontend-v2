@@ -19,10 +19,9 @@ export default function AddPaymentModal({
   if (!open) return null;
 
   const receivedByOptions = [
-    "Azad",
-    "Momani",
+    "Azad - Personal",
+    "Momani - Personal",
     "Company Account",
-    "Ahmad Emad",
   ];
   const errors = fieldErrors || {};
 
