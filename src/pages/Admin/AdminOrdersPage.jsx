@@ -19,6 +19,7 @@ import Pagination from "../../components/common/Pagination";
 import AddPaymentModal from "../../components/admin/AddPaymentModal";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
 import CourierDetailsModal from "../../components/admin/CourierDetailsModal";
+import DeleteOrderPreviewModal from "../../components/admin/DeleteOrderPreviewModal";
 import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
 import { courierPickupConfig } from "../../config/courierConfig";
 import { copyTextToClipboard } from "../../utils/clipboard";
@@ -43,6 +44,7 @@ import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
   useGetOrdersWorkSummaryQuery,
+  useLazyGetOrderDeletePreviewQuery,
   useMarkOrderDeliveredMutation,
   useUpdateOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
@@ -585,6 +587,11 @@ export default function AdminOrdersPage() {
   const [copyId, setCopyId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [deletePreviewId, setDeletePreviewId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletePreview, setDeletePreview] = useState(null);
+  const [deleteConfirmValue, setDeleteConfirmValue] = useState("");
+  const [deleteFormError, setDeleteFormError] = useState("");
   const [courierTarget, setCourierTarget] = useState(null);
   const [courierBaseForm, setCourierBaseForm] = useState(() =>
     getCourierDeliveryProfile()
@@ -636,6 +643,7 @@ export default function AdminOrdersPage() {
 
   const [deleteOrderByAdmin, { isLoading: isDeleting }] =
     useDeleteOrderByAdminMutation();
+  const [getOrderDeletePreview] = useLazyGetOrderDeletePreviewQuery();
   const [updateOrderStatus, { isLoading: isUpdatingStatus }] =
     useUpdateOrderByAdminMutation();
   const [
@@ -864,22 +872,63 @@ export default function AdminOrdersPage() {
     }
   }
 
+  function resetDeleteModal() {
+    setDeleteTarget(null);
+    setDeletePreview(null);
+    setDeleteConfirmValue("");
+    setDeleteFormError("");
+  }
+
+  function closeDeleteModal() {
+    if (isDeleting) return;
+    resetDeleteModal();
+  }
+
   async function onDelete(order) {
-    if (!order || deleteId || isDeleting) return;
-    const confirmed = window.confirm(
-      "Delete this cancelled order? This will delete its quote, invoice, payments, and allocations."
-    );
-    if (!confirmed) return;
+    if (!order?._id || deleteId || deletePreviewId || isDeleting) return;
+    setDeleteTarget(order);
+    setDeletePreview(null);
+    setDeleteConfirmValue("");
+    setDeleteFormError("");
+    setDeletePreviewId(order._id);
     try {
-      setDeleteId(order._id);
-      await deleteOrderByAdmin(order._id).unwrap();
-      toast.success("Order deleted.");
-    } catch (e) {
-      const msg = e?.data?.message || e?.error || "Delete failed.";
-      const friendly =
-        /allocation/i.test(msg) || /reserve/i.test(msg)
-          ? "Cannot delete: remove reservations/allocations first."
-          : msg;
+      const res = await getOrderDeletePreview(order._id).unwrap();
+      setDeletePreview(res?.data || res);
+    } catch (err) {
+      resetDeleteModal();
+      toast.error(friendlyApiError(err, "Failed to prepare delete preview."));
+    } finally {
+      setDeletePreviewId(null);
+    }
+  }
+
+  async function submitDeleteOrder() {
+    if (!deleteTarget?._id || deleteId || isDeleting) return;
+    const confirmText =
+      deletePreview?.confirmText ||
+      deletePreview?.order?.orderNumber ||
+      deleteTarget.orderNumber ||
+      deleteTarget._id;
+
+    if (String(deleteConfirmValue).trim() !== String(confirmText).trim()) {
+      setDeleteFormError("Type the order number exactly to confirm.");
+      return;
+    }
+
+    setDeleteFormError("");
+    try {
+      setDeleteId(deleteTarget._id);
+      const res = await deleteOrderByAdmin(deleteTarget._id).unwrap();
+      const restored = Boolean(res?.data?.stockRestored);
+      toast.success(
+        restored
+          ? "Order deleted and stock restored."
+          : "Order deleted."
+      );
+      resetDeleteModal();
+    } catch (err) {
+      const friendly = friendlyApiError(err, "Delete failed.");
+      setDeleteFormError(friendly);
       toast.error(friendly);
     } finally {
       setDeleteId(null);
@@ -1352,16 +1401,18 @@ export default function AdminOrdersPage() {
 	    const rowCopy = copyId === o._id;
 	    const rowCourier = courierTarget?._id === o._id;
 	    const rowDelete = deleteId === o._id;
+	    const rowDeletePreview = deletePreviewId === o._id;
     const state = row.actionState;
     const fulfillment = state.fulfillment;
     const billing = state.billing;
-    const canDelete = o.status === "Cancelled" && !row.isFinalized;
     const deleteHint =
-      o.status !== "Cancelled"
-        ? "Cancel order before deleting."
+      rowDeletePreview
+        ? "Preparing delete preview"
+        : rowDelete
+        ? "Deleting order"
         : row.isFinalized
-        ? "Stock finalized orders cannot be deleted."
-        : "Delete order";
+        ? "Review stock restore and delete"
+        : "Review delete impact";
     return (
       <div
         key={o._id}
@@ -1511,16 +1562,16 @@ export default function AdminOrdersPage() {
             type="button"
             className={[
               "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset transition",
-              !canDelete || rowDelete || isDeleting
+              rowDelete || rowDeletePreview || isDeleting
                 ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                 : "bg-white text-rose-600 ring-rose-200 hover:bg-rose-50",
             ].join(" ")}
-            disabled={!canDelete || rowDelete || isDeleting}
+            disabled={rowDelete || rowDeletePreview || isDeleting}
             onClick={() => onDelete(o)}
             title={deleteHint}
           >
             <FiTrash2 className="h-3.5 w-3.5" />
-            Delete
+            {rowDeletePreview ? "Checking..." : rowDelete ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>
@@ -1548,17 +1599,18 @@ export default function AdminOrdersPage() {
 	                    const rowCopy = copyId === o._id;
 	                    const rowCourier = courierTarget?._id === o._id;
 	                    const rowDelete = deleteId === o._id;
+	                    const rowDeletePreview = deletePreviewId === o._id;
                     const state = row.actionState;
                     const fulfillment = state.fulfillment;
                     const billing = state.billing;
-                    const canDelete =
-                      o.status === "Cancelled" && !row.isFinalized;
                     const deleteHint =
-                      o.status !== "Cancelled"
-                        ? "Cancel order before deleting."
+                      rowDeletePreview
+                        ? "Preparing delete preview"
+                        : rowDelete
+                        ? "Deleting order"
                         : row.isFinalized
-                        ? "Stock finalized orders cannot be deleted."
-                        : "Delete order";
+                        ? "Review stock restore and delete"
+                        : "Review delete impact";
                     return (
                       <tr key={o._id} className="hover:bg-slate-50">
                         <td className="px-4 py-3">
@@ -1689,11 +1741,11 @@ export default function AdminOrdersPage() {
                               type="button"
                               className={[
                                 "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-rose-600 hover:bg-rose-50",
-                                !canDelete || rowDelete || isDeleting
+                                rowDelete || rowDeletePreview || isDeleting
                                   ? "cursor-not-allowed text-slate-300 hover:bg-white"
                                   : "",
                               ].join(" ")}
-                              disabled={!canDelete || rowDelete || isDeleting}
+                              disabled={rowDelete || rowDeletePreview || isDeleting}
                               onClick={() => onDelete(o)}
                               aria-label="Delete order"
                               title={deleteHint}
@@ -1746,6 +1798,22 @@ export default function AdminOrdersPage() {
         form={paymentForm}
         onFieldChange={updatePaymentForm}
         fieldErrors={paymentFieldErrors}
+      />
+
+      <DeleteOrderPreviewModal
+        open={Boolean(deleteTarget)}
+        order={deleteTarget}
+        preview={deletePreview}
+        isLoading={Boolean(deletePreviewId)}
+        isDeleting={Boolean(deleteId && deleteId === deleteTarget?._id)}
+        confirmValue={deleteConfirmValue}
+        onConfirmValueChange={(value) => {
+          setDeleteConfirmValue(value);
+          setDeleteFormError("");
+        }}
+        onClose={closeDeleteModal}
+        onSubmit={submitDeleteOrder}
+        error={deleteFormError}
       />
 
       <CourierDetailsModal

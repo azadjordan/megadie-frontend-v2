@@ -69,6 +69,11 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       providesTags: () => [{ type: "Order", id: "LIST" }],
     }),
 
+    getOrderDeletePreview: builder.query({
+      query: (id) => `/orders/${id}/delete-preview`,
+      keepUnusedDataFor: 0,
+    }),
+
     // =========================
     // ✅ Admin: create order from quote
     // =========================
@@ -139,6 +144,16 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: (_result, _error, id) => [
         { type: "Order", id: "LIST" },
         { type: "Order", id },
+        { type: "Quote", id: "LIST" },
+        { type: "Invoice", id: "LIST" },
+        { type: "Invoice", id: "SUMMARY" },
+        { type: "Payment", id: "LIST" },
+        { type: "OrderAllocation", id: "LIST" },
+        { type: "OrderAllocation", id: `ORDER-${id}` },
+        { type: "SlotItem", id: "LIST" },
+        { type: "Slot", id: "LIST" },
+        { type: "InventoryProduct", id: "LIST" },
+        { type: "InventoryMovement", id: "LIST" },
       ],
     }),
 
@@ -151,6 +166,7 @@ export const {
   useGetMyOrdersQuery,
   useGetOrdersAdminQuery,
   useGetOrdersWorkSummaryQuery,
+  useLazyGetOrderDeletePreviewQuery,
   useCreateOrderFromQuoteMutation,
   useUpdateOrderByAdminMutation,
   useMarkOrderDeliveredMutation,
