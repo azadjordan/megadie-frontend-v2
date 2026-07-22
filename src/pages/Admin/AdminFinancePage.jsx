@@ -121,8 +121,8 @@ export default function AdminFinancePage() {
   }, [users, selectedUser, selectedUserId]);
 
   const soaScopeLabel = soaStartDate
-    ? `Includes invoices issued between ${soaStartDate} and ${soaCutoffDate}.`
-    : `Includes invoices issued on or before ${soaCutoffDate}.`;
+    ? `Includes issued invoices between ${soaStartDate} and ${soaCutoffDate}.`
+    : `Includes issued invoices on or before ${soaCutoffDate}.`;
 
   const handleSoa = async () => {
     if (!selectedUserId || !soaCutoffDate) return;
@@ -364,7 +364,7 @@ export default function AdminFinancePage() {
             Statement of Account (SOA)
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            Generate a PDF for invoices issued up to a selected date, or within a chosen date range, that still remain unpaid.
+            Generate a PDF for all issued invoices within the selected date range, including paid and unpaid balances.
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
