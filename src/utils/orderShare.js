@@ -130,22 +130,26 @@ export const buildAdminOrderShareText = (order, { invoiceDetails } = {}) => {
   lines.push(`Order #: ${safeOrderNumber}`);
   lines.push(`Invoice #: ${safeInvoiceLabel}`);
   lines.push(`Date: ${safeDate}`);
+  lines.push(`${orderStatusMark} Status: ${status}`);
+  lines.push(`${deliveredByMark} Delivered by: ${deliveredBy}`);
+  lines.push(`${stockStatusMark} Stock: ${stockStatus}`);
   lines.push("");
   lines.push("Client:");
   lines.push(`Name: ${clientName}`);
   lines.push(`Email: ${safeEmail}`);
   lines.push("");
-  lines.push("Status:");
-  lines.push(`${orderStatusMark} Order: ${status}`);
-  lines.push(`${paymentStatusMark} Payment: ${formatPaymentStatus(paymentStatus)}`);
+  lines.push("Payment:");
+  lines.push(`${paymentStatusMark} Status: ${formatPaymentStatus(paymentStatus)}`);
   if (paymentMethods.length) {
-    const methodLabel =
-      paymentMethods.length === 1 ? "Payment method" : "Payment methods";
+    const methodLabel = paymentMethods.length === 1 ? "Method" : "Methods";
     lines.push(`${STATUS_MARKS.done} ${methodLabel}: ${paymentMethods.join(", ")}`);
   }
-  lines.push(`${paymentReceiverMark} Payment received by: ${paymentReceivers}`);
-  lines.push(`${stockStatusMark} Stock: ${stockStatus}`);
-  lines.push(`${deliveredByMark} Delivered by: ${deliveredBy}`);
+  lines.push(`${paymentReceiverMark} Received by: ${paymentReceivers}`);
+  lines.push("");
+  lines.push("Fees:");
+  lines.push(`Delivery Charge: ${money(order?.deliveryCharge)}`);
+  lines.push(`Extra Fee: ${money(order?.extraFee)}`);
+  lines.push(`Total: ${money(getOrderTotals(order).total)}`);
   lines.push("");
   lines.push("Items:");
   if (!items.length) {
@@ -163,10 +167,6 @@ export const buildAdminOrderShareText = (order, { invoiceDetails } = {}) => {
       }
     });
   }
-  lines.push("");
-  lines.push(`Delivery Charge: ${money(order?.deliveryCharge)}`);
-  lines.push(`Extra Fee: ${money(order?.extraFee)}`);
-  lines.push(`Total: ${money(getOrderTotals(order).total)}`);
 
   return lines.join("\n");
 };
