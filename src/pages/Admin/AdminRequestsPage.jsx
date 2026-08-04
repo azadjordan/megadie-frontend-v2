@@ -63,6 +63,30 @@ function StatusBadge({ status, size = "default" }) {
   );
 }
 
+function OrderStatusBadge({ status, size = "default" }) {
+  if (!status) return null;
+
+  const base =
+    "inline-flex items-center gap-1 rounded-full font-semibold ring-1 ring-inset";
+  const sizes = {
+    default: "px-2.5 py-1 text-xs",
+    compact: "px-2 py-0.5 text-[10px]",
+  };
+
+  const map = {
+    Processing: "bg-slate-50 text-slate-700 ring-slate-200",
+    Shipping: "bg-blue-50 text-blue-700 ring-blue-200",
+    Delivered: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    Cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
+  };
+
+  return (
+    <span className={`${base} ${sizes[size] || sizes.default} ${map[status] || map.Processing}`}>
+      {status}
+    </span>
+  );
+}
+
 function AvailabilityBadge({ status, size = "default" }) {
   const base =
     "inline-flex items-center gap-1 rounded-full font-semibold ring-1 ring-inset";
@@ -1018,8 +1042,17 @@ export default function AdminRequestsPage() {
                       <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                         Order
                       </div>
-                      <div className="mt-1 text-xs font-semibold text-slate-700">
-                        {row.hasOrder ? q.order?.orderNumber : "—"}
+                      <div className="mt-1 flex flex-col items-end gap-1">
+                        {row.hasOrder ? (
+                          <>
+                            <span className="text-xs font-semibold text-slate-700">
+                              {q.order?.orderNumber || "Order"}
+                            </span>
+                            <OrderStatusBadge status={q.order?.status} size="compact" />
+                          </>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
                       </div>
                     </div>
                     <div>
@@ -1205,8 +1238,11 @@ export default function AdminRequestsPage() {
                         {/* Order */}
                         <td className="px-4 py-3">
                           {row.hasOrder ? (
-                            <div className="text-xs font-semibold text-slate-700">
-                              {q.order?.orderNumber}
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="text-xs font-semibold text-slate-700">
+                                {q.order?.orderNumber || "Order"}
+                              </span>
+                              <OrderStatusBadge status={q.order?.status} size="compact" />
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">-</span>
