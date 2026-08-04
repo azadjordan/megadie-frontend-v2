@@ -126,19 +126,14 @@ export const buildAdminOrderShareText = (order, { invoiceDetails } = {}) => {
   const safeEmail = preventAutoLink(clientEmail);
 
   const lines = [];
-  lines.push("ORDER");
-  lines.push(`Order #: ${safeOrderNumber}`);
+  lines.push(`ORDER #${safeOrderNumber}`);
+  lines.push(`Client: ${clientName}`);
+  lines.push(`Email: ${safeEmail}`);
   lines.push(`Invoice #: ${safeInvoiceLabel}`);
   lines.push(`Date: ${safeDate}`);
   lines.push(`${orderStatusMark} Status: ${status}`);
   lines.push(`${deliveredByMark} Delivered by: ${deliveredBy}`);
   lines.push(`${stockStatusMark} Stock: ${stockStatus}`);
-  lines.push("");
-  lines.push("Client:");
-  lines.push(`Name: ${clientName}`);
-  lines.push(`Email: ${safeEmail}`);
-  lines.push("");
-  lines.push("Payment:");
   lines.push(`${paymentStatusMark} Status: ${formatPaymentStatus(paymentStatus)}`);
   if (paymentMethods.length) {
     const methodLabel = paymentMethods.length === 1 ? "Method" : "Methods";
