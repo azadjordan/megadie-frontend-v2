@@ -45,7 +45,7 @@ import {
   toInputValue,
 } from "./request-details/helpers";
 
-const DELIVERY_CHARGE_OPTIONS = [0, 10, 12, 15, 20, 25, 30, 35, 40, 50];
+const DELIVERY_CHARGE_OPTIONS = [0, 10, 12, 15, 20, 25, 30, 32, 35, 40, 50];
 const DEFAULT_DELIVERY_CHARGE = 15;
 const DEFAULT_MANUAL_CURRENCY = "AED";
 
