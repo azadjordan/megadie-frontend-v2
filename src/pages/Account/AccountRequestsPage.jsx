@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
@@ -36,6 +37,7 @@ export default function AccountRequestsPage() {
     isLoading: isDeepLinkLoading,
     isError: isDeepLinkError,
     error: deepLinkError,
+    refetch: refetchDeepLink,
   } = useGetQuoteByIdQuery(deepLinkId, { skip: !deepLinkId });
 
   const [cancelQuote, { isLoading: isCancelling }] = useCancelQuoteMutation();
@@ -120,7 +122,15 @@ export default function AccountRequestsPage() {
     try {
       await confirmQuote(id).unwrap();
       refetch();
+      if (deepLinkId && typeof refetchDeepLink === "function") {
+        refetchDeepLink();
+      }
     } catch (e) {
+      toast.error(e?.data?.message || e?.error || "Unable to confirm quote.");
+      refetch();
+      if (deepLinkId && typeof refetchDeepLink === "function") {
+        refetchDeepLink();
+      }
       console.error(e);
     }
   };

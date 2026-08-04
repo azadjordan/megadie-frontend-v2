@@ -61,6 +61,32 @@ const getQuoteId = (quote) => {
   return id ? String(id) : "";
 };
 
+const getDisplayAvailabilityItem = (item) => {
+  const liveAvailableNow = Number(item?.liveAvailableNow);
+  const liveShortage = Number(item?.liveShortage);
+  const liveStatus = item?.liveAvailabilityStatus;
+  const hasLiveAvailability =
+    typeof liveStatus === "string" ||
+    Number.isFinite(liveAvailableNow) ||
+    Number.isFinite(liveShortage);
+
+  if (!hasLiveAvailability) return item;
+
+  const availableNow = Number.isFinite(liveAvailableNow)
+    ? Math.max(0, liveAvailableNow)
+    : item?.availableNow;
+  const shortage = Number.isFinite(liveShortage)
+    ? Math.max(0, liveShortage)
+    : item?.shortage;
+
+  return {
+    ...item,
+    availableNow,
+    shortage,
+    availabilityStatus: liveStatus || item?.availabilityStatus,
+  };
+};
+
 export default function AccountRequestCard({
   quote,
   isOpen,
@@ -82,8 +108,11 @@ export default function AccountRequestCard({
   const requestedItems = Array.isArray(quote?.requestedItems)
     ? quote.requestedItems
     : [];
-  const hasShortage = requestedItems.some((it) => Number(it?.shortage) > 0);
-  const availabilityStatuses = requestedItems
+  const displayItems = requestedItems.map(getDisplayAvailabilityItem);
+  const availabilityCheckedAt =
+    quote?.liveAvailabilityCheckedAt || quote?.availabilityCheckedAt;
+  const hasShortage = displayItems.some((it) => Number(it?.shortage) > 0);
+  const availabilityStatuses = displayItems
     .map((it) => it?.availabilityStatus)
     .filter(Boolean);
   const totalAvailabilityCount = availabilityStatuses.length;
@@ -124,7 +153,7 @@ export default function AccountRequestCard({
   const deliveryCharge = Number(quote?.deliveryCharge) || 0;
   const extraFee = Number(quote?.extraFee) || 0;
   const adjustedSubtotal = showFullPricing
-    ? requestedItems.reduce((sum, it) => {
+    ? displayItems.reduce((sum, it) => {
         const unitPrice = Number(it?.unitPrice);
         if (!Number.isFinite(unitPrice)) return sum;
         const requestedQty = Math.max(0, Number(it?.qty) || 0);
@@ -230,11 +259,11 @@ export default function AccountRequestCard({
                 Requested items
               </div>
             </div>
-            {!isCancelled && quote?.availabilityCheckedAt ? (
+            {!isCancelled && availabilityCheckedAt ? (
               <div className="mt-1 text-xs text-slate-500">
                 Availability as of{" "}
                 <span className="font-semibold text-slate-700">
-                  {formatDate(quote.availabilityCheckedAt)}
+                  {formatDate(availabilityCheckedAt)}
                 </span>
               </div>
             ) : null}
@@ -251,7 +280,7 @@ export default function AccountRequestCard({
 
             <RequestedItemsTable
               quoteId={quoteId}
-              requestedItems={requestedItems}
+              requestedItems={displayItems}
               isCancelled={isCancelled}
               showFullPricing={showFullPricing}
               showPricingColumn={showPricingColumn}
