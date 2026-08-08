@@ -7,7 +7,7 @@ import {
 } from "../../features/slots/slotsApiSlice";
 import {
   useGetSlotItemsBySlotQuery,
-  useAdjustSlotItemMutation,
+  useAdjustSlotItemsBulkMutation,
   useCorrectSlotItemCountMutation,
   useMoveSlotItemsMutation,
   useClearSlotItemsMutation,
@@ -86,7 +86,6 @@ export default function AdminSlotDetailsPage() {
   const {
     data: slot,
     isLoading: slotLoading,
-    isFetching: slotFetching,
     error: slotError,
   } = useGetSlotByIdQuery(slotId, { skip: !slotId });
 
@@ -103,7 +102,7 @@ export default function AdminSlotDetailsPage() {
     useClearSlotItemsMutation();
   const [loadInventoryProducts, { isFetching: stockSearchLoading }] =
     useLazyGetInventoryProductsQuery();
-  const [adjustSlotItem] = useAdjustSlotItemMutation();
+  const [adjustSlotItemsBulk] = useAdjustSlotItemsBulkMutation();
   const [correctSlotItemCount, { isLoading: isCorrectingCount }] =
     useCorrectSlotItemCountMutation();
 
@@ -317,7 +316,7 @@ export default function AdminSlotDetailsPage() {
     );
   }
 
-  if (slotLoading || slotFetching) {
+  if (slotLoading && !slot) {
     return (
       <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
         <div className="text-sm font-semibold text-slate-900">
@@ -330,7 +329,7 @@ export default function AdminSlotDetailsPage() {
     );
   }
 
-  if (slotError) {
+  if (slotError && !slot) {
     return (
       <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
         <div className="text-sm font-semibold text-slate-900">
@@ -521,10 +520,14 @@ export default function AdminSlotDetailsPage() {
     }
     const hasInvalidQty = entries.some(([, entry]) => {
       const qtyValue = Number(entry?.qty);
-      return !Number.isFinite(qtyValue) || qtyValue <= 0;
+      return (
+        !Number.isFinite(qtyValue) ||
+        !Number.isInteger(qtyValue) ||
+        qtyValue <= 0
+      );
     });
     if (hasInvalidQty) {
-      setStockSubmitError("Enter a qty for every selected SKU.");
+      setStockSubmitError("Enter a whole-number qty for every selected SKU.");
       return;
     }
 
@@ -533,60 +536,62 @@ export default function AdminSlotDetailsPage() {
     setStockSubmitSuccess("");
     setStockSubmitFailures([]);
 
-    const failures = [];
-    let successCount = 0;
+    const payloadItems = entries.map(([productId, entry]) => ({
+      productId,
+      deltaQty: Number(entry.qty),
+    }));
 
-    for (const [productId, entry] of entries) {
-      const qtyValue = Number(entry.qty);
-      if (!Number.isFinite(qtyValue) || qtyValue <= 0) {
-        failures.push({
+    try {
+      const result = await adjustSlotItemsBulk({
+        slotId: resolvedSlotId,
+        items: payloadItems,
+      }).unwrap();
+      const rawFailures = Array.isArray(result?.summary?.failures)
+        ? result.summary.failures
+        : [];
+      const failures = rawFailures.map((failure) => {
+        const productId = String(failure?.productId || failure?.product || "");
+        const selected = stockSelected?.[productId];
+        return {
           productId,
-          name: entry.product?.name,
-          sku: entry.product?.sku,
-          message: "Qty must be a positive number.",
-        });
-        continue;
-      }
-
-      try {
-        await adjustSlotItem({
-          productId,
-          slotId: resolvedSlotId,
-          deltaQty: qtyValue,
-        }).unwrap();
-        successCount += 1;
-      } catch (err) {
-        failures.push({
-          productId,
-          name: entry.product?.name,
-          sku: entry.product?.sku,
-          message: err?.data?.message || err?.error || "Unable to add stock.",
-        });
-      }
-    }
-
-    if (failures.length > 0) {
-      const failedIds = new Set(failures.map((failure) => failure.productId));
-      setStockSelected((prev) => {
-        const next = {};
-        Object.entries(prev || {}).forEach(([id, value]) => {
-          if (failedIds.has(id)) next[id] = value;
-        });
-        return next;
+          name: failure?.name || selected?.product?.name,
+          sku: failure?.sku || selected?.product?.sku,
+          message: failure?.message || "Unable to add stock.",
+        };
       });
-      setStockSubmitFailures(failures);
-      setStockSubmitError(`Failed to add ${failures.length} SKU(s).`);
-    } else {
-      setStockSelected({});
-      setStockSearch("");
-      setStockSearchRows([]);
-    }
+      const successCount = Number(
+        result?.summary?.successCount ?? result?.data?.length ?? entries.length
+      );
 
-    if (successCount > 0) {
-      setStockSubmitSuccess(`Added stock for ${successCount} SKU(s).`);
-    }
+      if (failures.length > 0) {
+        const failedIds = new Set(
+          failures.map((failure) => failure.productId).filter(Boolean)
+        );
+        setStockSelected((prev) => {
+          const next = {};
+          Object.entries(prev || {}).forEach(([id, value]) => {
+            if (failedIds.has(id)) next[id] = value;
+          });
+          return next;
+        });
+        setStockSubmitFailures(failures);
+        setStockSubmitError(`Failed to add ${failures.length} SKU(s).`);
+      } else {
+        setStockSelected({});
+        setStockSearch("");
+        setStockSearchRows([]);
+      }
 
-    setStockSubmitting(false);
+      if (successCount > 0) {
+        setStockSubmitSuccess(`Added stock for ${successCount} SKU(s).`);
+      }
+    } catch (err) {
+      setStockSubmitError(
+        err?.data?.message || err?.error || "Unable to add stock."
+      );
+    } finally {
+      setStockSubmitting(false);
+    }
   };
 
   const handleMoveSearchChange = (value) => {

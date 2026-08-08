@@ -45,6 +45,33 @@ export const slotItemsApiSlice = apiSlice.injectEndpoints({
         { type: "Slot", id: "LIST" },
       ],
     }),
+    adjustSlotItemsBulk: builder.mutation({
+      query: (body) => ({
+        url: "/slot-items/adjust-bulk",
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, arg) => {
+        const productIds = Array.isArray(arg?.items)
+          ? arg.items
+              .map((item) => item?.productId || item?.product)
+              .filter(Boolean)
+          : [];
+
+        return [
+          ...productIds.flatMap((productId) => [
+            { type: "SlotItem", id: productId },
+            { type: "InventoryProduct", id: productId },
+          ]),
+          { type: "SlotItem", id: `slot-${arg?.slotId}` },
+          { type: "SlotItem", id: "LIST" },
+          { type: "InventoryProduct", id: "LIST" },
+          { type: "InventoryMovement", id: "LIST" },
+          { type: "Slot", id: arg?.slotId },
+          { type: "Slot", id: "LIST" },
+        ];
+      },
+    }),
     correctSlotItemCount: builder.mutation({
       query: (body) => ({
         url: "/slot-items/correct-count",
@@ -99,6 +126,7 @@ export const {
   useLazyGetSlotItemsByProductQuery,
   useGetSlotItemsBySlotQuery,
   useAdjustSlotItemMutation,
+  useAdjustSlotItemsBulkMutation,
   useCorrectSlotItemCountMutation,
   useMoveSlotItemsMutation,
   useClearSlotItemsMutation,
