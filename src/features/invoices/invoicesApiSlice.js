@@ -2,7 +2,14 @@ import { apiSlice } from "../../app/apiSlice";
 
 const ADMIN_INVOICE_STATUSES = ["Issued", "Cancelled"];
 const ADMIN_PAYMENT_STATUSES = ["Unpaid", "PartiallyPaid", "Paid"];
-const ADMIN_INVOICE_SORTS = ["newest", "oldest", "amountHigh", "amountLow"];
+const ADMIN_INVOICE_SORTS = [
+  "newest",
+  "oldest",
+  "createdNewest",
+  "createdOldest",
+  "amountHigh",
+  "amountLow",
+];
 
 export const invoicesApiSlice = apiSlice.injectEndpoints({
   overrideExisting: import.meta.env.DEV,
@@ -11,6 +18,7 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
     getInvoicesAdmin: builder.query({
       query: ({
         page = 1,
+        limit = 20,
         status = "all",
         paymentStatus = "all",
         unpaid = false,
@@ -21,6 +29,7 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       } = {}) => {
         const params = new URLSearchParams();
         params.set("page", String(page));
+        params.set("limit", String(limit));
         if (status && status !== "all" && ADMIN_INVOICE_STATUSES.includes(status)) {
           params.set("status", status);
         }

@@ -40,6 +40,22 @@ function formatDate(iso) {
   }
 }
 
+function formatDateTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function moneyMinorRounded(amountMinor, currency = "AED", factor = 100) {
   if (typeof amountMinor !== "number" || !Number.isFinite(amountMinor))
     return "";
@@ -180,7 +196,15 @@ const PAYMENT_STATUS_FILTER_VALUES = new Set([
   "Unpaid",
   "overdue",
 ]);
-const SORT_FILTER_VALUES = new Set(["newest", "oldest", "amountHigh", "amountLow"]);
+const SORT_FILTER_VALUES = new Set([
+  "newest",
+  "oldest",
+  "createdNewest",
+  "createdOldest",
+  "amountHigh",
+  "amountLow",
+]);
+const PAGE_SIZE_VALUES = new Set(["20", "50", "100"]);
 
 function parsePositiveInt(raw, fallback = 1) {
   const n = Number.parseInt(String(raw ?? ""), 10);
@@ -188,8 +212,15 @@ function parsePositiveInt(raw, fallback = 1) {
   return n;
 }
 
+function parseInvoicePageSize(raw, fallback = 20) {
+  const value = String(raw ?? "");
+  if (!PAGE_SIZE_VALUES.has(value)) return fallback;
+  return Number.parseInt(value, 10);
+}
+
 function readInvoiceListState(searchParams) {
   const page = parsePositiveInt(searchParams.get("page"), 1);
+  const limit = parseInvoicePageSize(searchParams.get("limit"), 20);
   const search = searchParams.get("search") || "";
 
   const paymentStatusRaw = searchParams.get("paymentStatus") || "all";
@@ -204,6 +235,7 @@ function readInvoiceListState(searchParams) {
 
   return {
     page,
+    limit,
     search,
     paymentStatusFilter,
     sort,
@@ -214,12 +246,14 @@ function readInvoiceListState(searchParams) {
 function buildInvoiceListSearchParams(nextState = {}) {
   const params = new URLSearchParams();
   const safePage = parsePositiveInt(nextState.page, 1);
+  const limit = parseInvoicePageSize(nextState.limit, 20);
   const search = String(nextState.search || "");
   const paymentStatus = String(nextState.paymentStatusFilter || "all");
   const sort = String(nextState.sort || "newest");
   const user = String(nextState.user || "");
 
   if (safePage > 1) params.set("page", String(safePage));
+  if (limit !== 20) params.set("limit", String(limit));
   if (search) params.set("search", search);
   if (paymentStatus !== "all") params.set("paymentStatus", paymentStatus);
   if (sort !== "newest") params.set("sort", sort);
@@ -247,7 +281,7 @@ export default function AdminInvoicesPage() {
   ]);
 
   const listState = readInvoiceListState(searchParams);
-  const { page, search, paymentStatusFilter, sort, user: selectedUserId } =
+  const { page, limit, search, paymentStatusFilter, sort, user: selectedUserId } =
     listState;
 
   const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
@@ -273,6 +307,7 @@ export default function AdminInvoicesPage() {
     error,
   } = useGetInvoicesAdminQuery({
     page,
+    limit,
     status: statusFilter,
     paymentStatus: effectivePaymentStatus,
     overdue: overdueOnly,
@@ -673,10 +708,36 @@ export default function AdminInvoicesPage() {
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
+                <option value="newest">Invoice date (newest)</option>
+                <option value="oldest">Invoice date (oldest)</option>
+                <option value="createdNewest">Created (newest)</option>
+                <option value="createdOldest">Created (oldest)</option>
                 <option value="amountHigh">Amount (high)</option>
                 <option value="amountLow">Amount (low)</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="invoices-limit"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Per page
+              </label>
+              <select
+                id="invoices-limit"
+                value={String(limit)}
+                onChange={(e) => {
+                  updateListState(
+                    { limit: Number(e.target.value) },
+                    { resetPage: true, replace: true }
+                  );
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="20">20 invoices</option>
+                <option value="50">50 invoices</option>
+                <option value="100">100 invoices</option>
               </select>
             </div>
 
@@ -776,8 +837,11 @@ export default function AdminInvoicesPage() {
                 {row.issuedLabel}
               </span>
               {inv.status === "Cancelled" ? null : (
-                <span> • {formatDate(getInvoiceDateValue(inv))}</span>
+                <span> • Invoice: {formatDate(getInvoiceDateValue(inv))}</span>
               )}
+            </div>
+            <div className="text-xs text-slate-500">
+              Created: {formatDateTime(inv.createdAt) || "-"}
             </div>
           </div>
 
@@ -893,16 +957,24 @@ export default function AdminInvoicesPage() {
                                   : "text-emerald-700",
                               ].join(" ")}
                             >
-                              {row.issuedLabel}
-                            </span>
-                            {inv.status === "Cancelled" ? null : (
-                              <span>{formatDate(getInvoiceDateValue(inv))}</span>
-                            )}
-                          </div>
-                          <div className="mt-0.5 font-semibold text-slate-900">
-                            {inv.invoiceNumber || inv._id}
-                          </div>
-                          {row.isManual ? (
+                            {row.issuedLabel}
+                          </span>
+                          {inv.status === "Cancelled" ? null : (
+                              <span>
+                                Invoice: {formatDate(getInvoiceDateValue(inv))}
+                              </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 font-semibold text-slate-900">
+                          {inv.invoiceNumber || inv._id}
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          <span className="font-semibold text-slate-500">
+                            Created:
+                          </span>{" "}
+                          {formatDateTime(inv.createdAt) || "-"}
+                        </div>
+                        {row.isManual ? (
                             <div className="mt-0.5 text-xs text-slate-500">
                               <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
                                 {row.sourceLabel}
