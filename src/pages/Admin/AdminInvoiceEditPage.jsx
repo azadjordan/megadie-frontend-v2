@@ -304,7 +304,9 @@ export default function AdminInvoiceEditPage() {
     }
 
     let paymentDateValue;
-    if (paymentForm.date) {
+    if (!paymentForm.date) {
+      nextErrors.date = "Required";
+    } else {
       const parsed = new Date(paymentForm.date);
       if (Number.isNaN(parsed.getTime())) {
         nextErrors.date = "Invalid date.";

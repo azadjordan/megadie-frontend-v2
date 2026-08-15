@@ -149,10 +149,11 @@ export default function AddPaymentModal({
 
             <div className="md:col-span-3">
               <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Payment date
+                Payment received date
               </label>
               <input
                 type="datetime-local"
+                required
                 value={form.date}
                 onChange={(e) => onFieldChange("date", e.target.value)}
                 className={fieldClass(errors.date)}

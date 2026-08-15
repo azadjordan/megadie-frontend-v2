@@ -7,18 +7,43 @@ const ADMIN_PAYMENT_METHODS = [
   "Cheque",
   "Other",
 ];
+const ADMIN_PAYMENT_SORTS = [
+  "createdNewest",
+  "createdOldest",
+  "paymentNewest",
+  "paymentOldest",
+  "amountHigh",
+  "amountLow",
+  "newest",
+  "oldest",
+];
 
 export const paymentsApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getPaymentsAdmin: builder.query({
-      query: ({ page = 1, search = "", method = "all", sort = "newest" } = {}) => {
+      query: ({
+        page = 1,
+        limit = 20,
+        search = "",
+        method = "all",
+        sort = "createdNewest",
+        user,
+      } = {}) => {
         const params = new URLSearchParams();
         params.set("page", String(page));
+        params.set("limit", String(limit));
         if (search) params.set("search", search);
         if (method && method !== "all" && ADMIN_PAYMENT_METHODS.includes(method)) {
           params.set("method", method);
         }
-        if (sort && sort !== "newest") params.set("sort", sort);
+        if (
+          sort &&
+          sort !== "createdNewest" &&
+          ADMIN_PAYMENT_SORTS.includes(sort)
+        ) {
+          params.set("sort", sort);
+        }
+        if (user) params.set("user", user);
         return `/payments?${params.toString()}`;
       },
       providesTags: (result) => {

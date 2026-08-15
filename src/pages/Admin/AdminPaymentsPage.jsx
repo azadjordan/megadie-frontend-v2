@@ -12,6 +12,7 @@ import {
   useDeletePaymentByAdminMutation,
   useGetPaymentsAdminQuery,
 } from "../../features/payments/paymentsApiSlice";
+import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -20,6 +21,22 @@ function formatDate(iso) {
       year: "numeric",
       month: "short",
       day: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function formatDateTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
     });
   } catch {
     return iso;
@@ -85,11 +102,18 @@ const PAYMENT_METHOD_FILTER_VALUES = new Set([
   "Other",
 ]);
 const PAYMENT_SORT_FILTER_VALUES = new Set([
-  "newest",
-  "oldest",
+  "createdNewest",
+  "createdOldest",
+  "paymentNewest",
+  "paymentOldest",
   "amountHigh",
   "amountLow",
 ]);
+const PAYMENT_SORT_ALIASES = {
+  newest: "createdNewest",
+  oldest: "createdOldest",
+};
+const PAGE_SIZE_VALUES = new Set(["20", "50", "100"]);
 
 function parsePositiveInt(raw, fallback = 1) {
   const n = Number.parseInt(String(raw ?? ""), 10);
@@ -97,27 +121,41 @@ function parsePositiveInt(raw, fallback = 1) {
   return n;
 }
 
+function parsePaymentPageSize(raw, fallback = 20) {
+  const value = String(raw ?? "");
+  if (!PAGE_SIZE_VALUES.has(value)) return fallback;
+  return Number.parseInt(value, 10);
+}
+
 function readPaymentListState(searchParams) {
   const page = parsePositiveInt(searchParams.get("page"), 1);
+  const limit = parsePaymentPageSize(searchParams.get("limit"), 20);
   const search = searchParams.get("search") || "";
   const methodRaw = searchParams.get("method") || "all";
   const method = PAYMENT_METHOD_FILTER_VALUES.has(methodRaw) ? methodRaw : "all";
-  const sortRaw = searchParams.get("sort") || "newest";
-  const sort = PAYMENT_SORT_FILTER_VALUES.has(sortRaw) ? sortRaw : "newest";
-  return { page, search, method, sort };
+  const sortRaw = searchParams.get("sort") || "createdNewest";
+  const sort = PAYMENT_SORT_FILTER_VALUES.has(sortRaw)
+    ? sortRaw
+    : PAYMENT_SORT_ALIASES[sortRaw] || "createdNewest";
+  const user = searchParams.get("user") || "";
+  return { page, limit, search, method, sort, user };
 }
 
 function buildPaymentListSearchParams(nextState = {}) {
   const params = new URLSearchParams();
   const page = parsePositiveInt(nextState.page, 1);
+  const limit = parsePaymentPageSize(nextState.limit, 20);
   const search = String(nextState.search || "");
   const method = String(nextState.method || "all");
-  const sort = String(nextState.sort || "newest");
+  const sort = String(nextState.sort || "createdNewest");
+  const user = String(nextState.user || "");
 
   if (page > 1) params.set("page", String(page));
+  if (limit !== 20) params.set("limit", String(limit));
   if (search) params.set("search", search);
   if (method !== "all") params.set("method", method);
-  if (sort !== "newest") params.set("sort", sort);
+  if (sort !== "createdNewest") params.set("sort", sort);
+  if (user) params.set("user", user);
 
   return params;
 }
@@ -125,7 +163,7 @@ function buildPaymentListSearchParams(nextState = {}) {
 export default function AdminPaymentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const listState = readPaymentListState(searchParams);
-  const { page, search, method, sort } = listState;
+  const { page, limit, search, method, sort, user: selectedUserId } = listState;
   const updateListState = (updates = {}, { resetPage = false, replace = true } = {}) => {
     const next = {
       ...listState,
@@ -149,9 +187,23 @@ export default function AdminPaymentsPage() {
     error,
   } = useGetPaymentsAdminQuery({
     page,
+    limit,
     search: debouncedSearch,
     method,
     sort,
+    user: selectedUserId || undefined,
+  });
+
+  const {
+    data: usersData,
+    isLoading: usersLoading,
+    isError: usersError,
+    error: usersErrorMessage,
+  } = useGetUsersAdminQuery({
+    page: 1,
+    limit: 100,
+    role: "all",
+    sort: "name",
   });
 
   const [deletePaymentByAdmin, { isLoading: isDeleting }] =
@@ -160,6 +212,19 @@ export default function AdminPaymentsPage() {
 
   const rows = useMemo(() => data?.data || data?.items || [], [data]);
   const total = data?.pagination?.total ?? data?.total ?? rows.length;
+  const users = useMemo(
+    () => usersData?.data || usersData?.items || [],
+    [usersData]
+  );
+
+  const userOptions = useMemo(() => {
+    if (!selectedUserId) return users;
+    const exists = users.some(
+      (user) => String(user?._id || user?.id) === String(selectedUserId)
+    );
+    if (exists) return users;
+    return [{ _id: selectedUserId, email: selectedUserId }, ...users];
+  }, [users, selectedUserId]);
 
   const pagination = useMemo(() => {
     if (!data) return null;
@@ -206,7 +271,7 @@ export default function AdminPaymentsPage() {
       </div>
 
       <div className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_200px_200px_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px_220px_180px_150px_auto] md:items-end">
           <div className="flex items-end gap-2 md:contents">
             <div className="flex-1">
               <label
@@ -280,6 +345,45 @@ export default function AdminPaymentsPage() {
 
             <div>
               <label
+                htmlFor="payments-user"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Client
+              </label>
+              <select
+                id="payments-user"
+                value={selectedUserId ? String(selectedUserId) : ""}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  updateListState(
+                    { user: nextId || "" },
+                    { resetPage: true, replace: true }
+                  );
+                }}
+                disabled={usersLoading && userOptions.length === 0}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="">
+                  {usersLoading && userOptions.length === 0
+                    ? "Loading clients..."
+                    : "All clients"}
+                </option>
+                {userOptions.map((user) => {
+                  const userId = user._id || user.id;
+                  const label = user.name
+                    ? `${user.name}${user.email ? ` - ${user.email}` : ""}`
+                    : user.email || userId;
+                  return (
+                    <option key={userId} value={userId}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div>
+              <label
                 htmlFor="payments-sort"
                 className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
               >
@@ -296,10 +400,36 @@ export default function AdminPaymentsPage() {
                 }}
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               >
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
+                <option value="createdNewest">Created (newest)</option>
+                <option value="createdOldest">Created (oldest)</option>
+                <option value="paymentNewest">Paid date (newest)</option>
+                <option value="paymentOldest">Paid date (oldest)</option>
                 <option value="amountHigh">Amount (high)</option>
                 <option value="amountLow">Amount (low)</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="payments-limit"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Per page
+              </label>
+              <select
+                id="payments-limit"
+                value={String(limit)}
+                onChange={(e) => {
+                  updateListState(
+                    { limit: Number(e.target.value) },
+                    { resetPage: true, replace: true }
+                  );
+                }}
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+              >
+                <option value="20">20 payments</option>
+                <option value="50">50 payments</option>
+                <option value="100">100 payments</option>
               </select>
             </div>
 
@@ -330,6 +460,11 @@ export default function AdminPaymentsPage() {
             <span className="font-semibold text-slate-900">{total}</span> items
             {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
             {isFetching ? <span className="ml-2">(Updating)</span> : null}
+            {usersError ? (
+              <span className="ml-2 text-rose-600">
+                {friendlyApiError(usersErrorMessage)}
+              </span>
+            ) : null}
           </div>
 
           {pagination ? (
@@ -386,6 +521,9 @@ export default function AdminPaymentsPage() {
                       </div>
                       <div className="text-xs text-slate-500">
                         Paid: {formatDate(p.paymentDate) || "-"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Created: {formatDateTime(p.createdAt) || "-"}
                       </div>
                     </div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
@@ -475,6 +613,9 @@ export default function AdminPaymentsPage() {
                           </div>
                           <div className="mt-0.5 text-xs text-slate-500">
                             Paid: {formatDate(p.paymentDate) || "-"}
+                          </div>
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            Created: {formatDateTime(p.createdAt) || "-"}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-700 min-w-[150px]">
