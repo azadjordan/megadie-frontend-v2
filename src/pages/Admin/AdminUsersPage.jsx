@@ -522,6 +522,11 @@ export default function AdminUsersPage() {
                             Same IP: {row.sameIpCount}
                           </div>
                         ) : null}
+                        {row.sameBrowserContextCount > 0 ? (
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            Same browser: {row.sameBrowserContextCount}
+                          </div>
+                        ) : null}
                         {row.sameEmailDomainCount > 0 ? (
                           <div className="mt-0.5 text-[11px] text-slate-400">
                             Same domain: {row.sameEmailDomainCount}
@@ -641,6 +646,11 @@ export default function AdminUsersPage() {
                           {row.sameIpCount > 0 ? (
                             <div className="mt-1 text-[11px] text-slate-400">
                               Same IP: {row.sameIpCount}
+                            </div>
+                          ) : null}
+                          {row.sameBrowserContextCount > 0 ? (
+                            <div className="mt-0.5 text-[11px] text-slate-400">
+                              Same browser: {row.sameBrowserContextCount}
                             </div>
                           ) : null}
                           {row.sameEmailDomainCount > 0 ? (

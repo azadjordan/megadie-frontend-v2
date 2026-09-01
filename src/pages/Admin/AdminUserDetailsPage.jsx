@@ -23,9 +23,9 @@ import {
 import {
   formatDeviceSummary,
   formatIpAddress,
-  formatRiskFlags,
   formatRiskLevel,
   formatUtmSummary,
+  getRegistrationRiskMeta,
   getRiskBadgeClasses,
   hasUtmValues,
 } from "../../utils/registrationAuditDisplay";
@@ -162,10 +162,13 @@ function SignupIntelligencePanel({ audit }) {
     );
   }
 
-  const riskLevel = audit?.riskLevel || "Low";
+  const riskMeta = getRegistrationRiskMeta(audit);
+  const riskLevel = riskMeta.riskLevel || "Low";
   const sameIpCount = Number(audit?.sameIpSignupCountAtRegistration) || 0;
   const sameEmailDomainCount =
     Number(audit?.sameEmailDomainCountAtRegistration) || 0;
+  const sameBrowserContextCount =
+    Number(audit?.sameBrowserContextSignupCountAtRegistration) || 0;
   const utm = audit?.utm || {};
   const hasUtm = hasUtmValues(utm);
 
@@ -180,7 +183,7 @@ function SignupIntelligencePanel({ audit }) {
             <RiskBadge riskLevel={riskLevel} />
           </div>
         </div>
-        <AuditField label="Signals" value={formatRiskFlags(audit?.riskFlags)} />
+        <AuditField label="Signals" value={riskMeta.riskTitle} />
         <AuditField
           label="IP address"
           value={formatIpAddress(audit?.ip)}
@@ -193,6 +196,10 @@ function SignupIntelligencePanel({ audit }) {
         <AuditField
           label="Same-domain signup count"
           value={sameEmailDomainCount}
+        />
+        <AuditField
+          label="Same-browser signup count"
+          value={sameBrowserContextCount}
         />
         <AuditField label="Device" value={formatDeviceSummary(audit)} />
         <AuditField
@@ -241,6 +248,8 @@ function SignupIntelligencePanel({ audit }) {
       <AuditSection title="Raw Technical">
         <AuditField label="Captured at" value={formatAuditDate(audit?.capturedAt)} />
         <AuditField label="Origin" value={audit?.origin} mono />
+        <AuditField label="IP source" value={audit?.ipSource} mono />
+        <AuditField label="IP country" value={audit?.ipCountry} mono />
         <AuditField label="Accept language" value={audit?.acceptLanguage} mono />
         <AuditField label="User agent" value={audit?.userAgent} mono />
       </AuditSection>
