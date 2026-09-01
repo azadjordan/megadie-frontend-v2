@@ -19,6 +19,189 @@ import {
   useUpsertUserPriceMutation,
   useDeleteUserPriceMutation,
 } from "../../features/userPrices/userPricesApiSlice";
+import {
+  formatDeviceSummary,
+  formatRiskFlags,
+  formatRiskLevel,
+  formatUtmSummary,
+  getRiskBadgeClasses,
+} from "../../utils/registrationAuditDisplay";
+
+function hasRegistrationAudit(audit) {
+  return Boolean(
+    audit &&
+      (audit.capturedAt ||
+        audit.ip ||
+        audit.userAgent ||
+        audit.emailDomain ||
+        audit.riskLevel)
+  );
+}
+
+function formatAuditValue(value) {
+  if (value === 0) return "0";
+  const text = String(value ?? "").trim();
+  return text || "Not captured";
+}
+
+function formatAuditDate(value) {
+  if (!value) return "Not captured";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not captured";
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function formatAuditDuration(value) {
+  const duration = Number(value);
+  if (!Number.isFinite(duration) || duration < 0) return "Not captured";
+  if (duration < 1000) return `${Math.round(duration)} ms`;
+  return `${(duration / 1000).toFixed(1)} sec`;
+}
+
+function formatAuditDimensions(width, height) {
+  const safeWidth = Number(width);
+  const safeHeight = Number(height);
+  if (
+    !Number.isFinite(safeWidth) ||
+    !Number.isFinite(safeHeight) ||
+    safeWidth <= 0 ||
+    safeHeight <= 0
+  ) {
+    return "Not captured";
+  }
+  return `${Math.round(safeWidth)} x ${Math.round(safeHeight)}`;
+}
+
+function RiskBadge({ riskLevel }) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+        getRiskBadgeClasses(riskLevel),
+      ].join(" ")}
+    >
+      {formatRiskLevel(riskLevel)}
+    </span>
+  );
+}
+
+function AuditField({ label, value, mono = false }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        {label}
+      </div>
+      <div
+        className={[
+          "mt-1 break-words text-sm font-semibold text-slate-800",
+          mono ? "font-mono text-xs" : "",
+        ].join(" ")}
+        title={typeof value === "string" ? value : undefined}
+      >
+        {formatAuditValue(value)}
+      </div>
+    </div>
+  );
+}
+
+function AuditSection({ title, children }) {
+  return (
+    <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+      <div className="text-sm font-semibold text-slate-900">{title}</div>
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SignupIntelligencePanel({ audit }) {
+  if (!hasRegistrationAudit(audit)) {
+    return (
+      <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <div className="text-sm font-semibold text-slate-900">
+          Signup Intelligence
+        </div>
+        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-500 ring-1 ring-slate-100">
+          Not captured
+        </div>
+      </div>
+    );
+  }
+
+  const riskLevel = audit?.riskLevel || "Low";
+  const sameIpCount = Number(audit?.sameIpSignupCountAtRegistration) || 0;
+  const sameEmailDomainCount =
+    Number(audit?.sameEmailDomainCountAtRegistration) || 0;
+  const utm = audit?.utm || {};
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <AuditSection title="Risk Summary">
+        <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Risk level
+          </div>
+          <div className="mt-1">
+            <RiskBadge riskLevel={riskLevel} />
+          </div>
+        </div>
+        <AuditField label="Signals" value={formatRiskFlags(audit?.riskFlags)} />
+        <AuditField label="IP address" value={audit?.ip} mono />
+        <AuditField label="Same-IP signup count" value={sameIpCount} />
+        <AuditField label="Email domain" value={audit?.emailDomain} mono />
+        <AuditField
+          label="Same-domain signup count"
+          value={sameEmailDomainCount}
+        />
+        <AuditField label="Device" value={formatDeviceSummary(audit)} />
+        <AuditField
+          label="Signup duration"
+          value={formatAuditDuration(audit?.signupDurationMs)}
+        />
+      </AuditSection>
+
+      <AuditSection title="Source">
+        <AuditField label="Referrer" value={audit?.referrer} mono />
+        <AuditField label="Landing path" value={audit?.landingPath} mono />
+        <AuditField label="UTM source" value={utm.source} mono />
+        <AuditField label="UTM medium" value={utm.medium} mono />
+        <AuditField label="UTM campaign" value={utm.campaign} mono />
+        <AuditField label="UTM summary" value={formatUtmSummary(utm)} mono />
+        <AuditField label="UTM term" value={utm.term} mono />
+        <AuditField label="UTM content" value={utm.content} mono />
+      </AuditSection>
+
+      <AuditSection title="Browser Context">
+        <AuditField label="Timezone" value={audit?.timezone} mono />
+        <AuditField label="Browser language" value={audit?.browserLanguage} mono />
+        <AuditField label="Browser" value={audit?.browserName} />
+        <AuditField label="Operating system" value={audit?.osName} />
+        <AuditField label="Device type" value={audit?.deviceType} />
+        <AuditField
+          label="Screen size"
+          value={formatAuditDimensions(audit?.screenWidth, audit?.screenHeight)}
+          mono
+        />
+        <AuditField
+          label="Viewport size"
+          value={formatAuditDimensions(audit?.viewportWidth, audit?.viewportHeight)}
+          mono
+        />
+      </AuditSection>
+
+      <AuditSection title="Raw Technical">
+        <AuditField label="Captured at" value={formatAuditDate(audit?.capturedAt)} />
+        <AuditField label="Origin" value={audit?.origin} mono />
+        <AuditField label="Accept language" value={audit?.acceptLanguage} mono />
+        <AuditField label="User agent" value={audit?.userAgent} mono />
+      </AuditSection>
+    </div>
+  );
+}
 
 const parsePrice = (value) => {
   if (value === "" || value === null || value === undefined) return null;
@@ -459,6 +642,7 @@ export default function AdminUserDetailsPage() {
           {[
             { id: "info", label: "User Info" },
             { id: "approval", label: "Approval" },
+            { id: "signup", label: "Signup Intelligence" },
             { id: "pricing", label: "User Pricing" },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -804,6 +988,8 @@ export default function AdminUserDetailsPage() {
             </div>
           ) : null}
         </div>
+      ) : activeTab === "signup" ? (
+        <SignupIntelligencePanel audit={user.registrationAudit} />
       ) : (
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <div className="flex flex-wrap items-center justify-between gap-2">

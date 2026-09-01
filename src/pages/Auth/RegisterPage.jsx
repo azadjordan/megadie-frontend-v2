@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -7,10 +7,45 @@ import AuthShell from '../../components/auth/AuthShell'
 import { setCredentials } from '../../features/auth/authSlice'
 import { useLoginMutation, useRegisterMutation } from '../../features/auth/usersApiSlice'
 
+function buildUtm(search = '') {
+  const params = new URLSearchParams(search)
+  const utm = {
+    source: params.get('utm_source') || undefined,
+    medium: params.get('utm_medium') || undefined,
+    campaign: params.get('utm_campaign') || undefined,
+    term: params.get('utm_term') || undefined,
+    content: params.get('utm_content') || undefined,
+  }
+
+  return Object.values(utm).some(Boolean) ? utm : undefined
+}
+
+function buildClientAudit(location, pageStartedAt) {
+  try {
+    const startedAt = Number(pageStartedAt?.current) || Date.now()
+    const landingPath = `${location?.pathname || ''}${location?.search || ''}`
+
+    return {
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      browserLanguage: navigator.language,
+      screenWidth: window.screen?.width,
+      screenHeight: window.screen?.height,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      landingPath,
+      utm: buildUtm(location?.search),
+      signupDurationMs: Date.now() - startedAt,
+    }
+  } catch {
+    return {}
+  }
+}
+
 export default function RegisterPage() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
+  const pageStartedAt = useRef(null)
 
   const { userInfo, isInitialized } = useSelector((state) => state.auth)
 
@@ -61,6 +96,10 @@ export default function RegisterPage() {
     String(value || '').replace(/[^\d+]/g, '')
 
   useEffect(() => {
+    pageStartedAt.current = Date.now()
+  }, [])
+
+  useEffect(() => {
     if (!isInitialized) return
     if (!userInfo) return
 
@@ -85,6 +124,7 @@ export default function RegisterPage() {
         phoneNumber: normalizedPhoneNumber,
         email: trimmedEmail,
         password,
+        clientAudit: buildClientAudit(location, pageStartedAt),
       }).unwrap()
 
       try {

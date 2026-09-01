@@ -14,6 +14,7 @@ import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import ApproveUserModal from "../../components/admin/ApproveUserModal";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
+import { getRegistrationRiskMeta } from "../../utils/registrationAuditDisplay";
 
 import {
   useDeleteUserMutation,
@@ -36,6 +37,7 @@ function getUserRowMeta(user, state = {}) {
   const roleLabel = user?.isAdmin ? "Admin" : "User";
   const approval = user?.approvalStatus || "Approved";
   const approvalClasses = getApprovalBadgeClasses(approval);
+  const riskMeta = getRegistrationRiskMeta(user?.registrationAudit);
   const linkCounts = user?.linkCounts || {};
   const ordersCount = Number(linkCounts.orders) || 0;
   const invoicesCount = Number(linkCounts.invoices) || 0;
@@ -59,6 +61,7 @@ function getUserRowMeta(user, state = {}) {
     roleLabel,
     approval,
     approvalClasses,
+    ...riskMeta,
     ordersCount,
     invoicesCount,
     requestsCount,
@@ -452,12 +455,40 @@ export default function AdminUsersPage() {
                     </div>
                   ) : null}
 
-                  <div className="mt-3 text-xs text-slate-600">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Role
-                    </span>
-                    <div className="mt-1 font-semibold text-slate-900">
-                      {row.roleLabel}
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-slate-600">
+                    <div>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Role
+                      </span>
+                      <div className="mt-1 font-semibold text-slate-900">
+                        {row.roleLabel}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Risk
+                      </span>
+                      <div className="mt-1">
+                        <span
+                          className={[
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                            row.riskClasses,
+                          ].join(" ")}
+                          title={row.riskTitle}
+                        >
+                          {row.riskLabel}
+                        </span>
+                        {row.sameIpCount > 0 ? (
+                          <div className="mt-1 text-[11px] text-slate-400">
+                            Same IP: {row.sameIpCount}
+                          </div>
+                        ) : null}
+                        {row.sameEmailDomainCount > 0 ? (
+                          <div className="mt-0.5 text-[11px] text-slate-400">
+                            Same domain: {row.sameEmailDomainCount}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 
@@ -524,6 +555,7 @@ export default function AdminUsersPage() {
                     <th className="px-4 py-3">User</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Approval</th>
+                    <th className="px-4 py-3">Risk</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Internal Note</th>
                     <th className="px-4 py-3 text-center">Actions</th>
@@ -555,6 +587,27 @@ export default function AdminUsersPage() {
                           >
                             {row.approval}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={[
+                              "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+                              row.riskClasses,
+                            ].join(" ")}
+                            title={row.riskTitle}
+                          >
+                            {row.riskLabel}
+                          </span>
+                          {row.sameIpCount > 0 ? (
+                            <div className="mt-1 text-[11px] text-slate-400">
+                              Same IP: {row.sameIpCount}
+                            </div>
+                          ) : null}
+                          {row.sameEmailDomainCount > 0 ? (
+                            <div className="mt-0.5 text-[11px] text-slate-400">
+                              Same domain: {row.sameEmailDomainCount}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-slate-700">
                           {row.roleLabel}

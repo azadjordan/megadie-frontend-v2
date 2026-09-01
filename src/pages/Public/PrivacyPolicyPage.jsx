@@ -27,8 +27,9 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>1.2</strong> We may automatically collect certain technical information
-            like your IP address, browser type, and browsing behavior through cookies and
-            similar technologies.
+            like your IP address, browser type, language, timezone, referral source,
+            registration timing, and browsing behavior through cookies, similar
+            technologies, and standard request data.
           </li>
           <li>
             <strong>1.3</strong> We may also collect non-personal, aggregated data about
@@ -40,6 +41,7 @@ export default function PrivacyPolicyPage() {
         <ul className="list-disc space-y-2 pl-5">
           <li>Processing your orders and payments.</li>
           <li>Responding to your inquiries and providing customer support.</li>
+          <li>Reviewing account registrations and protecting accounts from misuse.</li>
           <li>Improving our Website, products, and services.</li>
           <li>Analyzing usage to enhance user experience.</li>
           <li>Sending promotional offers, subject to your consent.</li>
