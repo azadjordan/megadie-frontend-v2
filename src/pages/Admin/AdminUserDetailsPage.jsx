@@ -21,24 +21,14 @@ import {
   useDeleteUserPriceMutation,
 } from "../../features/userPrices/userPricesApiSlice";
 import {
-  formatDeviceSummary,
-  formatIpAddress,
-  formatRiskLevel,
+  formatSignupDuration,
   formatUtmSummary,
-  getRegistrationRiskMeta,
-  getRiskBadgeClasses,
+  getRegistrationEvidenceMeta,
   hasUtmValues,
 } from "../../utils/registrationAuditDisplay";
 
 function hasRegistrationAudit(audit) {
-  return Boolean(
-    audit &&
-      (audit.capturedAt ||
-        audit.ip ||
-        audit.userAgent ||
-        audit.emailDomain ||
-        audit.riskLevel)
-  );
+  return getRegistrationEvidenceMeta(audit).hasAudit;
 }
 
 function formatAuditValue(value) {
@@ -57,13 +47,6 @@ function formatAuditDate(value) {
   });
 }
 
-function formatAuditDuration(value) {
-  const duration = Number(value);
-  if (!Number.isFinite(duration) || duration < 0) return "Not captured";
-  if (duration < 1000) return `${Math.round(duration)} ms`;
-  return `${(duration / 1000).toFixed(1)} sec`;
-}
-
 function formatAuditDimensions(width, height) {
   const safeWidth = Number(width);
   const safeHeight = Number(height);
@@ -76,19 +59,6 @@ function formatAuditDimensions(width, height) {
     return "Not captured";
   }
   return `${Math.round(safeWidth)} x ${Math.round(safeHeight)}`;
-}
-
-function RiskBadge({ riskLevel }) {
-  return (
-    <span
-      className={[
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
-        getRiskBadgeClasses(riskLevel),
-      ].join(" ")}
-    >
-      {formatRiskLevel(riskLevel)}
-    </span>
-  );
 }
 
 function AuditField({ label, value, mono = false, copyValue, copyLabel }) {
@@ -148,12 +118,12 @@ function AuditSection({ title, children }) {
   );
 }
 
-function SignupIntelligencePanel({ audit }) {
+function SignupContextPanel({ audit }) {
   if (!hasRegistrationAudit(audit)) {
     return (
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <div className="text-sm font-semibold text-slate-900">
-          Signup Intelligence
+          Signup Context
         </div>
         <div className="mt-3 rounded-xl bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-500 ring-1 ring-slate-100">
           Not captured
@@ -162,49 +132,38 @@ function SignupIntelligencePanel({ audit }) {
     );
   }
 
-  const riskMeta = getRegistrationRiskMeta(audit);
-  const riskLevel = riskMeta.riskLevel || "Low";
-  const sameIpCount = Number(audit?.sameIpSignupCountAtRegistration) || 0;
-  const sameEmailDomainCount =
-    Number(audit?.sameEmailDomainCountAtRegistration) || 0;
-  const sameBrowserContextCount =
-    Number(audit?.sameBrowserContextSignupCountAtRegistration) || 0;
+  const evidence = getRegistrationEvidenceMeta(audit);
   const utm = audit?.utm || {};
   const hasUtm = hasUtmValues(utm);
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <AuditSection title="Risk Summary">
-        <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Risk level
-          </div>
-          <div className="mt-1">
-            <RiskBadge riskLevel={riskLevel} />
-          </div>
-        </div>
-        <AuditField label="Signals" value={riskMeta.riskTitle} />
+      <AuditSection title="Registration Evidence">
         <AuditField
           label="IP address"
-          value={formatIpAddress(audit?.ip)}
+          value={evidence.ipLabel}
           mono
           copyValue={audit?.ip}
           copyLabel="IP address"
         />
-        <AuditField label="Same-IP signup count" value={sameIpCount} />
+        <AuditField label="IP source" value={audit?.ipSource} mono />
+        <AuditField label="IP country" value={audit?.ipCountry} mono />
         <AuditField label="Email domain" value={audit?.emailDomain} mono />
         <AuditField
-          label="Same-domain signup count"
-          value={sameEmailDomainCount}
+          label="Previous same-IP signups"
+          value={evidence.sameIpCount}
         />
         <AuditField
-          label="Same-browser signup count"
-          value={sameBrowserContextCount}
+          label="Previous same-domain signups"
+          value={evidence.sameEmailDomainCount}
         />
-        <AuditField label="Device" value={formatDeviceSummary(audit)} />
+        <AuditField
+          label="Previous same-browser signups"
+          value={evidence.sameBrowserContextCount}
+        />
         <AuditField
           label="Signup duration"
-          value={formatAuditDuration(audit?.signupDurationMs)}
+          value={formatSignupDuration(audit?.signupDurationMs)}
         />
       </AuditSection>
 
@@ -248,8 +207,6 @@ function SignupIntelligencePanel({ audit }) {
       <AuditSection title="Raw Technical">
         <AuditField label="Captured at" value={formatAuditDate(audit?.capturedAt)} />
         <AuditField label="Origin" value={audit?.origin} mono />
-        <AuditField label="IP source" value={audit?.ipSource} mono />
-        <AuditField label="IP country" value={audit?.ipCountry} mono />
         <AuditField label="Accept language" value={audit?.acceptLanguage} mono />
         <AuditField label="User agent" value={audit?.userAgent} mono />
       </AuditSection>
@@ -696,7 +653,7 @@ export default function AdminUserDetailsPage() {
           {[
             { id: "info", label: "User Info" },
             { id: "approval", label: "Approval" },
-            { id: "signup", label: "Signup Intelligence" },
+            { id: "signup", label: "Signup Context" },
             { id: "pricing", label: "User Pricing" },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -1043,7 +1000,7 @@ export default function AdminUserDetailsPage() {
           ) : null}
         </div>
       ) : activeTab === "signup" ? (
-        <SignupIntelligencePanel audit={user.registrationAudit} />
+        <SignupContextPanel audit={user.registrationAudit} />
       ) : (
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <div className="flex flex-wrap items-center justify-between gap-2">

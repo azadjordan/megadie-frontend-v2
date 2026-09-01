@@ -16,7 +16,7 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import ApproveUserModal from "../../components/admin/ApproveUserModal";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { copyTextToClipboard } from "../../utils/clipboard";
-import { getRegistrationRiskMeta } from "../../utils/registrationAuditDisplay";
+import { getRegistrationEvidenceMeta } from "../../utils/registrationAuditDisplay";
 
 import {
   useDeleteUserMutation,
@@ -39,7 +39,7 @@ function getUserRowMeta(user, state = {}) {
   const roleLabel = user?.isAdmin ? "Admin" : "User";
   const approval = user?.approvalStatus || "Approved";
   const approvalClasses = getApprovalBadgeClasses(approval);
-  const riskMeta = getRegistrationRiskMeta(user?.registrationAudit);
+  const evidenceMeta = getRegistrationEvidenceMeta(user?.registrationAudit);
   const linkCounts = user?.linkCounts || {};
   const ordersCount = Number(linkCounts.orders) || 0;
   const invoicesCount = Number(linkCounts.invoices) || 0;
@@ -63,7 +63,7 @@ function getUserRowMeta(user, state = {}) {
     roleLabel,
     approval,
     approvalClasses,
-    ...riskMeta,
+    ...evidenceMeta,
     ordersCount,
     invoicesCount,
     requestsCount,
@@ -74,26 +74,55 @@ function getUserRowMeta(user, state = {}) {
   };
 }
 
-function UserIpMeta({ row, onCopyIp }) {
-  if (!row.hasIp) return null;
+function SignupContextMeta({ row, onCopyIp }) {
+  const hasContext =
+    row.hasIp ||
+    row.sameIpCount > 0 ||
+    row.sameBrowserContextCount > 0 ||
+    row.sameEmailDomainCount > 0 ||
+    row.hasSignupDuration;
+
+  if (!hasContext) {
+    return (
+      <div className="mt-1 text-[11px] font-semibold text-slate-300">
+        Not captured
+      </div>
+    );
+  }
 
   return (
-    <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-slate-400">
-      <span
-        className="min-w-0 break-all font-mono text-[10px] font-semibold text-slate-500"
-        title={row.ip}
-      >
-        IP: {row.ipLabel}
-      </span>
-      <button
-        type="button"
-        onClick={() => onCopyIp(row.ip)}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-slate-400 ring-1 ring-slate-200 hover:bg-white hover:text-slate-700"
-        title="Copy IP address"
-        aria-label="Copy IP address"
-      >
-        <FiCopy className="h-3 w-3" aria-hidden="true" />
-      </button>
+    <div className="mt-1 space-y-0.5 text-[11px] text-slate-400">
+      {row.hasIp ? (
+        <div className="flex min-w-0 items-center gap-1">
+          <span
+            className="min-w-0 break-all font-mono text-[10px] font-semibold text-slate-500"
+            title={row.ip}
+          >
+            IP: {row.ipLabel}
+          </span>
+          <button
+            type="button"
+            onClick={() => onCopyIp(row.ip)}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-slate-400 ring-1 ring-slate-200 hover:bg-white hover:text-slate-700"
+            title="Copy IP address"
+            aria-label="Copy IP address"
+          >
+            <FiCopy className="h-3 w-3" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+      {row.hasSignupDuration ? (
+        <div>Signup duration: {row.signupDuration}</div>
+      ) : null}
+      {row.sameIpCount > 0 ? (
+        <div>Previous same IP: {row.sameIpCount}</div>
+      ) : null}
+      {row.sameBrowserContextCount > 0 ? (
+        <div>Previous same browser: {row.sameBrowserContextCount}</div>
+      ) : null}
+      {row.sameEmailDomainCount > 0 ? (
+        <div>Previous same domain: {row.sameEmailDomainCount}</div>
+      ) : null}
     </div>
   );
 }
@@ -504,35 +533,9 @@ export default function AdminUsersPage() {
                     </div>
                     <div>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Risk
+                        Signup context
                       </span>
-                      <div className="mt-1">
-                        <span
-                          className={[
-                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
-                            row.riskClasses,
-                          ].join(" ")}
-                          title={row.riskTitle}
-                        >
-                          {row.riskLabel}
-                        </span>
-                        <UserIpMeta row={row} onCopyIp={onCopyIp} />
-                        {row.sameIpCount > 0 ? (
-                          <div className="mt-1 text-[11px] text-slate-400">
-                            Same IP: {row.sameIpCount}
-                          </div>
-                        ) : null}
-                        {row.sameBrowserContextCount > 0 ? (
-                          <div className="mt-0.5 text-[11px] text-slate-400">
-                            Same browser: {row.sameBrowserContextCount}
-                          </div>
-                        ) : null}
-                        {row.sameEmailDomainCount > 0 ? (
-                          <div className="mt-0.5 text-[11px] text-slate-400">
-                            Same domain: {row.sameEmailDomainCount}
-                          </div>
-                        ) : null}
-                      </div>
+                      <SignupContextMeta row={row} onCopyIp={onCopyIp} />
                     </div>
                   </div>
 
@@ -599,7 +602,7 @@ export default function AdminUsersPage() {
                     <th className="px-4 py-3">User</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Approval</th>
-                    <th className="px-4 py-3">Risk</th>
+                    <th className="px-4 py-3">Signup Context</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Internal Note</th>
                     <th className="px-4 py-3 text-center">Actions</th>
@@ -633,31 +636,7 @@ export default function AdminUsersPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={[
-                              "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
-                              row.riskClasses,
-                            ].join(" ")}
-                            title={row.riskTitle}
-                          >
-                            {row.riskLabel}
-                          </span>
-                          <UserIpMeta row={row} onCopyIp={onCopyIp} />
-                          {row.sameIpCount > 0 ? (
-                            <div className="mt-1 text-[11px] text-slate-400">
-                              Same IP: {row.sameIpCount}
-                            </div>
-                          ) : null}
-                          {row.sameBrowserContextCount > 0 ? (
-                            <div className="mt-0.5 text-[11px] text-slate-400">
-                              Same browser: {row.sameBrowserContextCount}
-                            </div>
-                          ) : null}
-                          {row.sameEmailDomainCount > 0 ? (
-                            <div className="mt-0.5 text-[11px] text-slate-400">
-                              Same domain: {row.sameEmailDomainCount}
-                            </div>
-                          ) : null}
+                          <SignupContextMeta row={row} onCopyIp={onCopyIp} />
                         </td>
                         <td className="px-4 py-3 text-slate-700">
                           {row.roleLabel}
