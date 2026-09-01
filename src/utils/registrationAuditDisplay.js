@@ -29,22 +29,6 @@ export function formatSignupDuration(value) {
   return `${(duration / 1000).toFixed(1)} sec`;
 }
 
-export function formatDeviceSummary(audit = {}) {
-  const browserName = audit?.browserName || "Unknown";
-  const osName = audit?.osName || "Unknown";
-  const deviceType = audit?.deviceType || "Unknown";
-
-  if (
-    browserName === "Unknown" &&
-    osName === "Unknown" &&
-    deviceType === "Unknown"
-  ) {
-    return "Not captured";
-  }
-
-  return `${browserName} on ${osName} (${deviceType})`;
-}
-
 export function formatUtmSummary(utm = {}) {
   const parts = [utm?.source, utm?.medium, utm?.campaign]
     .map((value) => String(value || "").trim())

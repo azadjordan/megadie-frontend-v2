@@ -154,7 +154,7 @@ function SignupContextPanel({ audit }) {
           value={evidence.sameIpCount}
         />
         <AuditField
-          label="Previous same-domain signups"
+          label="Previous same email-domain signups"
           value={evidence.sameEmailDomainCount}
         />
         <AuditField

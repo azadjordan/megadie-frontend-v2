@@ -121,7 +121,7 @@ function SignupContextMeta({ row, onCopyIp }) {
         <div>Previous same browser: {row.sameBrowserContextCount}</div>
       ) : null}
       {row.sameEmailDomainCount > 0 ? (
-        <div>Previous same domain: {row.sameEmailDomainCount}</div>
+        <div>Previous same email domain: {row.sameEmailDomainCount}</div>
       ) : null}
     </div>
   );
