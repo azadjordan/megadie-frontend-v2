@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { FiChevronLeft } from "react-icons/fi";
+import { FiChevronLeft, FiCopy } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import ApproveUserModal from "../../components/admin/ApproveUserModal";
+import { copyTextToClipboard } from "../../utils/clipboard";
 
 import {
   useGetUserByIdQuery,
@@ -21,10 +22,12 @@ import {
 } from "../../features/userPrices/userPricesApiSlice";
 import {
   formatDeviceSummary,
+  formatIpAddress,
   formatRiskFlags,
   formatRiskLevel,
   formatUtmSummary,
   getRiskBadgeClasses,
+  hasUtmValues,
 } from "../../utils/registrationAuditDisplay";
 
 function hasRegistrationAudit(audit) {
@@ -88,20 +91,47 @@ function RiskBadge({ riskLevel }) {
   );
 }
 
-function AuditField({ label, value, mono = false }) {
+function AuditField({ label, value, mono = false, copyValue, copyLabel }) {
+  const displayValue = formatAuditValue(value);
+  const copiedValue = String(copyValue ?? "").trim();
+  const canCopy = Boolean(copiedValue);
+
+  const onCopy = async () => {
+    if (!canCopy) return;
+    try {
+      await copyTextToClipboard(copiedValue);
+      toast.success(`${copyLabel || label} copied.`);
+    } catch {
+      toast.error(`Could not copy ${String(copyLabel || label).toLowerCase()}.`);
+    }
+  };
+
   return (
     <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
         {label}
       </div>
-      <div
-        className={[
-          "mt-1 break-words text-sm font-semibold text-slate-800",
-          mono ? "font-mono text-xs" : "",
-        ].join(" ")}
-        title={typeof value === "string" ? value : undefined}
-      >
-        {formatAuditValue(value)}
+      <div className="mt-1 flex min-w-0 items-start gap-2">
+        <div
+          className={[
+            "min-w-0 flex-1 break-words text-sm font-semibold text-slate-800",
+            mono ? "font-mono text-xs" : "",
+          ].join(" ")}
+          title={typeof value === "string" ? value : undefined}
+        >
+          {displayValue}
+        </div>
+        {canCopy ? (
+          <button
+            type="button"
+            onClick={onCopy}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 ring-1 ring-slate-200 hover:bg-white hover:text-slate-700"
+            title={`Copy ${String(copyLabel || label).toLowerCase()}`}
+            aria-label={`Copy ${String(copyLabel || label).toLowerCase()}`}
+          >
+            <FiCopy className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -137,6 +167,7 @@ function SignupIntelligencePanel({ audit }) {
   const sameEmailDomainCount =
     Number(audit?.sameEmailDomainCountAtRegistration) || 0;
   const utm = audit?.utm || {};
+  const hasUtm = hasUtmValues(utm);
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -150,7 +181,13 @@ function SignupIntelligencePanel({ audit }) {
           </div>
         </div>
         <AuditField label="Signals" value={formatRiskFlags(audit?.riskFlags)} />
-        <AuditField label="IP address" value={audit?.ip} mono />
+        <AuditField
+          label="IP address"
+          value={formatIpAddress(audit?.ip)}
+          mono
+          copyValue={audit?.ip}
+          copyLabel="IP address"
+        />
         <AuditField label="Same-IP signup count" value={sameIpCount} />
         <AuditField label="Email domain" value={audit?.emailDomain} mono />
         <AuditField
@@ -167,12 +204,20 @@ function SignupIntelligencePanel({ audit }) {
       <AuditSection title="Source">
         <AuditField label="Referrer" value={audit?.referrer} mono />
         <AuditField label="Landing path" value={audit?.landingPath} mono />
-        <AuditField label="UTM source" value={utm.source} mono />
-        <AuditField label="UTM medium" value={utm.medium} mono />
-        <AuditField label="UTM campaign" value={utm.campaign} mono />
-        <AuditField label="UTM summary" value={formatUtmSummary(utm)} mono />
-        <AuditField label="UTM term" value={utm.term} mono />
-        <AuditField label="UTM content" value={utm.content} mono />
+        {hasUtm ? (
+          <>
+            <AuditField label="UTM summary" value={formatUtmSummary(utm)} mono />
+            {utm.source ? <AuditField label="UTM source" value={utm.source} mono /> : null}
+            {utm.medium ? <AuditField label="UTM medium" value={utm.medium} mono /> : null}
+            {utm.campaign ? (
+              <AuditField label="UTM campaign" value={utm.campaign} mono />
+            ) : null}
+            {utm.term ? <AuditField label="UTM term" value={utm.term} mono /> : null}
+            {utm.content ? (
+              <AuditField label="UTM content" value={utm.content} mono />
+            ) : null}
+          </>
+        ) : null}
       </AuditSection>
 
       <AuditSection title="Browser Context">

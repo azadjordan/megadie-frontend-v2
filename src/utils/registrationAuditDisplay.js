@@ -15,6 +15,30 @@ const RISK_LEVEL_LABELS = {
   High: "Review carefully",
 };
 
+const LOCAL_IP_VALUES = new Set([
+  "::1",
+  "0:0:0:0:0:0:0:1",
+  "127.0.0.1",
+  "localhost",
+]);
+
+const UTM_KEYS = ["source", "medium", "campaign", "term", "content"];
+
+export function isLocalIpAddress(value) {
+  const ip = String(value ?? "").trim().toLowerCase();
+  return LOCAL_IP_VALUES.has(ip) || ip.startsWith("::ffff:127.");
+}
+
+export function formatIpAddress(value) {
+  const ip = String(value ?? "").trim();
+  if (!ip) return "Not captured";
+  return isLocalIpAddress(ip) ? `${ip} (local test)` : ip;
+}
+
+export function hasUtmValues(utm = {}) {
+  return UTM_KEYS.some((key) => String(utm?.[key] || "").trim());
+}
+
 export function getRiskBadgeClasses(riskLevel) {
   if (riskLevel === "High") {
     return "bg-rose-50 text-rose-700 ring-rose-200";
@@ -66,6 +90,7 @@ export function getRegistrationRiskMeta(audit) {
   const sameIpCount = Number(audit?.sameIpSignupCountAtRegistration) || 0;
   const sameEmailDomainCount =
     Number(audit?.sameEmailDomainCountAtRegistration) || 0;
+  const ip = String(audit?.ip || "").trim();
 
   return {
     riskLevel,
@@ -76,6 +101,9 @@ export function getRegistrationRiskMeta(audit) {
       : riskLevel === "Not captured"
       ? "Not captured"
       : "No signals",
+    ip,
+    ipLabel: formatIpAddress(ip),
+    hasIp: Boolean(ip),
     sameIpCount,
     sameEmailDomainCount,
   };

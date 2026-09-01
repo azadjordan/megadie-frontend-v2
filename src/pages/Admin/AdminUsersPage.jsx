@@ -4,6 +4,7 @@ import {
   FiCheck,
   FiChevronDown,
   FiChevronUp,
+  FiCopy,
   FiRefreshCw,
   FiSettings,
   FiTrash2,
@@ -14,6 +15,7 @@ import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import ApproveUserModal from "../../components/admin/ApproveUserModal";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
+import { copyTextToClipboard } from "../../utils/clipboard";
 import { getRegistrationRiskMeta } from "../../utils/registrationAuditDisplay";
 
 import {
@@ -70,6 +72,30 @@ function getUserRowMeta(user, state = {}) {
     deleteReason,
     rowDeleting,
   };
+}
+
+function UserIpMeta({ row, onCopyIp }) {
+  if (!row.hasIp) return null;
+
+  return (
+    <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-slate-400">
+      <span
+        className="min-w-0 break-all font-mono text-[10px] font-semibold text-slate-500"
+        title={row.ip}
+      >
+        IP: {row.ipLabel}
+      </span>
+      <button
+        type="button"
+        onClick={() => onCopyIp(row.ip)}
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-slate-400 ring-1 ring-slate-200 hover:bg-white hover:text-slate-700"
+        title="Copy IP address"
+        aria-label="Copy IP address"
+      >
+        <FiCopy className="h-3 w-3" aria-hidden="true" />
+      </button>
+    </div>
+  );
 }
 
 const USER_ROLE_FILTER_VALUES = new Set(["all", "user", "admin"]);
@@ -212,6 +238,18 @@ export default function AdminUsersPage() {
       toast.error(msg);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const onCopyIp = async (ip) => {
+    const value = String(ip ?? "").trim();
+    if (!value) return;
+
+    try {
+      await copyTextToClipboard(value);
+      toast.success("IP address copied.");
+    } catch {
+      toast.error("Could not copy IP address.");
     }
   };
 
@@ -478,6 +516,7 @@ export default function AdminUsersPage() {
                         >
                           {row.riskLabel}
                         </span>
+                        <UserIpMeta row={row} onCopyIp={onCopyIp} />
                         {row.sameIpCount > 0 ? (
                           <div className="mt-1 text-[11px] text-slate-400">
                             Same IP: {row.sameIpCount}
@@ -598,6 +637,7 @@ export default function AdminUsersPage() {
                           >
                             {row.riskLabel}
                           </span>
+                          <UserIpMeta row={row} onCopyIp={onCopyIp} />
                           {row.sameIpCount > 0 ? (
                             <div className="mt-1 text-[11px] text-slate-400">
                               Same IP: {row.sameIpCount}
