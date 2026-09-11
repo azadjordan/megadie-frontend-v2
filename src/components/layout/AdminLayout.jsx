@@ -18,6 +18,7 @@ import {
   FiFilter,
   FiGrid,
   FiArrowLeft,
+  FiBarChart2,
   FiLogOut,
   FiUser,
 } from "react-icons/fi";
@@ -101,6 +102,7 @@ export default function AdminLayout() {
   const items = useMemo(
     () => [
       { to: "/admin", label: "Dashboard", icon: FiHome, end: true },
+      { to: "/admin/analytics", label: "Analytics", icon: FiBarChart2 },
       { to: "/admin/requests", label: "Requests", icon: FiFileText },
       { to: "/admin/orders", label: "Orders", icon: FiPackage },
       { to: "/admin/finance", label: "Finance", icon: FiTrendingUp },
