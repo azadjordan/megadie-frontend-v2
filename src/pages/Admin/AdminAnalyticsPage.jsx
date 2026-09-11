@@ -1,10 +1,23 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FiCalendar, FiRefreshCw, FiTrendingUp } from "react-icons/fi";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Loader from "../../components/common/Loader";
-import { useGetAnalyticsOverviewQuery } from "../../features/analytics/analyticsApiSlice";
+import {
+  useGetAnalyticsCustomersQuery,
+  useGetAnalyticsOverviewQuery,
+} from "../../features/analytics/analyticsApiSlice";
+import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import { formatInvoiceMoneyMinor } from "../../utils/invoiceMoney";
 
 const BUSINESS_UTC_OFFSET_MS = 4 * 60 * 60 * 1000;
@@ -18,6 +31,7 @@ const PRESETS = [
 ];
 
 const PRESET_VALUES = new Set(PRESETS.map((preset) => preset.value));
+const CUSTOMER_ID_RE = /^[a-f\d]{24}$/i;
 
 function pad2(value) {
   return String(value).padStart(2, "0");
@@ -90,10 +104,13 @@ function getPresetRange(preset) {
 function readAnalyticsState(searchParams) {
   const presetRaw = searchParams.get("preset") || "thisMonth";
   const preset = PRESET_VALUES.has(presetRaw) ? presetRaw : "thisMonth";
+  const customerIdRaw = searchParams.get("customerId") || "";
+  const customerId = CUSTOMER_ID_RE.test(customerIdRaw) ? customerIdRaw : "";
 
   if (preset !== "custom") {
     return {
       preset,
+      customerId,
       ...getPresetRange(preset),
     };
   }
@@ -106,6 +123,7 @@ function readAnalyticsState(searchParams) {
     preset,
     from: parseDateKey(rawFrom)?.key || defaults.from,
     to: parseDateKey(rawTo)?.key || defaults.to,
+    customerId,
   };
 }
 
@@ -114,12 +132,16 @@ function buildSearchParams(state) {
   const preset = PRESET_VALUES.has(state?.preset) ? state.preset : "thisMonth";
   const from = parseDateKey(state?.from)?.key || getPresetRange(preset).from;
   const to = parseDateKey(state?.to)?.key || getPresetRange(preset).to;
+  const customerId = CUSTOMER_ID_RE.test(String(state?.customerId || ""))
+    ? String(state.customerId)
+    : "";
 
   if (preset !== "thisMonth") params.set("preset", preset);
   if (preset === "custom") {
     params.set("from", from);
     params.set("to", to);
   }
+  if (customerId) params.set("customerId", customerId);
 
   return params;
 }
@@ -133,6 +155,17 @@ function formatDateLabel(dateKey) {
     month: "short",
     day: "2-digit",
     year: "numeric",
+  });
+}
+
+function formatShortDateLabel(dateKey) {
+  const parsed = parseDateKey(dateKey);
+  if (!parsed) return "";
+
+  return new Date(parsed.utcMs).toLocaleDateString(undefined, {
+    timeZone: "UTC",
+    month: "short",
+    day: "2-digit",
   });
 }
 
@@ -154,6 +187,32 @@ function formatMajorMoney(value, currency = "AED") {
   } catch {
     return `${amount.toFixed(2)} ${currency}`;
   }
+}
+
+function formatCompactMoney(value) {
+  const n = Number(value);
+  const amount = Number.isFinite(n) ? n : 0;
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(amount);
+  } catch {
+    return String(Math.round(amount));
+  }
+}
+
+function getUserId(user) {
+  return String(user?._id || user?.id || "");
+}
+
+function getCustomerLabel(customer) {
+  if (!customer) return "";
+  const name = String(customer.name || "").trim();
+  const email = String(customer.email || "").trim();
+  if (name && email) return `${name} - ${email}`;
+  return name || email || getUserId(customer);
 }
 
 function formatPercent(value) {
@@ -250,12 +309,30 @@ function SnapshotCard({ metric }) {
   );
 }
 
-function TrendList({ rows = [] }) {
-  const maxBookedSales = Math.max(
-    1,
-    ...rows.map((row) => Number(row?.bookedSales) || 0)
-  );
+function TrendTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
 
+  const row = payload[0]?.payload || {};
+  return (
+    <div className="rounded-xl bg-white px-3 py-2 text-xs shadow-lg ring-1 ring-slate-200">
+      <div className="font-semibold text-slate-900">{formatDateLabel(label)}</div>
+      <div className="mt-1 text-slate-600">
+        Booked Sales:{" "}
+        <span className="font-semibold text-slate-900">
+          {formatMajorMoney(row.bookedSales)}
+        </span>
+      </div>
+      <div className="mt-0.5 text-slate-600">
+        Orders:{" "}
+        <span className="font-semibold text-slate-900">
+          {formatCount(row.orderCount)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TrendChart({ rows = [] }) {
   if (!rows.length) {
     return (
       <div className="rounded-2xl bg-white p-6 text-center text-sm text-slate-500 ring-1 ring-slate-200">
@@ -264,43 +341,180 @@ function TrendList({ rows = [] }) {
     );
   }
 
+  const chartRows = rows.map((row) => ({
+    date: row.date,
+    bookedSales: Number(row?.bookedSales) || 0,
+    orderCount: Number(row?.orderCount) || 0,
+  }));
+  const chartWidth = Math.max(720, chartRows.length * 18);
+  const tickInterval =
+    chartRows.length > 120 ? 13 : chartRows.length > 62 ? 6 : "preserveStartEnd";
+
   return (
     <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-      <div className="grid grid-cols-[96px_minmax(140px,1fr)_118px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500">
-        <div>Date</div>
-        <div>Booked Sales</div>
-        <div className="text-right">Orders</div>
-      </div>
-      <div className="max-h-[420px] overflow-y-auto">
-        {rows.map((row) => {
-          const bookedSales = Number(row?.bookedSales) || 0;
-          const width = `${Math.max(2, (bookedSales / maxBookedSales) * 100)}%`;
-
-          return (
-            <div
-              key={row.date}
-              className="grid grid-cols-[96px_minmax(140px,1fr)_118px] items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0"
+      <div className="overflow-x-auto">
+        <div className="h-[340px] min-w-full p-4" style={{ width: chartWidth }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartRows}
+              margin={{ top: 8, right: 12, left: 0, bottom: 12 }}
             >
-              <div className="text-xs font-semibold text-slate-600">
-                {formatDateLabel(row.date)}
-              </div>
-              <div className="min-w-0">
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full bg-slate-900"
-                    style={{ width }}
-                  />
-                </div>
-                <div className="mt-1 text-xs font-semibold text-slate-900 tabular-nums">
-                  {formatMajorMoney(bookedSales)}
-                </div>
-              </div>
-              <div className="text-right text-xs font-semibold text-slate-700">
-                {formatCount(row?.orderCount || 0)}
-              </div>
-            </div>
+              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="date"
+                axisLine={false}
+                tickLine={false}
+                interval={tickInterval}
+                tickFormatter={formatShortDateLabel}
+                tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
+                minTickGap={16}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => formatCompactMoney(value)}
+                tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
+                width={56}
+              />
+              <Tooltip
+                cursor={{ fill: "#f1f5f9" }}
+                content={<TrendTooltip />}
+              />
+              <Bar
+                dataKey="bookedSales"
+                fill="#0f172a"
+                radius={[5, 5, 0, 0]}
+                minPointSize={2}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+        Hover a bar to see booked sales and order count for that day.
+      </div>
+    </div>
+  );
+}
+
+function CustomerFilter({ value, users, selectedCustomer, onChange }) {
+  const optionMap = new Map();
+  for (const user of users || []) {
+    const userId = getUserId(user);
+    if (!userId || user?.isAdmin) continue;
+    optionMap.set(userId, user);
+  }
+  if (selectedCustomer?._id && !optionMap.has(String(selectedCustomer._id))) {
+    optionMap.set(String(selectedCustomer._id), selectedCustomer);
+  }
+
+  const options = Array.from(optionMap.values()).sort((a, b) =>
+    getCustomerLabel(a).localeCompare(getCustomerLabel(b))
+  );
+
+  return (
+    <div>
+      <label
+        htmlFor="analytics-customer"
+        className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+      >
+        Customer
+      </label>
+      <select
+        id="analytics-customer"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+      >
+        <option value="">All Customers</option>
+        {options.map((customer) => {
+          const customerId = getUserId(customer);
+          return (
+            <option key={customerId} value={customerId}>
+              {getCustomerLabel(customer)}
+            </option>
           );
         })}
+      </select>
+    </div>
+  );
+}
+
+function CustomerPerformanceTable({ rows = [], onSelectCustomer }) {
+  if (!rows.length) {
+    return (
+      <div className="rounded-2xl bg-white p-6 text-center text-sm text-slate-500 ring-1 ring-slate-200">
+        No customer performance data for this range.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
+      <div className="overflow-x-auto">
+        <table className="min-w-[880px] w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Customer</th>
+              <th className="px-4 py-3 text-right">Booked Sales</th>
+              <th className="px-4 py-3 text-right">Orders</th>
+              <th className="px-4 py-3 text-right">Delivered</th>
+              <th className="px-4 py-3 text-right">Invoiced</th>
+              <th className="px-4 py-3 text-right">Collected</th>
+              <th className="px-4 py-3 text-right">Outstanding</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row) => {
+              const customer = row.customer || {};
+              const customerId = getUserId(customer);
+              const currency = row.currency || "AED";
+              const factor = row.minorUnitFactor || 100;
+
+              return (
+                <tr
+                  key={customerId}
+                  className="cursor-pointer hover:bg-slate-50"
+                  onClick={() => onSelectCustomer(customerId)}
+                  title="Filter analytics by this customer"
+                >
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-slate-900">
+                      {customer.name || "Unknown customer"}
+                    </div>
+                    {customer.email ? (
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {customer.email}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
+                    {formatMajorMoney(row.bookedSales)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                    {formatCount(row.orderCount)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                    {formatMajorMoney(row.deliveredValue)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                    {formatInvoiceMoneyMinor(row.invoicedMinor, currency, factor)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                    {formatInvoiceMoneyMinor(row.collectedMinor, currency, factor)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-rose-700">
+                    {formatInvoiceMoneyMinor(
+                      row.currentOutstandingMinor,
+                      currency,
+                      factor
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -309,7 +523,7 @@ function TrendList({ rows = [] }) {
 export default function AdminAnalyticsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const state = readAnalyticsState(searchParams);
-  const { preset, from, to } = state;
+  const { preset, from, to, customerId } = state;
   const fromParsed = parseDateKey(from);
   const toParsed = parseDateKey(to);
   const rangeIsValid = Boolean(
@@ -323,14 +537,37 @@ export default function AdminAnalyticsPage() {
     isError,
     error,
   } = useGetAnalyticsOverviewQuery(
-    { from, to },
+    { from, to, customerId },
     { skip: !rangeIsValid }
   );
+  const {
+    data: customerData,
+    isLoading: isCustomersLoading,
+    isError: isCustomersError,
+    error: customersError,
+  } = useGetAnalyticsCustomersQuery(
+    { from, to, limit: 10 },
+    { skip: !rangeIsValid }
+  );
+  const {
+    data: usersData,
+  } = useGetUsersAdminQuery({
+    page: 1,
+    limit: 100,
+    role: "user",
+    sort: "name",
+  });
 
   const metrics = useMemo(() => data?.metrics || {}, [data?.metrics]);
   const range = data?.range || {};
+  const selectedCustomer = data?.scope?.customer || null;
+  const customerRows = customerData?.customers || [];
+  const customerOptions = usersData?.data || usersData?.items || [];
   const trendRows = data?.trend || [];
   const selectedRangeLabel = `${formatDateLabel(from)} to ${formatDateLabel(to)}`;
+  const selectedCustomerLabel = selectedCustomer
+    ? getCustomerLabel(selectedCustomer)
+    : "All Customers";
   const comparisonLabel =
     range?.previousFrom && range?.previousTo
       ? `${formatDateLabel(range.previousFrom)} to ${formatDateLabel(
@@ -402,14 +639,18 @@ export default function AdminAnalyticsPage() {
 
   const updatePreset = (nextPreset) => {
     if (nextPreset === "custom") {
-      setSearchParams(buildSearchParams({ preset: "custom", from, to }), {
+      setSearchParams(buildSearchParams({ preset: "custom", from, to, customerId }), {
         replace: true,
       });
       return;
     }
 
     setSearchParams(
-      buildSearchParams({ preset: nextPreset, ...getPresetRange(nextPreset) }),
+      buildSearchParams({
+        preset: nextPreset,
+        customerId,
+        ...getPresetRange(nextPreset),
+      }),
       { replace: true }
     );
   };
@@ -419,9 +660,22 @@ export default function AdminAnalyticsPage() {
       preset: "custom",
       from,
       to,
+      customerId,
       [key]: value,
     };
     setSearchParams(buildSearchParams(next), { replace: true });
+  };
+
+  const updateCustomer = (nextCustomerId) => {
+    setSearchParams(
+      buildSearchParams({
+        preset,
+        from,
+        to,
+        customerId: nextCustomerId,
+      }),
+      { replace: true }
+    );
   };
 
   const resetRange = () => {
@@ -434,7 +688,7 @@ export default function AdminAnalyticsPage() {
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Analytics</div>
           <div className="text-sm text-slate-500">
-            Business performance for a selected date range.
+            Business performance for the selected period.
           </div>
         </div>
         <div className="inline-flex items-center gap-2 self-start rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -444,7 +698,7 @@ export default function AdminAnalyticsPage() {
       </div>
 
       <section className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[220px_170px_170px_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[190px_minmax(240px,1fr)_170px_170px_auto] md:items-end">
           <div>
             <label
               htmlFor="analytics-preset"
@@ -465,6 +719,13 @@ export default function AdminAnalyticsPage() {
               ))}
             </select>
           </div>
+
+          <CustomerFilter
+            value={customerId}
+            users={customerOptions}
+            selectedCustomer={selectedCustomer}
+            onChange={updateCustomer}
+          />
 
           <div>
             <label
@@ -513,7 +774,7 @@ export default function AdminAnalyticsPage() {
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <span>
-            Selected:{" "}
+            Selected period:{" "}
             <span className="font-semibold text-slate-700">
               {selectedRangeLabel}
             </span>
@@ -526,6 +787,13 @@ export default function AdminAnalyticsPage() {
               </span>
             </span>
           ) : null}
+          <span>
+            Customer scope:{" "}
+            <span className="font-semibold text-slate-700">
+              {selectedCustomerLabel}
+            </span>
+          </span>
+          <span>Current Outstanding is a live balance.</span>
           {isFetching && !isLoading ? <span>Updating...</span> : null}
         </div>
 
@@ -570,7 +838,36 @@ export default function AdminAnalyticsPage() {
                 </div>
               ) : null}
             </div>
-            <TrendList rows={trendRows} />
+            <TrendChart rows={trendRows} />
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">
+                  Customer Performance
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Top customers by booked sales in this period. Current
+                  Outstanding is today's open balance.
+                </div>
+              </div>
+              {isCustomersLoading ? (
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  Loading...
+                </div>
+              ) : null}
+            </div>
+            {isCustomersError ? (
+              <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+                <ErrorMessage error={customersError} />
+              </div>
+            ) : (
+              <CustomerPerformanceTable
+                rows={customerRows}
+                onSelectCustomer={updateCustomer}
+              />
+            )}
           </section>
         </>
       ) : null}
