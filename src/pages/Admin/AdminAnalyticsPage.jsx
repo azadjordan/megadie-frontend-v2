@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,6 +17,7 @@ import Loader from "../../components/common/Loader";
 import {
   useGetAnalyticsCustomersQuery,
   useGetAnalyticsOverviewQuery,
+  useGetAnalyticsSkusQuery,
 } from "../../features/analytics/analyticsApiSlice";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import { formatInvoiceMoneyMinor } from "../../utils/invoiceMoney";
@@ -203,6 +205,20 @@ function formatCompactMoney(value) {
   }
 }
 
+function formatCompactNumber(value) {
+  const n = Number(value);
+  const amount = Number.isFinite(n) ? n : 0;
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(amount);
+  } catch {
+    return String(Math.round(amount));
+  }
+}
+
 function getUserId(user) {
   return String(user?._id || user?.id || "");
 }
@@ -303,7 +319,7 @@ function SnapshotCard({ metric }) {
         {count} issued invoice{count === "1" ? "" : "s"} with a balance
       </div>
       <div className="mt-2 text-xs text-rose-700/80">
-        Current balance, not historical for the selected range.
+        Current balance today, shown as context.
       </div>
     </div>
   );
@@ -346,7 +362,7 @@ function TrendChart({ rows = [] }) {
     bookedSales: Number(row?.bookedSales) || 0,
     orderCount: Number(row?.orderCount) || 0,
   }));
-  const chartWidth = Math.max(720, chartRows.length * 18);
+  const chartWidth = Math.max(720, chartRows.length * 22);
   const tickInterval =
     chartRows.length > 120 ? 13 : chartRows.length > 62 ? 6 : "preserveStartEnd";
 
@@ -358,6 +374,7 @@ function TrendChart({ rows = [] }) {
             <BarChart
               data={chartRows}
               margin={{ top: 8, right: 12, left: 0, bottom: 12 }}
+              barCategoryGap="18%"
             >
               <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
               <XAxis
@@ -370,19 +387,43 @@ function TrendChart({ rows = [] }) {
                 minTickGap={16}
               />
               <YAxis
+                yAxisId="sales"
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) => formatCompactMoney(value)}
                 tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
                 width={56}
               />
+              <YAxis
+                yAxisId="orders"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => formatCompactNumber(value)}
+                tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
+                width={42}
+              />
               <Tooltip
                 cursor={{ fill: "#f1f5f9" }}
                 content={<TrendTooltip />}
               />
+              <Legend
+                iconType="circle"
+                wrapperStyle={{ fontSize: 12, fontWeight: 600, color: "#475569" }}
+              />
               <Bar
+                yAxisId="sales"
                 dataKey="bookedSales"
-                fill="#0f172a"
+                name="Booked Sales"
+                fill="#0f766e"
+                radius={[5, 5, 0, 0]}
+                minPointSize={2}
+              />
+              <Bar
+                yAxisId="orders"
+                dataKey="orderCount"
+                name="Orders"
+                fill="#2563eb"
                 radius={[5, 5, 0, 0]}
                 minPointSize={2}
               />
@@ -391,7 +432,7 @@ function TrendChart({ rows = [] }) {
         </div>
       </div>
       <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
-        Hover a bar to see booked sales and order count for that day.
+        Daily totals use order created date.
       </div>
     </div>
   );
@@ -520,6 +561,66 @@ function CustomerPerformanceTable({ rows = [], onSelectCustomer }) {
   );
 }
 
+function SkuPerformanceTable({ rows = [] }) {
+  if (!rows.length) {
+    return (
+      <div className="rounded-2xl bg-white p-6 text-center text-sm text-slate-500 ring-1 ring-slate-200">
+        No SKU performance data for this scope.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
+      <div className="overflow-x-auto">
+        <table className="min-w-[760px] w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-3">SKU</th>
+              <th className="px-4 py-3 text-right">Units Sold</th>
+              <th className="px-4 py-3 text-right">Product Revenue</th>
+              <th className="px-4 py-3 text-right">Orders</th>
+              <th className="px-4 py-3 text-right">Avg Selling Price</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row) => {
+              const currency = row.currency || "AED";
+
+              return (
+                <tr key={row.sku} className="hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-slate-900">
+                      {row.sku || "-"}
+                    </div>
+                    {row.productName ? (
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {row.productName}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
+                    {formatCount(row.unitsSold)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
+                    {formatMajorMoney(row.bookedRevenue, currency)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                    {formatCount(row.orderCount)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                    {formatMajorMoney(row.averageSellingPrice, currency)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminAnalyticsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const state = readAnalyticsState(searchParams);
@@ -546,7 +647,7 @@ export default function AdminAnalyticsPage() {
     isError: isCustomersError,
     error: customersError,
   } = useGetAnalyticsCustomersQuery(
-    { from, to, limit: 10 },
+    { from, to, customerId, limit: 10 },
     { skip: !rangeIsValid }
   );
   const {
@@ -557,17 +658,33 @@ export default function AdminAnalyticsPage() {
     role: "user",
     sort: "name",
   });
+  const {
+    data: skuData,
+    isLoading: isSkusLoading,
+    isError: isSkusError,
+    error: skusError,
+  } = useGetAnalyticsSkusQuery(
+    { from, to, customerId, limit: 10 },
+    { skip: !rangeIsValid }
+  );
 
   const metrics = useMemo(() => data?.metrics || {}, [data?.metrics]);
   const range = data?.range || {};
   const selectedCustomer = data?.scope?.customer || null;
   const customerRows = customerData?.customers || [];
   const customerOptions = usersData?.data || usersData?.items || [];
+  const skuRows = skuData?.skus || [];
   const trendRows = data?.trend || [];
   const selectedRangeLabel = `${formatDateLabel(from)} to ${formatDateLabel(to)}`;
   const selectedCustomerLabel = selectedCustomer
     ? getCustomerLabel(selectedCustomer)
     : "All Customers";
+  const customerPerformanceTitle = selectedCustomer
+    ? "Selected Customer Performance"
+    : "Customer Performance";
+  const customerPerformanceDescription = selectedCustomer
+    ? `Performance for ${selectedCustomerLabel} in this period. Current Outstanding is today's open balance.`
+    : "Top customers by booked sales in this period. Current Outstanding is today's open balance.";
   const comparisonLabel =
     range?.previousFrom && range?.previousTo
       ? `${formatDateLabel(range.previousFrom)} to ${formatDateLabel(
@@ -781,7 +898,7 @@ export default function AdminAnalyticsPage() {
           </span>
           {comparisonLabel ? (
             <span>
-              Compared with{" "}
+              KPI cards compare with{" "}
               <span className="font-semibold text-slate-700">
                 {comparisonLabel}
               </span>
@@ -845,11 +962,10 @@ export default function AdminAnalyticsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-sm font-semibold text-slate-900">
-                  Customer Performance
+                  {customerPerformanceTitle}
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
-                  Top customers by booked sales in this period. Current
-                  Outstanding is today's open balance.
+                  {customerPerformanceDescription}
                 </div>
               </div>
               {isCustomersLoading ? (
@@ -867,6 +983,32 @@ export default function AdminAnalyticsPage() {
                 rows={customerRows}
                 onSelectCustomer={updateCustomer}
               />
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">
+                  SKU Performance
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Top SKUs by product-line revenue in this period using order
+                  created date and current customer scope.
+                </div>
+              </div>
+              {isSkusLoading ? (
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  Loading...
+                </div>
+              ) : null}
+            </div>
+            {isSkusError ? (
+              <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+                <ErrorMessage error={skusError} />
+              </div>
+            ) : (
+              <SkuPerformanceTable rows={skuRows} />
             )}
           </section>
         </>

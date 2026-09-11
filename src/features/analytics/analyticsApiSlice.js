@@ -15,10 +15,11 @@ export const analyticsApiSlice = apiSlice.injectEndpoints({
       providesTags: () => [{ type: "Analytics", id: "OVERVIEW" }],
     }),
     getAnalyticsCustomers: builder.query({
-      query: ({ from, to, limit = 10 } = {}) => {
+      query: ({ from, to, customerId, limit = 10 } = {}) => {
         const params = new URLSearchParams();
         if (from) params.set("from", from);
         if (to) params.set("to", to);
+        if (customerId) params.set("customerId", customerId);
         if (limit) params.set("limit", String(limit));
         const qs = params.toString();
         return qs ? `/analytics/customers?${qs}` : "/analytics/customers";
@@ -26,10 +27,24 @@ export const analyticsApiSlice = apiSlice.injectEndpoints({
       transformResponse: (response) => response?.data ?? response,
       providesTags: () => [{ type: "Analytics", id: "CUSTOMERS" }],
     }),
+    getAnalyticsSkus: builder.query({
+      query: ({ from, to, customerId, limit = 10 } = {}) => {
+        const params = new URLSearchParams();
+        if (from) params.set("from", from);
+        if (to) params.set("to", to);
+        if (customerId) params.set("customerId", customerId);
+        if (limit) params.set("limit", String(limit));
+        const qs = params.toString();
+        return qs ? `/analytics/skus?${qs}` : "/analytics/skus";
+      },
+      transformResponse: (response) => response?.data ?? response,
+      providesTags: () => [{ type: "Analytics", id: "SKUS" }],
+    }),
   }),
 });
 
 export const {
   useGetAnalyticsCustomersQuery,
   useGetAnalyticsOverviewQuery,
+  useGetAnalyticsSkusQuery,
 } = analyticsApiSlice;
