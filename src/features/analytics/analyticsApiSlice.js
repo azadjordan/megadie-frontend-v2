@@ -3,11 +3,12 @@ import { apiSlice } from "../../app/apiSlice";
 export const analyticsApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getAnalyticsOverview: builder.query({
-      query: ({ from, to, customerId } = {}) => {
+      query: ({ from, to, customerId, compare } = {}) => {
         const params = new URLSearchParams();
         if (from) params.set("from", from);
         if (to) params.set("to", to);
         if (customerId) params.set("customerId", customerId);
+        if (compare) params.set("compare", compare);
         const qs = params.toString();
         return qs ? `/analytics/overview?${qs}` : "/analytics/overview";
       },

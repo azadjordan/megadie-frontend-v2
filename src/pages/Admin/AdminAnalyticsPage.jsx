@@ -23,6 +23,7 @@ import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import { formatInvoiceMoneyMinor } from "../../utils/invoiceMoney";
 
 const BUSINESS_UTC_OFFSET_MS = 4 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const PRESETS = [
@@ -33,6 +34,17 @@ const PRESETS = [
 ];
 
 const PRESET_VALUES = new Set(PRESETS.map((preset) => preset.value));
+const COMPARE_MODES = {
+  NONE: "none",
+  PREVIOUS_PERIOD: "previousPeriod",
+  SAME_DATES_LAST_YEAR: "sameDatesLastYear",
+};
+const COMPARE_OPTIONS = [
+  { value: COMPARE_MODES.NONE, label: "None" },
+  { value: COMPARE_MODES.PREVIOUS_PERIOD, label: "Previous period" },
+  { value: COMPARE_MODES.SAME_DATES_LAST_YEAR, label: "Same dates last year" },
+];
+const COMPARE_VALUES = new Set(COMPARE_OPTIONS.map((option) => option.value));
 const CUSTOMER_ID_RE = /^[a-f\d]{24}$/i;
 
 function pad2(value) {
@@ -66,7 +78,7 @@ function parseDateKey(value) {
 function addDays(dateKey, days) {
   const parsed = parseDateKey(dateKey);
   if (!parsed) return "";
-  return dateKeyFromUtcMs(parsed.utcMs + days * 24 * 60 * 60 * 1000);
+  return dateKeyFromUtcMs(parsed.utcMs + days * DAY_MS);
 }
 
 function businessTodayKey(now = new Date()) {
@@ -75,6 +87,57 @@ function businessTodayKey(now = new Date()) {
 
 function daysInMonth(year, month) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function sameDateLastYear(dateKey) {
+  const parsed = parseDateKey(dateKey);
+  if (!parsed) return null;
+
+  const year = parsed.year - 1;
+  const day = Math.min(parsed.day, daysInMonth(year, parsed.month));
+  return parseDateKey(`${year}-${pad2(parsed.month)}-${pad2(day)}`);
+}
+
+function dayCountBetween(fromKey, toKey) {
+  const from = parseDateKey(fromKey);
+  const to = parseDateKey(toKey);
+  if (!from || !to || from.utcMs > to.utcMs) return 0;
+  return Math.round((to.utcMs - from.utcMs) / DAY_MS) + 1;
+}
+
+function canCompareSameDatesLastYear(fromKey, toKey) {
+  const from = parseDateKey(fromKey);
+  const previousTo = sameDateLastYear(toKey);
+  const dayCount = dayCountBetween(fromKey, toKey);
+
+  return Boolean(
+    from &&
+      previousTo &&
+      dayCount > 0 &&
+      dayCount <= 366 &&
+      previousTo.utcMs < from.utcMs
+  );
+}
+
+function defaultCompareForPreset(preset) {
+  return preset === "custom"
+    ? COMPARE_MODES.NONE
+    : COMPARE_MODES.PREVIOUS_PERIOD;
+}
+
+function normalizeCompareMode(value, preset, from, to) {
+  const raw = String(value || "");
+  const fallback = defaultCompareForPreset(preset);
+  const compare = COMPARE_VALUES.has(raw) ? raw : fallback;
+
+  if (
+    compare === COMPARE_MODES.SAME_DATES_LAST_YEAR &&
+    !canCompareSameDatesLastYear(from, to)
+  ) {
+    return COMPARE_MODES.NONE;
+  }
+
+  return compare;
 }
 
 function getPresetRange(preset) {
@@ -108,12 +171,15 @@ function readAnalyticsState(searchParams) {
   const preset = PRESET_VALUES.has(presetRaw) ? presetRaw : "thisMonth";
   const customerIdRaw = searchParams.get("customerId") || "";
   const customerId = CUSTOMER_ID_RE.test(customerIdRaw) ? customerIdRaw : "";
+  const compareRaw = searchParams.get("compare") || "";
 
   if (preset !== "custom") {
+    const range = getPresetRange(preset);
     return {
       preset,
       customerId,
-      ...getPresetRange(preset),
+      compare: normalizeCompareMode(compareRaw, preset, range.from, range.to),
+      ...range,
     };
   }
 
@@ -121,11 +187,15 @@ function readAnalyticsState(searchParams) {
   const rawFrom = searchParams.get("from") || "";
   const rawTo = searchParams.get("to") || "";
 
+  const from = parseDateKey(rawFrom)?.key || defaults.from;
+  const to = parseDateKey(rawTo)?.key || defaults.to;
+
   return {
     preset,
-    from: parseDateKey(rawFrom)?.key || defaults.from,
-    to: parseDateKey(rawTo)?.key || defaults.to,
+    from,
+    to,
     customerId,
+    compare: normalizeCompareMode(compareRaw, preset, from, to),
   };
 }
 
@@ -134,6 +204,7 @@ function buildSearchParams(state) {
   const preset = PRESET_VALUES.has(state?.preset) ? state.preset : "thisMonth";
   const from = parseDateKey(state?.from)?.key || getPresetRange(preset).from;
   const to = parseDateKey(state?.to)?.key || getPresetRange(preset).to;
+  const compare = normalizeCompareMode(state?.compare, preset, from, to);
   const customerId = CUSTOMER_ID_RE.test(String(state?.customerId || ""))
     ? String(state.customerId)
     : "";
@@ -142,6 +213,9 @@ function buildSearchParams(state) {
   if (preset === "custom") {
     params.set("from", from);
     params.set("to", to);
+  }
+  if (preset === "custom" || compare !== defaultCompareForPreset(preset)) {
+    params.set("compare", compare);
   }
   if (customerId) params.set("customerId", customerId);
 
@@ -232,6 +306,7 @@ function getCustomerLabel(customer) {
 }
 
 function formatPercent(value) {
+  if (value === null || value === undefined) return "No comparison";
   const n = Number(value);
   if (!Number.isFinite(n)) return "No comparison";
   const prefix = n > 0 ? "+" : "";
@@ -239,6 +314,14 @@ function formatPercent(value) {
 }
 
 function ChangeBadge({ value }) {
+  if (value === null || value === undefined) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200">
+        No comparison
+      </span>
+    );
+  }
+
   const n = Number(value);
   const hasChange = Number.isFinite(n);
   const tone = !hasChange
@@ -266,6 +349,7 @@ function MetricCard({
   value,
   previous,
   changePercent,
+  comparisonEnabled,
   basis,
   accent = "slate",
 }) {
@@ -287,12 +371,14 @@ function MetricCard({
       <div className="mt-2 text-xl font-semibold text-slate-900 tabular-nums">
         {value}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <ChangeBadge value={changePercent} />
-        {previous ? (
-          <span className="text-xs text-slate-500">Prev: {previous}</span>
-        ) : null}
-      </div>
+      {comparisonEnabled ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <ChangeBadge value={changePercent} />
+          {previous ? (
+            <span className="text-xs text-slate-500">Prev: {previous}</span>
+          ) : null}
+        </div>
+      ) : null}
       {basis ? <div className="mt-2 text-xs text-slate-500">{basis}</div> : null}
     </div>
   );
@@ -319,54 +405,9 @@ function SnapshotCard({ metric }) {
         {count} issued invoice{count === "1" ? "" : "s"} with a balance
       </div>
       <div className="mt-2 text-xs text-rose-700/80">
-        Current balance today, shown as context.
+        Current open invoice balance today, not historical for the selected period.
       </div>
     </div>
-  );
-}
-
-function MetricNotes() {
-  const notes = [
-    {
-      label: "Booked Sales",
-      detail:
-        "Non-cancelled orders created in the selected period, including delivery and extra fees.",
-    },
-    {
-      label: "Delivered Value",
-      detail:
-        "Delivered orders by delivered date, including delivery and extra fees.",
-    },
-    {
-      label: "Invoiced",
-      detail: "Issued invoices by invoice date, including manual invoices.",
-    },
-    {
-      label: "Collected",
-      detail: "Payments received by payment date.",
-    },
-    {
-      label: "Current Outstanding",
-      detail: "Current open invoice balance today, shown as context.",
-    },
-  ];
-
-  return (
-    <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-      <div className="text-sm font-semibold text-slate-900">Metric Notes</div>
-      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-        {notes.map((note) => (
-          <div key={note.label}>
-            <div className="text-xs font-semibold text-slate-700">
-              {note.label}
-            </div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">
-              {note.detail}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -526,6 +567,38 @@ function CustomerFilter({ value, users, selectedCustomer, onChange }) {
   );
 }
 
+function CompareFilter({ value, sameDatesLastYearDisabled, onChange }) {
+  return (
+    <div>
+      <label
+        htmlFor="analytics-compare"
+        className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+      >
+        Compare
+      </label>
+      <select
+        id="analytics-compare"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+      >
+        {COMPARE_OPTIONS.map((option) => (
+          <option
+            key={option.value}
+            value={option.value}
+            disabled={
+              option.value === COMPARE_MODES.SAME_DATES_LAST_YEAR &&
+              sameDatesLastYearDisabled
+            }
+          >
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function CustomerPerformanceTable({ rows = [], onSelectCustomer }) {
   if (!rows.length) {
     return (
@@ -669,12 +742,13 @@ function SkuPerformanceTable({ rows = [] }) {
 export default function AdminAnalyticsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const state = readAnalyticsState(searchParams);
-  const { preset, from, to, customerId } = state;
+  const { preset, from, to, customerId, compare } = state;
   const fromParsed = parseDateKey(from);
   const toParsed = parseDateKey(to);
   const rangeIsValid = Boolean(
     fromParsed && toParsed && fromParsed.utcMs <= toParsed.utcMs
   );
+  const sameDatesLastYearDisabled = !canCompareSameDatesLastYear(from, to);
 
   const {
     data,
@@ -683,7 +757,7 @@ export default function AdminAnalyticsPage() {
     isError,
     error,
   } = useGetAnalyticsOverviewQuery(
-    { from, to, customerId },
+    { from, to, customerId, compare },
     { skip: !rangeIsValid }
   );
   const {
@@ -715,6 +789,8 @@ export default function AdminAnalyticsPage() {
 
   const metrics = useMemo(() => data?.metrics || {}, [data?.metrics]);
   const range = data?.range || {};
+  const comparison = range?.comparison || {};
+  const comparisonEnabled = Boolean(comparison.enabled);
   const selectedCustomer = data?.scope?.customer || null;
   const customerRows = customerData?.customers || [];
   const customerOptions = usersData?.data || usersData?.items || [];
@@ -731,9 +807,9 @@ export default function AdminAnalyticsPage() {
     ? `Performance for ${selectedCustomerLabel} in this period. Booked Sales includes delivery and extra fees. Outstanding is today's open balance.`
     : "Top customers by booked sales in this period, including delivery and extra fees. Outstanding is today's open balance.";
   const comparisonLabel =
-    range?.previousFrom && range?.previousTo
-      ? `${formatDateLabel(range.previousFrom)} to ${formatDateLabel(
-          range.previousTo
+    comparisonEnabled && comparison?.from && comparison?.to
+      ? `${formatDateLabel(comparison.from)} to ${formatDateLabel(
+          comparison.to
         )}`
       : "";
 
@@ -744,6 +820,7 @@ export default function AdminAnalyticsPage() {
         value: formatMajorMoney(metrics.bookedSales?.current),
         previous: formatMajorMoney(metrics.bookedSales?.previous),
         changePercent: metrics.bookedSales?.changePercent,
+        comparisonEnabled,
         basis: "Non-cancelled orders by order created date, including delivery and extra fees.",
         accent: "violet",
       },
@@ -752,6 +829,7 @@ export default function AdminAnalyticsPage() {
         value: formatMajorMoney(metrics.deliveredValue?.current),
         previous: formatMajorMoney(metrics.deliveredValue?.previous),
         changePercent: metrics.deliveredValue?.changePercent,
+        comparisonEnabled,
         basis: "Delivered orders by delivered date, including delivery and extra fees.",
         accent: "emerald",
       },
@@ -768,7 +846,8 @@ export default function AdminAnalyticsPage() {
           metrics.invoiced?.minorUnitFactor || 100
         ),
         changePercent: metrics.invoiced?.changePercent,
-        basis: "Issued invoices by invoice date.",
+        comparisonEnabled,
+        basis: "Issued invoices by invoice date, including manual invoices.",
         accent: "blue",
       },
       {
@@ -784,7 +863,8 @@ export default function AdminAnalyticsPage() {
           metrics.collected?.minorUnitFactor || 100
         ),
         changePercent: metrics.collected?.changePercent,
-        basis: "Payments by payment date.",
+        comparisonEnabled,
+        basis: "Payments received by payment date.",
         accent: "amber",
       },
       {
@@ -792,32 +872,48 @@ export default function AdminAnalyticsPage() {
         value: formatCount(metrics.orders?.current),
         previous: formatCount(metrics.orders?.previous),
         changePercent: metrics.orders?.changePercent,
+        comparisonEnabled,
         basis: "Non-cancelled orders by order created date.",
         accent: "slate",
       },
     ],
-    [metrics]
+    [comparisonEnabled, metrics]
   );
 
   const updatePreset = (nextPreset) => {
+    const nextCompare = defaultCompareForPreset(nextPreset);
     if (nextPreset === "custom") {
-      setSearchParams(buildSearchParams({ preset: "custom", from, to, customerId }), {
-        replace: true,
-      });
+      setSearchParams(
+        buildSearchParams({
+          preset: "custom",
+          from,
+          to,
+          customerId,
+          compare: nextCompare,
+        }),
+        { replace: true }
+      );
       return;
     }
 
+    const nextRange = getPresetRange(nextPreset);
     setSearchParams(
       buildSearchParams({
         preset: nextPreset,
         customerId,
-        ...getPresetRange(nextPreset),
+        compare: nextCompare,
+        ...nextRange,
       }),
       { replace: true }
     );
   };
 
   const updateCustomDate = (key, value) => {
+    const compareWasPresetDefault = compare === defaultCompareForPreset(preset);
+    const nextCompare =
+      preset !== "custom" && compareWasPresetDefault
+        ? defaultCompareForPreset("custom")
+        : compare;
     const next = {
       preset: "custom",
       from,
@@ -825,7 +921,26 @@ export default function AdminAnalyticsPage() {
       customerId,
       [key]: value,
     };
+    next.compare = normalizeCompareMode(
+      nextCompare,
+      next.preset,
+      next.from,
+      next.to
+    );
     setSearchParams(buildSearchParams(next), { replace: true });
+  };
+
+  const updateCompare = (nextCompare) => {
+    setSearchParams(
+      buildSearchParams({
+        preset,
+        from,
+        to,
+        customerId,
+        compare: nextCompare,
+      }),
+      { replace: true }
+    );
   };
 
   const updateCustomer = (nextCustomerId) => {
@@ -835,6 +950,7 @@ export default function AdminAnalyticsPage() {
         from,
         to,
         customerId: nextCustomerId,
+        compare,
       }),
       { replace: true }
     );
@@ -860,7 +976,7 @@ export default function AdminAnalyticsPage() {
       </div>
 
       <section className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[190px_minmax(240px,1fr)_170px_170px_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:items-end xl:grid-cols-[190px_190px_minmax(240px,1fr)_170px_170px_auto]">
           <div>
             <label
               htmlFor="analytics-preset"
@@ -881,6 +997,12 @@ export default function AdminAnalyticsPage() {
               ))}
             </select>
           </div>
+
+          <CompareFilter
+            value={compare}
+            sameDatesLastYearDisabled={sameDatesLastYearDisabled}
+            onChange={updateCompare}
+          />
 
           <CustomerFilter
             value={customerId}
@@ -943,7 +1065,7 @@ export default function AdminAnalyticsPage() {
           </span>
           {comparisonLabel ? (
             <span>
-              KPI cards compare with{" "}
+              Prev period:{" "}
               <span className="font-semibold text-slate-700">
                 {comparisonLabel}
               </span>
@@ -955,7 +1077,6 @@ export default function AdminAnalyticsPage() {
               {selectedCustomerLabel}
             </span>
           </span>
-          <span>Current Outstanding is a live balance.</span>
           {isFetching && !isLoading ? <span>Updating...</span> : null}
         </div>
 
@@ -982,8 +1103,6 @@ export default function AdminAnalyticsPage() {
             ))}
             <SnapshotCard metric={metrics.currentOutstanding} />
           </section>
-
-          <MetricNotes />
 
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
