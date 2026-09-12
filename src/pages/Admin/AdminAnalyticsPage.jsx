@@ -325,6 +325,51 @@ function SnapshotCard({ metric }) {
   );
 }
 
+function MetricNotes() {
+  const notes = [
+    {
+      label: "Booked Sales",
+      detail:
+        "Non-cancelled orders created in the selected period, including delivery and extra fees.",
+    },
+    {
+      label: "Delivered Value",
+      detail:
+        "Delivered orders by delivered date, including delivery and extra fees.",
+    },
+    {
+      label: "Invoiced",
+      detail: "Issued invoices by invoice date, including manual invoices.",
+    },
+    {
+      label: "Collected",
+      detail: "Payments received by payment date.",
+    },
+    {
+      label: "Current Outstanding",
+      detail: "Current open invoice balance today, shown as context.",
+    },
+  ];
+
+  return (
+    <section className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+      <div className="text-sm font-semibold text-slate-900">Metric Notes</div>
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {notes.map((note) => (
+          <div key={note.label}>
+            <div className="text-xs font-semibold text-slate-700">
+              {note.label}
+            </div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              {note.detail}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
 
@@ -683,8 +728,8 @@ export default function AdminAnalyticsPage() {
     ? "Selected Customer Performance"
     : "Customer Performance";
   const customerPerformanceDescription = selectedCustomer
-    ? `Performance for ${selectedCustomerLabel} in this period. Current Outstanding is today's open balance.`
-    : "Top customers by booked sales in this period. Current Outstanding is today's open balance.";
+    ? `Performance for ${selectedCustomerLabel} in this period. Booked Sales includes delivery and extra fees. Outstanding is today's open balance.`
+    : "Top customers by booked sales in this period, including delivery and extra fees. Outstanding is today's open balance.";
   const comparisonLabel =
     range?.previousFrom && range?.previousTo
       ? `${formatDateLabel(range.previousFrom)} to ${formatDateLabel(
@@ -699,7 +744,7 @@ export default function AdminAnalyticsPage() {
         value: formatMajorMoney(metrics.bookedSales?.current),
         previous: formatMajorMoney(metrics.bookedSales?.previous),
         changePercent: metrics.bookedSales?.changePercent,
-        basis: "Non-cancelled orders by order created date.",
+        basis: "Non-cancelled orders by order created date, including delivery and extra fees.",
         accent: "violet",
       },
       {
@@ -707,7 +752,7 @@ export default function AdminAnalyticsPage() {
         value: formatMajorMoney(metrics.deliveredValue?.current),
         previous: formatMajorMoney(metrics.deliveredValue?.previous),
         changePercent: metrics.deliveredValue?.changePercent,
-        basis: "Delivered orders by delivered date.",
+        basis: "Delivered orders by delivered date, including delivery and extra fees.",
         accent: "emerald",
       },
       {
@@ -938,6 +983,8 @@ export default function AdminAnalyticsPage() {
             <SnapshotCard metric={metrics.currentOutstanding} />
           </section>
 
+          <MetricNotes />
+
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -947,6 +994,7 @@ export default function AdminAnalyticsPage() {
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
                   Daily booked sales and order count using order created date.
+                  Booked Sales includes delivery and extra fees.
                 </div>
               </div>
               {trendRows.length > 120 ? (
