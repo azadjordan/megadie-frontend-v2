@@ -41,6 +41,7 @@ import AccountInvoicesReceiptPage from "../pages/Account/AccountInvoicesReceiptP
 
 const AdminLayout = lazy(() => import("../components/layout/AdminLayout"));
 const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
+const AdminAnalyticsPage = lazy(() => import("../pages/Admin/AdminAnalyticsPage"));
 const AdminRequestsPage = lazy(() => import("../pages/Admin/AdminRequestsPage"));
 const AdminRequestDetailsPage = lazy(() =>
   import("../pages/Admin/AdminRequestDetailsPage")
@@ -200,6 +201,7 @@ export default function AppRoutes() {
           }
         >
           <Route index element={<AdminDashboardPage />} />
+          <Route path="analytics" element={<AdminAnalyticsPage />} />
 
           <Route path="requests" element={<AdminRequestsPage />} />
           <Route path="requests/:id" element={<AdminRequestDetailsPage />} />
