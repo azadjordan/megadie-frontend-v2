@@ -20,7 +20,7 @@ import {
   useGetAnalyticsSkusQuery,
 } from "../../features/analytics/analyticsApiSlice";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
-import { formatInvoiceMoneyMinor } from "../../utils/invoiceMoney";
+import { formatInvoiceMoneyMinor, minorToMajor } from "../../utils/invoiceMoney";
 
 const BUSINESS_UTC_OFFSET_MS = 4 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -105,6 +105,19 @@ function dayCountBetween(fromKey, toKey) {
   return Math.round((to.utcMs - from.utcMs) / DAY_MS) + 1;
 }
 
+function isFullCalendarMonth(fromKey, toKey) {
+  const from = parseDateKey(fromKey);
+  const to = parseDateKey(toKey);
+  return Boolean(
+    from &&
+      to &&
+      from.day === 1 &&
+      from.year === to.year &&
+      from.month === to.month &&
+      to.day === daysInMonth(to.year, to.month)
+  );
+}
+
 function canCompareSameDatesLastYear(fromKey, toKey) {
   const from = parseDateKey(fromKey);
   const previousTo = sameDateLastYear(toKey);
@@ -138,6 +151,40 @@ function normalizeCompareMode(value, preset, from, to) {
   }
 
   return compare;
+}
+
+function getComparisonRange(fromKey, toKey, compareMode) {
+  const from = parseDateKey(fromKey);
+  const to = parseDateKey(toKey);
+  const dayCount = dayCountBetween(fromKey, toKey);
+
+  if (!from || !to || dayCount <= 0 || compareMode === COMPARE_MODES.NONE) {
+    return null;
+  }
+
+  if (compareMode === COMPARE_MODES.SAME_DATES_LAST_YEAR) {
+    const previousFrom = sameDateLastYear(fromKey);
+    const previousTo = sameDateLastYear(toKey);
+    if (!canCompareSameDatesLastYear(fromKey, toKey)) return null;
+    return {
+      from: previousFrom.key,
+      to: previousTo.key,
+    };
+  }
+
+  if (isFullCalendarMonth(fromKey, toKey)) {
+    const month = from.month === 1 ? 12 : from.month - 1;
+    const year = from.month === 1 ? from.year - 1 : from.year;
+    return {
+      from: `${year}-${pad2(month)}-01`,
+      to: `${year}-${pad2(month)}-${pad2(daysInMonth(year, month))}`,
+    };
+  }
+
+  return {
+    from: addDays(fromKey, -dayCount),
+    to: addDays(fromKey, -1),
+  };
 }
 
 function getPresetRange(preset) {
@@ -245,6 +292,52 @@ function formatShortDateLabel(dateKey) {
   });
 }
 
+function formatMonthLabel(dateKey) {
+  const parsed = parseDateKey(dateKey);
+  if (!parsed) return "";
+
+  return new Date(parsed.utcMs).toLocaleDateString(undefined, {
+    timeZone: "UTC",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatBucketRangeLabel(fromKey, toKey) {
+  if (!fromKey) return "";
+  if (!toKey || fromKey === toKey) return formatDateLabel(fromKey);
+  return `${formatDateLabel(fromKey)} to ${formatDateLabel(toKey)}`;
+}
+
+function formatBucketTickLabel(fromKey, toKey, granularity) {
+  if (!fromKey) return "";
+
+  if (granularity === "month") {
+    const from = parseDateKey(fromKey);
+    const to = parseDateKey(toKey);
+    if (
+      from &&
+      to &&
+      from.year === to.year &&
+      from.month === to.month
+    ) {
+      return formatMonthLabel(fromKey);
+    }
+  }
+
+  if (granularity === "week" && toKey && fromKey !== toKey) {
+    return `${formatShortDateLabel(fromKey)}-${formatShortDateLabel(toKey)}`;
+  }
+
+  return formatShortDateLabel(fromKey);
+}
+
+function formatGranularityLabel(granularity) {
+  if (granularity === "month") return "Monthly";
+  if (granularity === "week") return "Weekly";
+  return "Daily";
+}
+
 function formatCount(value) {
   const n = Number(value) || 0;
   return new Intl.NumberFormat().format(n);
@@ -266,20 +359,6 @@ function formatMajorMoney(value, currency = "AED") {
 }
 
 function formatCompactMoney(value) {
-  const n = Number(value);
-  const amount = Number.isFinite(n) ? n : 0;
-
-  try {
-    return new Intl.NumberFormat(undefined, {
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(amount);
-  } catch {
-    return String(Math.round(amount));
-  }
-}
-
-function formatCompactNumber(value) {
   const n = Number(value);
   const amount = Number.isFinite(n) ? n : 0;
 
@@ -415,26 +494,52 @@ function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
 
   const row = payload[0]?.payload || {};
+  const currency = row.currency || "AED";
+  const factor = row.minorUnitFactor || 100;
+
   return (
     <div className="rounded-xl bg-white px-3 py-2 text-xs shadow-lg ring-1 ring-slate-200">
-      <div className="font-semibold text-slate-900">{formatDateLabel(label)}</div>
+      <div className="font-semibold text-slate-900">{label}</div>
       <div className="mt-1 text-slate-600">
-        Booked Sales:{" "}
+        Current:{" "}
         <span className="font-semibold text-slate-900">
-          {formatMajorMoney(row.bookedSales)}
+          {formatInvoiceMoneyMinor(row.currentAmountMinor, currency, factor)}
         </span>
       </div>
-      <div className="mt-0.5 text-slate-600">
-        Orders:{" "}
-        <span className="font-semibold text-slate-900">
-          {formatCount(row.orderCount)}
-        </span>
+      <div className="mt-1 text-slate-600">
+        {row.currentRangeLabel}
+        {row.currentCount ? `, ${formatCount(row.currentCount)} invoice${
+          row.currentCount === 1 ? "" : "s"
+        }` : ""}
       </div>
+      {row.comparisonEnabled ? (
+        <>
+          <div className="mt-2 text-slate-600">
+            Prev:{" "}
+            <span className="font-semibold text-slate-900">
+              {formatInvoiceMoneyMinor(
+                row.previousAmountMinor,
+                currency,
+                factor
+              )}
+            </span>
+          </div>
+          <div className="mt-1 text-slate-600">
+            {row.previousRangeLabel}
+            {row.previousCount ? `, ${formatCount(row.previousCount)} invoice${
+              row.previousCount === 1 ? "" : "s"
+            }` : ""}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
 
-function TrendChart({ rows = [] }) {
+function TrendChart({ trend, comparisonEnabled }) {
+  const rows = Array.isArray(trend?.points) ? trend.points : [];
+  const granularity = trend?.granularity || "day";
+
   if (!rows.length) {
     return (
       <div className="rounded-2xl bg-white p-6 text-center text-sm text-slate-500 ring-1 ring-slate-200">
@@ -443,14 +548,47 @@ function TrendChart({ rows = [] }) {
     );
   }
 
-  const chartRows = rows.map((row) => ({
-    date: row.date,
-    bookedSales: Number(row?.bookedSales) || 0,
-    orderCount: Number(row?.orderCount) || 0,
-  }));
-  const chartWidth = Math.max(720, chartRows.length * 22);
+  const chartRows = rows.map((row) => {
+    const currency = row.currency || "AED";
+    const factor = row.minorUnitFactor || 100;
+    return {
+      label: formatBucketTickLabel(
+        row.currentFrom,
+        row.currentTo,
+        granularity
+      ),
+      currentRangeLabel: formatBucketRangeLabel(
+        row.currentFrom,
+        row.currentTo
+      ),
+      previousRangeLabel: formatBucketRangeLabel(
+        row.previousFrom,
+        row.previousTo
+      ),
+      currentAmountMinor: Number(row.currentAmountMinor || 0),
+      previousAmountMinor:
+        row.previousAmountMinor === null || row.previousAmountMinor === undefined
+          ? null
+          : Number(row.previousAmountMinor || 0),
+      currentAmountMajor:
+        minorToMajor(row.currentAmountMinor || 0, factor) ?? 0,
+      previousAmountMajor:
+        row.previousAmountMinor === null || row.previousAmountMinor === undefined
+          ? null
+          : minorToMajor(row.previousAmountMinor || 0, factor) ?? 0,
+      currentCount: Number(row.currentCount || 0),
+      previousCount: Number(row.previousCount || 0),
+      comparisonEnabled: Boolean(
+        comparisonEnabled && row.previousFrom && row.previousTo
+      ),
+      currency,
+      minorUnitFactor: factor,
+    };
+  });
+  const showComparison = chartRows.some((row) => row.comparisonEnabled);
+  const chartWidth = Math.max(720, chartRows.length * (showComparison ? 44 : 30));
   const tickInterval =
-    chartRows.length > 120 ? 13 : chartRows.length > 62 ? 6 : "preserveStartEnd";
+    chartRows.length > 48 ? Math.ceil(chartRows.length / 16) : 0;
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
@@ -460,34 +598,23 @@ function TrendChart({ rows = [] }) {
             <BarChart
               data={chartRows}
               margin={{ top: 8, right: 12, left: 0, bottom: 12 }}
-              barCategoryGap="18%"
+              barCategoryGap="22%"
             >
               <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
               <XAxis
-                dataKey="date"
+                dataKey="label"
                 axisLine={false}
                 tickLine={false}
                 interval={tickInterval}
-                tickFormatter={formatShortDateLabel}
                 tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
                 minTickGap={16}
               />
               <YAxis
-                yAxisId="sales"
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) => formatCompactMoney(value)}
                 tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
                 width={56}
-              />
-              <YAxis
-                yAxisId="orders"
-                orientation="right"
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(value) => formatCompactNumber(value)}
-                tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
-                width={42}
               />
               <Tooltip
                 cursor={{ fill: "#f1f5f9" }}
@@ -497,18 +624,18 @@ function TrendChart({ rows = [] }) {
                 iconType="circle"
                 wrapperStyle={{ fontSize: 12, fontWeight: 600, color: "#475569" }}
               />
+              {showComparison ? (
+                <Bar
+                  dataKey="previousAmountMajor"
+                  name="Prev"
+                  fill="#94a3b8"
+                  radius={[5, 5, 0, 0]}
+                  minPointSize={2}
+                />
+              ) : null}
               <Bar
-                yAxisId="sales"
-                dataKey="bookedSales"
-                name="Booked Sales"
-                fill="#0f766e"
-                radius={[5, 5, 0, 0]}
-                minPointSize={2}
-              />
-              <Bar
-                yAxisId="orders"
-                dataKey="orderCount"
-                name="Orders"
+                dataKey="currentAmountMajor"
+                name="Current"
                 fill="#2563eb"
                 radius={[5, 5, 0, 0]}
                 minPointSize={2}
@@ -518,7 +645,8 @@ function TrendChart({ rows = [] }) {
         </div>
       </div>
       <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
-        Daily totals use order created date.
+        {formatGranularityLabel(granularity)} totals use issued invoices by
+        invoice date.
       </div>
     </div>
   );
@@ -751,7 +879,7 @@ export default function AdminAnalyticsPage() {
   const sameDatesLastYearDisabled = !canCompareSameDatesLastYear(from, to);
 
   const {
-    data,
+    currentData: data,
     isLoading,
     isFetching,
     isError,
@@ -787,15 +915,21 @@ export default function AdminAnalyticsPage() {
     { skip: !rangeIsValid }
   );
 
+  const overviewIsLoading = isLoading || (isFetching && !data);
   const metrics = useMemo(() => data?.metrics || {}, [data?.metrics]);
   const range = data?.range || {};
   const comparison = range?.comparison || {};
   const comparisonEnabled = Boolean(comparison.enabled);
+  const requestedComparisonRange = getComparisonRange(from, to, compare);
+  const visibleComparisonEnabled =
+    comparisonEnabled || Boolean(requestedComparisonRange);
   const selectedCustomer = data?.scope?.customer || null;
   const customerRows = customerData?.customers || [];
   const customerOptions = usersData?.data || usersData?.items || [];
   const skuRows = skuData?.skus || [];
-  const trendRows = data?.trend || [];
+  const trend = data?.trend || {};
+  const trendRows = Array.isArray(trend?.points) ? trend.points : [];
+  const trendGranularity = trend?.granularity || "day";
   const selectedRangeLabel = `${formatDateLabel(from)} to ${formatDateLabel(to)}`;
   const selectedCustomerLabel = selectedCustomer
     ? getCustomerLabel(selectedCustomer)
@@ -807,9 +941,11 @@ export default function AdminAnalyticsPage() {
     ? `Performance for ${selectedCustomerLabel} in this period. Booked Sales includes delivery and extra fees. Outstanding is today's open balance.`
     : "Top customers by booked sales in this period, including delivery and extra fees. Outstanding is today's open balance.";
   const comparisonLabel =
-    comparisonEnabled && comparison?.from && comparison?.to
-      ? `${formatDateLabel(comparison.from)} to ${formatDateLabel(
-          comparison.to
+    requestedComparisonRange || (comparison?.from && comparison?.to)
+      ? `${formatDateLabel(
+          requestedComparisonRange?.from || comparison.from
+        )} to ${formatDateLabel(
+          requestedComparisonRange?.to || comparison.to
         )}`
       : "";
 
@@ -820,7 +956,7 @@ export default function AdminAnalyticsPage() {
         value: formatMajorMoney(metrics.bookedSales?.current),
         previous: formatMajorMoney(metrics.bookedSales?.previous),
         changePercent: metrics.bookedSales?.changePercent,
-        comparisonEnabled,
+        comparisonEnabled: visibleComparisonEnabled,
         basis: "Non-cancelled orders by order created date, including delivery and extra fees.",
         accent: "violet",
       },
@@ -829,7 +965,7 @@ export default function AdminAnalyticsPage() {
         value: formatMajorMoney(metrics.deliveredValue?.current),
         previous: formatMajorMoney(metrics.deliveredValue?.previous),
         changePercent: metrics.deliveredValue?.changePercent,
-        comparisonEnabled,
+        comparisonEnabled: visibleComparisonEnabled,
         basis: "Delivered orders by delivered date, including delivery and extra fees.",
         accent: "emerald",
       },
@@ -846,7 +982,7 @@ export default function AdminAnalyticsPage() {
           metrics.invoiced?.minorUnitFactor || 100
         ),
         changePercent: metrics.invoiced?.changePercent,
-        comparisonEnabled,
+        comparisonEnabled: visibleComparisonEnabled,
         basis: "Issued invoices by invoice date, including manual invoices.",
         accent: "blue",
       },
@@ -863,7 +999,7 @@ export default function AdminAnalyticsPage() {
           metrics.collected?.minorUnitFactor || 100
         ),
         changePercent: metrics.collected?.changePercent,
-        comparisonEnabled,
+        comparisonEnabled: visibleComparisonEnabled,
         basis: "Payments received by payment date.",
         accent: "amber",
       },
@@ -872,12 +1008,12 @@ export default function AdminAnalyticsPage() {
         value: formatCount(metrics.orders?.current),
         previous: formatCount(metrics.orders?.previous),
         changePercent: metrics.orders?.changePercent,
-        comparisonEnabled,
+        comparisonEnabled: visibleComparisonEnabled,
         basis: "Non-cancelled orders by order created date.",
         accent: "slate",
       },
     ],
-    [comparisonEnabled, metrics]
+    [metrics, visibleComparisonEnabled]
   );
 
   const updatePreset = (nextPreset) => {
@@ -976,13 +1112,13 @@ export default function AdminAnalyticsPage() {
       </div>
 
       <section className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:items-end xl:grid-cols-[190px_190px_minmax(240px,1fr)_170px_170px_auto]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:items-end xl:grid-cols-[210px_210px_minmax(260px,1fr)_auto]">
           <div>
             <label
               htmlFor="analytics-preset"
               className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
             >
-              Date Range
+              Period
             </label>
             <select
               id="analytics-preset"
@@ -1011,39 +1147,6 @@ export default function AdminAnalyticsPage() {
             onChange={updateCustomer}
           />
 
-          <div>
-            <label
-              htmlFor="analytics-from"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              From
-            </label>
-            <input
-              id="analytics-from"
-              type="date"
-              value={from}
-              onChange={(event) => updateCustomDate("from", event.target.value)}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="analytics-to"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              To
-            </label>
-            <input
-              id="analytics-to"
-              type="date"
-              value={to}
-              min={from}
-              onChange={(event) => updateCustomDate("to", event.target.value)}
-              className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-            />
-          </div>
-
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
             <button
               type="button"
@@ -1055,6 +1158,51 @@ export default function AdminAnalyticsPage() {
             </button>
           </div>
         </div>
+
+        {preset === "custom" ? (
+          <div className="mt-3 border-t border-slate-200 pt-3">
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <FiCalendar className="h-3.5 w-3.5 text-slate-400" />
+              Custom dates
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[190px_190px]">
+              <div>
+                <label
+                  htmlFor="analytics-from"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  From
+                </label>
+                <input
+                  id="analytics-from"
+                  type="date"
+                  value={from}
+                  onChange={(event) =>
+                    updateCustomDate("from", event.target.value)
+                  }
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="analytics-to"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  To
+                </label>
+                <input
+                  id="analytics-to"
+                  type="date"
+                  value={to}
+                  min={from}
+                  onChange={(event) => updateCustomDate("to", event.target.value)}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <span>
@@ -1087,7 +1235,7 @@ export default function AdminAnalyticsPage() {
         ) : null}
       </section>
 
-      {isLoading ? (
+      {overviewIsLoading ? (
         <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
           <Loader />
         </div>
@@ -1109,20 +1257,23 @@ export default function AdminAnalyticsPage() {
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                   <FiTrendingUp className="h-4 w-4 text-slate-500" />
-                  Business Performance
+                  Invoiced Value Over Time
                 </div>
                 <div className="mt-1 text-xs text-slate-500">
-                  Daily booked sales and order count using order created date.
-                  Booked Sales includes delivery and extra fees.
+                  Issued invoices by invoice date, grouped by{" "}
+                  {trendGranularity}.
                 </div>
               </div>
-              {trendRows.length > 120 ? (
+              {trendRows.length ? (
                 <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                  Daily view may be dense for long ranges.
+                  {formatGranularityLabel(trendGranularity)}
                 </div>
               ) : null}
             </div>
-            <TrendChart rows={trendRows} />
+            <TrendChart
+              trend={trend}
+              comparisonEnabled={comparisonEnabled}
+            />
           </section>
 
           <section className="space-y-3">
