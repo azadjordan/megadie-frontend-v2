@@ -54,6 +54,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [companyWebsite, setCompanyWebsite] = useState('')
   const [submitError, setSubmitError] = useState('')
   const hasConfirm = confirmPassword.length > 0
   const isTooShort = password.length > 0 && password.length < 6
@@ -125,6 +126,7 @@ export default function RegisterPage() {
         email: trimmedEmail,
         password,
         clientAudit: buildClientAudit(location, pageStartedAt),
+        companyWebsite,
       }).unwrap()
 
       try {
@@ -175,6 +177,17 @@ export default function RegisterPage() {
       }
     >
       <form onSubmit={submitHandler} className="space-y-4">
+        <input
+          type="text"
+          name="companyWebsite"
+          value={companyWebsite}
+          onChange={(e) => setCompanyWebsite(e.target.value)}
+          autoComplete="off"
+          tabIndex={-1}
+          className="hidden"
+          aria-hidden="true"
+        />
+
         <div>
           <label className="text-sm font-semibold text-slate-700">
             Client/Company Name

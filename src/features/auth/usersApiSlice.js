@@ -15,10 +15,24 @@ export const usersApiSlice = apiSlice.injectEndpoints({
     }),
 
     register: builder.mutation({
-      query: ({ name, phoneNumber, email, password, clientAudit }) => ({
+      query: ({
+        name,
+        phoneNumber,
+        email,
+        password,
+        clientAudit,
+        companyWebsite,
+      }) => ({
         url: "/users",
         method: "POST",
-        body: { name, phoneNumber, email, password, clientAudit },
+        body: {
+          name,
+          phoneNumber,
+          email,
+          password,
+          clientAudit,
+          companyWebsite,
+        },
       }),
       invalidatesTags: [{ type: "User", id: "LIST" }],
     }),
