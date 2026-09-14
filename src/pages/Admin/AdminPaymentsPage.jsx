@@ -75,8 +75,12 @@ function getPaymentRowMeta(payment, state = {}) {
       : null;
   const user =
     payment?.user && typeof payment.user === "object" ? payment.user : null;
-  const currency = invoice?.currency || "AED";
-  const factor = invoice?.minorUnitFactor || 100;
+  const receipt =
+    payment?.receipt && typeof payment.receipt === "object"
+      ? payment.receipt
+      : null;
+  const currency = invoice?.currency || receipt?.currency || "AED";
+  const factor = invoice?.minorUnitFactor || receipt?.minorUnitFactor || 100;
   const invoiceId =
     typeof payment?.invoice === "string"
       ? payment.invoice
@@ -86,10 +90,12 @@ function getPaymentRowMeta(payment, state = {}) {
   return {
     invoice,
     user,
+    receipt,
     currency,
     factor,
     invoiceId,
     rowDeleting,
+    isReceiptAllocation: Boolean(receipt?._id),
   };
 }
 
@@ -242,6 +248,10 @@ export default function AdminPaymentsPage() {
 
   const handleDelete = async (payment) => {
     if (!payment?._id) return;
+    if (payment?.receipt) {
+      toast.info("Receipt allocations cannot be deleted individually.");
+      return;
+    }
     const ok = window.confirm(
       "Delete this payment? The invoice balance will be updated."
     );
@@ -525,6 +535,11 @@ export default function AdminPaymentsPage() {
                       <div className="text-xs text-slate-500">
                         Created: {formatDateTime(p.createdAt) || "-"}
                       </div>
+                      {row.isReceiptAllocation ? (
+                        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-violet-600">
+                          Receipt allocation
+                        </div>
+                      ) : null}
                     </div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                       {p.paymentMethod || "Method"}
@@ -568,14 +583,18 @@ export default function AdminPaymentsPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(p)}
-                      disabled={isDeleting && row.rowDeleting}
+                      disabled={row.isReceiptAllocation || (isDeleting && row.rowDeleting)}
                       className={[
                         "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider ring-1 transition",
-                        isDeleting && row.rowDeleting
+                        row.isReceiptAllocation || (isDeleting && row.rowDeleting)
                           ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                           : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
                       ].join(" ")}
-                      title="Delete payment"
+                      title={
+                        row.isReceiptAllocation
+                          ? "Receipt allocations cannot be deleted individually"
+                          : "Delete payment"
+                      }
                       aria-label="Delete payment"
                     >
                       <FiTrash2 className="h-3.5 w-3.5" />
@@ -617,6 +636,11 @@ export default function AdminPaymentsPage() {
                           <div className="mt-0.5 text-xs text-slate-500">
                             Created: {formatDateTime(p.createdAt) || "-"}
                           </div>
+                          {row.isReceiptAllocation ? (
+                            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-violet-600">
+                              Receipt allocation
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 text-slate-700 min-w-[150px]">
                           {row.invoiceId ? (
@@ -650,14 +674,22 @@ export default function AdminPaymentsPage() {
                           <button
                             type="button"
                             onClick={() => handleDelete(p)}
-                            disabled={isDeleting && row.rowDeleting}
+                            disabled={
+                              row.isReceiptAllocation ||
+                              (isDeleting && row.rowDeleting)
+                            }
                             className={[
                               "inline-flex items-center justify-center rounded-xl p-2 ring-1 transition",
-                              isDeleting && row.rowDeleting
+                              row.isReceiptAllocation ||
+                              (isDeleting && row.rowDeleting)
                                 ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                                 : "bg-white text-rose-600 ring-slate-200 hover:bg-rose-50",
                             ].join(" ")}
-                            title="Delete payment"
+                            title={
+                              row.isReceiptAllocation
+                                ? "Receipt allocations cannot be deleted individually"
+                                : "Delete payment"
+                            }
                             aria-label="Delete payment"
                           >
                             <FiTrash2 className="h-4 w-4" />

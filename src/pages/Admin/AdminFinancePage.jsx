@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiChevronDown, FiFileText, FiSearch } from "react-icons/fi";
+import { FiChevronDown, FiDollarSign, FiFileText, FiSearch } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
+import ReceiveCustomerPaymentModal from "../../components/admin/ReceiveCustomerPaymentModal";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
@@ -56,6 +57,7 @@ export default function AdminFinancePage() {
   const [soaCutoffDate, setSoaCutoffDate] = useState(() => getTodayInputValue());
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const dropdownRef = useRef(null);
   const todayInputValue = getTodayInputValue();
 
@@ -72,9 +74,9 @@ export default function AdminFinancePage() {
     page: 1,
     limit: 100,
     search: debouncedSearch,
-    role: "all",
+    role: "user",
     sort: "name",
-    approvalStatus: "all",
+    approvalStatus: "Approved",
   }, {
     skip: !userDropdownOpen,
   });
@@ -184,6 +186,12 @@ export default function AdminFinancePage() {
 
   return (
     <div className="space-y-6">
+      <ReceiveCustomerPaymentModal
+        open={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        initialCustomer={selectedUser}
+      />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Finance</div>
@@ -191,9 +199,19 @@ export default function AdminFinancePage() {
             Track balances and generate statements of account.
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-          {selectedUserId ? "Client scoped" : "All clients"}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            {selectedUserId ? "Client scoped" : "All clients"}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPaymentModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+          >
+            <FiDollarSign className="h-4 w-4" />
+            Receive Payment
+          </button>
         </div>
       </div>
 
@@ -235,15 +253,30 @@ export default function AdminFinancePage() {
         </div>
 
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-          <div className="text-xs font-semibold text-slate-600">Scope</div>
+          <div className="text-xs font-semibold text-slate-600">
+            Receive payment
+          </div>
           <div className="mt-2 text-sm font-semibold text-slate-900">
-            {selectedUserId ? "Selected client" : "All clients"}
+            {selectedUserId
+              ? "Ready for selected client"
+              : "Choose client in payment flow"}
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            {selectedUserId
-              ? selectedUserLabel
-              : "Summary reflects company-wide balances."}
+            Apply one received amount across unpaid issued invoices.
           </div>
+          <button
+            type="button"
+            onClick={() => setPaymentModalOpen(true)}
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-900 ring-1 ring-slate-200 transition hover:bg-slate-50"
+          >
+            <FiDollarSign className="h-4 w-4 text-slate-500" />
+            {selectedUserId ? "Receive for client" : "Receive payment"}
+          </button>
+          {selectedUserId ? (
+            <div className="mt-2 truncate text-xs text-slate-500">
+              {selectedUserLabel}
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -354,7 +387,7 @@ export default function AdminFinancePage() {
               ) : null}
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              Open the dropdown to search up to 100 clients.
+              Open the dropdown to search approved clients.
             </div>
           </div>
         </div>

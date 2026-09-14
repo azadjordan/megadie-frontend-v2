@@ -18,6 +18,12 @@ const ADMIN_PAYMENT_SORTS = [
   "oldest",
 ];
 
+function getInvoiceTagId(invoice) {
+  if (!invoice) return "";
+  if (typeof invoice === "string") return invoice;
+  return String(invoice?._id || invoice?.id || invoice || "");
+}
+
 export const paymentsApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getPaymentsAdmin: builder.query({
@@ -79,13 +85,54 @@ export const paymentsApiSlice = apiSlice.injectEndpoints({
       },
     }),
 
+    getCustomerPaymentPreview: builder.query({
+      query: ({ userId, amount } = {}) => ({
+        url: `/payments/customer/${userId}/preview`,
+        method: "POST",
+        body: amount ? { amount } : {},
+      }),
+      transformResponse: (response) => response?.data ?? response,
+      providesTags: () => [
+        { type: "Invoice", id: "SUMMARY" },
+        { type: "Invoice", id: "LIST" },
+      ],
+    }),
+
+    allocateCustomerPayment: builder.mutation({
+      query: ({ userId, ...body }) => ({
+        url: `/payments/customer/${userId}/allocate`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (result) => {
+        const tags = [
+          { type: "Invoice", id: "SUMMARY" },
+          { type: "Invoice", id: "LIST" },
+          { type: "Payment", id: "LIST" },
+          { type: "Analytics", id: "OVERVIEW" },
+          { type: "Analytics", id: "CUSTOMERS" },
+        ];
+        const allocations = result?.data?.allocations || result?.allocations || [];
+        for (const allocation of allocations) {
+          const invoiceId = getInvoiceTagId(allocation?.invoice);
+          if (invoiceId) tags.push({ type: "Invoice", id: invoiceId });
+        }
+        return tags;
+      },
+    }),
+
     deletePaymentByAdmin: builder.mutation({
       query: (paymentId) => ({
         url: `/payments/${paymentId}`,
         method: "DELETE",
       }),
       invalidatesTags: (result) => {
-        const tags = [{ type: "Payment", id: "LIST" }];
+        const tags = [
+          { type: "Payment", id: "LIST" },
+          { type: "Invoice", id: "SUMMARY" },
+          { type: "Analytics", id: "OVERVIEW" },
+          { type: "Analytics", id: "CUSTOMERS" },
+        ];
         if (result?.paymentId) {
           tags.push({ type: "Payment", id: result.paymentId });
         }
@@ -100,6 +147,8 @@ export const paymentsApiSlice = apiSlice.injectEndpoints({
 });
 
 export const {
+  useAllocateCustomerPaymentMutation,
+  useGetCustomerPaymentPreviewQuery,
   useGetPaymentsAdminQuery,
   useAddPaymentToInvoiceMutation,
   useDeletePaymentByAdminMutation,
