@@ -123,7 +123,7 @@ export default function AdminFinancePage() {
   }, [users, selectedUser, selectedUserId]);
 
   const soaScopeLabel = soaStartDate
-    ? `Shows the current balance with ${soaStartDate} to ${soaCutoffDate} grouped first.`
+    ? `Adds ${soaStartDate} to ${soaCutoffDate} invoices above other current dues.`
     : "Shows current due invoices only.";
 
   const handleSoa = async () => {
@@ -397,8 +397,8 @@ export default function AdminFinancePage() {
             Statement of Account (SOA)
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            Generate a current client statement. Add a From Date to group a
-            selected period first.
+            Generate a current client statement. Add a From Date to highlight
+            that period first.
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -444,8 +444,8 @@ export default function AdminFinancePage() {
               : "Select a client to enable SOA."}
           </div>
           <div className="mt-2 text-xs text-slate-500">
-            Date range controls grouping inside the SOA. Without a From Date,
-            only current due invoices are shown.
+            Date range adds a focus table above other current due invoices.
+            Without a From Date, only current due invoices are shown.
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
