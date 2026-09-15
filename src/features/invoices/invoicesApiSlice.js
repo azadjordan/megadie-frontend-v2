@@ -5,6 +5,7 @@ const ADMIN_PAYMENT_STATUSES = ["Unpaid", "PartiallyPaid", "Paid"];
 const ADMIN_INVOICE_SORTS = [
   "newest",
   "oldest",
+  "dueOldest",
   "createdNewest",
   "createdOldest",
   "amountHigh",

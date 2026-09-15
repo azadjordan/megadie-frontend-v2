@@ -199,6 +199,7 @@ const PAYMENT_STATUS_FILTER_VALUES = new Set([
 const SORT_FILTER_VALUES = new Set([
   "newest",
   "oldest",
+  "dueOldest",
   "createdNewest",
   "createdOldest",
   "amountHigh",
@@ -710,6 +711,7 @@ export default function AdminInvoicesPage() {
               >
                 <option value="newest">Invoice date (newest)</option>
                 <option value="oldest">Invoice date (oldest)</option>
+                <option value="dueOldest">Due date (oldest)</option>
                 <option value="createdNewest">Created (newest)</option>
                 <option value="createdOldest">Created (oldest)</option>
                 <option value="amountHigh">Amount (high)</option>
