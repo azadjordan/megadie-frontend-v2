@@ -123,8 +123,8 @@ export default function AdminFinancePage() {
   }, [users, selectedUser, selectedUserId]);
 
   const soaScopeLabel = soaStartDate
-    ? `Shows ${soaStartDate} to ${soaCutoffDate} with opening balance included.`
-    : `Shows all invoices up to ${soaCutoffDate}.`;
+    ? `Shows the current balance with ${soaStartDate} to ${soaCutoffDate} grouped first.`
+    : `Shows the current statement up to ${soaCutoffDate}.`;
 
   const handleSoa = async () => {
     if (!selectedUserId || !soaCutoffDate) return;
@@ -397,8 +397,8 @@ export default function AdminFinancePage() {
             Statement of Account (SOA)
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            Generate a client statement with opening balance, invoices issued,
-            recorded payments, and closing balance.
+            Generate a current client statement with selected-period invoices
+            grouped first.
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -417,8 +417,8 @@ export default function AdminFinancePage() {
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
               />
               <div className="mt-1 text-[11px] text-slate-500">
-                Optional. Older unpaid or partially paid invoices are included
-                in the opening balance.
+                Optional. Outstanding invoices outside this period appear
+                separately.
               </div>
             </div>
             <div>
@@ -445,8 +445,8 @@ export default function AdminFinancePage() {
               : "Select a client to enable SOA."}
           </div>
           <div className="mt-2 text-xs text-slate-500">
-            Date range controls the generated SOA. Balance cards above remain
-            current.
+            Date range controls grouping inside the SOA. Balance cards above
+            remain current.
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
