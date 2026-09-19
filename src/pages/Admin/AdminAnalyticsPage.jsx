@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FiCalendar, FiRefreshCw, FiTrendingUp } from "react-icons/fi";
+import { FiCalendar, FiHeart, FiRefreshCw, FiTrendingUp } from "react-icons/fi";
 import {
   Bar,
   BarChart,
@@ -15,6 +15,7 @@ import {
 import ErrorMessage from "../../components/common/ErrorMessage";
 import Loader from "../../components/common/Loader";
 import {
+  useGetAnalyticsCharityQuery,
   useGetAnalyticsCustomersQuery,
   useGetAnalyticsOverviewQuery,
   useGetAnalyticsSkusQuery,
@@ -867,6 +868,104 @@ function SkuPerformanceTable({ rows = [] }) {
   );
 }
 
+function CharityImpactPanel({ charity }) {
+  const currency = charity?.currency || "AED";
+  const factor = charity?.minorUnitFactor || 100;
+  const rows = Array.isArray(charity?.breakdown) ? charity.breakdown : [];
+  const totalDonation = formatInvoiceMoneyMinor(
+    charity?.totalDonationMinor || 0,
+    currency,
+    factor
+  );
+  const totalEligibleUnits = formatCount(charity?.totalEligibleUnits || 0);
+  const deliveredOrderCount = formatCount(charity?.deliveredOrderCount || 0);
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
+      <div className="grid grid-cols-1 divide-y divide-slate-100 md:grid-cols-3 md:divide-x md:divide-y-0">
+        <div className="p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Donation Due
+          </div>
+          <div className="mt-2 text-xl font-semibold text-slate-900 tabular-nums">
+            {totalDonation}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            Based on delivered eligible products.
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Eligible Pieces
+          </div>
+          <div className="mt-2 text-xl font-semibold text-slate-900 tabular-nums">
+            {totalEligibleUnits}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            Ribbon and creasing matrix quantities.
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Delivered Orders
+          </div>
+          <div className="mt-2 text-xl font-semibold text-slate-900 tabular-nums">
+            {deliveredOrderCount}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            Orders with at least one eligible item.
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border-t border-slate-100">
+        <table className="min-w-[720px] w-full text-left text-sm">
+          <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Rule</th>
+              <th className="px-4 py-3 text-right">Pieces</th>
+              <th className="px-4 py-3 text-right">Rate</th>
+              <th className="px-4 py-3 text-right">Donation</th>
+              <th className="px-4 py-3 text-right">Products</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row) => (
+              <tr key={row.key} className="hover:bg-slate-50">
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-slate-900">
+                    {row.label}
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-500">
+                    {row.description}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
+                  {formatCount(row.unitsSold)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                  {formatInvoiceMoneyMinor(row.rateMinor, currency, factor)}
+                </td>
+                <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
+                  {formatInvoiceMoneyMinor(row.donationMinor, currency, factor)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                  {formatCount(row.productCount)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+        Rules: Grosgrain ribbon AED 1.00, other ribbons AED 0.50, creasing
+        matrix AED 1.00 per delivered piece. Other product types are excluded.
+      </div>
+    </div>
+  );
+}
+
 export default function AdminAnalyticsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const state = readAnalyticsState(searchParams);
@@ -914,6 +1013,15 @@ export default function AdminAnalyticsPage() {
     { from, to, customerId, limit: 10 },
     { skip: !rangeIsValid }
   );
+  const {
+    data: charityData,
+    isLoading: isCharityLoading,
+    isError: isCharityError,
+    error: charityError,
+  } = useGetAnalyticsCharityQuery(
+    { from, to, customerId },
+    { skip: !rangeIsValid }
+  );
 
   const overviewIsLoading = isLoading || (isFetching && !data);
   const metrics = useMemo(() => data?.metrics || {}, [data?.metrics]);
@@ -927,6 +1035,7 @@ export default function AdminAnalyticsPage() {
   const customerRows = customerData?.customers || [];
   const customerOptions = usersData?.data || usersData?.items || [];
   const skuRows = skuData?.skus || [];
+  const charity = charityData?.charity || {};
   const trend = data?.trend || {};
   const trendRows = Array.isArray(trend?.points) ? trend.points : [];
   const trendGranularity = trend?.granularity || "day";
@@ -1250,6 +1359,33 @@ export default function AdminAnalyticsPage() {
               <MetricCard key={metric.label} {...metric} />
             ))}
             <SnapshotCard metric={metrics.currentOutstanding} />
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <FiHeart className="h-4 w-4 text-slate-500" />
+                  Charity Impact
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Donation estimate from delivered eligible products in this
+                  period.
+                </div>
+              </div>
+              {isCharityLoading ? (
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  Loading...
+                </div>
+              ) : null}
+            </div>
+            {isCharityError ? (
+              <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+                <ErrorMessage error={charityError} />
+              </div>
+            ) : (
+              <CharityImpactPanel charity={charity} />
+            )}
           </section>
 
           <section className="space-y-3">

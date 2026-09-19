@@ -9,6 +9,7 @@ import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { useGetUsersAdminQuery } from "../../features/users/usersApiSlice";
 import {
   useGetInvoicesAdminSummaryQuery,
+  useLazyGetOutstandingBalancePdfQuery,
   useLazyGetStatementOfAccountPdfQuery,
 } from "../../features/invoices/invoicesApiSlice";
 
@@ -53,6 +54,7 @@ function getTodayInputValue() {
 export default function AdminFinancePage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [soaUserId, setSoaUserId] = useState(null);
+  const [outstandingReportUserId, setOutstandingReportUserId] = useState(null);
   const [soaStartDate, setSoaStartDate] = useState("");
   const [soaCutoffDate, setSoaCutoffDate] = useState(() => getTodayInputValue());
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -105,6 +107,8 @@ export default function AdminFinancePage() {
 
   const [getStatementOfAccountPdf, { isFetching: isSoaLoading }] =
     useLazyGetStatementOfAccountPdfQuery();
+  const [getOutstandingBalancePdf, { isFetching: isOutstandingReportLoading }] =
+    useLazyGetOutstandingBalancePdfQuery();
 
   const unpaidSummary = summaryData?.unpaidTotalMinor ?? 0;
   const overdueSummary = summaryData?.overdueTotalMinor ?? 0;
@@ -123,8 +127,8 @@ export default function AdminFinancePage() {
   }, [users, selectedUser, selectedUserId]);
 
   const soaScopeLabel = soaStartDate
-    ? `Adds ${soaStartDate} to ${soaCutoffDate} invoices above other current dues.`
-    : "Shows current due invoices only.";
+    ? `Builds a ledger from ${soaStartDate} to ${soaCutoffDate} with opening and closing balances.`
+    : `Builds full account activity through ${soaCutoffDate}.`;
 
   const handleSoa = async () => {
     if (!selectedUserId || !soaCutoffDate) return;
@@ -173,6 +177,42 @@ export default function AdminFinancePage() {
     }
   };
 
+  const handleOutstandingBalance = async () => {
+    if (!selectedUserId) return;
+
+    const user = userOptions.find(
+      (u) => String(u._id || u.id) === String(selectedUserId)
+    );
+
+    try {
+      setOutstandingReportUserId(selectedUserId);
+      const blob = await getOutstandingBalancePdf(selectedUserId).unwrap();
+      const safeName = String(user?.name || selectedUserId)
+        .trim()
+        .replace(/[^A-Za-z0-9_-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      const fileName = `outstanding-balance-${safeName || selectedUserId}-${todayInputValue}.pdf`;
+      const url = window.URL.createObjectURL(blob);
+      const newTab = window.open(url, "_blank", "noopener,noreferrer");
+
+      if (!newTab) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      toast.error(friendlyApiError(err));
+    } finally {
+      setOutstandingReportUserId(null);
+    }
+  };
+
   useEffect(() => {
     if (!userDropdownOpen) return;
     const handleClickOutside = (event) => {
@@ -196,7 +236,7 @@ export default function AdminFinancePage() {
         <div className="min-w-0">
           <div className="text-lg font-semibold text-slate-900">Finance</div>
           <div className="text-sm text-slate-500">
-            Track balances and generate statements of account.
+            Track balances, receive payments, and generate client reports.
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -215,268 +255,321 @@ export default function AdminFinancePage() {
         </div>
       </div>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-          <div className="text-xs font-semibold text-slate-600">Unpaid balance</div>
-          <div className="mt-2 text-lg font-semibold text-slate-900 tabular-nums">
-            {summaryLoading
-              ? "..."
-              : summaryError
-              ? "--"
-              : moneyMinorRounded(unpaidSummary, summaryCurrency, summaryFactor)}
-          </div>
-          <div className="mt-1 text-xs text-slate-500">
-            {summaryLoading
-              ? "Loading..."
-              : summaryError
-              ? "Unavailable"
-              : `${formatCount(unpaidCount)} invoice${unpaidCount === 1 ? "" : "s"}`}
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-rose-50/70 p-4 ring-1 ring-rose-100">
-          <div className="text-xs font-semibold text-rose-700">Overdue balance</div>
-          <div className="mt-2 text-lg font-semibold text-rose-800 tabular-nums">
-            {summaryLoading
-              ? "..."
-              : summaryError
-              ? "--"
-              : moneyMinorRounded(overdueSummary, summaryCurrency, summaryFactor)}
-          </div>
-          <div className="mt-1 text-xs text-rose-700">
-            {summaryLoading
-              ? "Loading..."
-              : summaryError
-              ? "Unavailable"
-              : `${formatCount(overdueCount)} overdue`}
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-          <div className="text-xs font-semibold text-slate-600">
-            Receive payment
-          </div>
-          <div className="mt-2 text-sm font-semibold text-slate-900">
-            {selectedUserId
-              ? "Ready for selected client"
-              : "Choose client in payment flow"}
-          </div>
-          <div className="mt-1 text-xs text-slate-500">
-            Apply one received amount across unpaid issued invoices.
-          </div>
-          <button
-            type="button"
-            onClick={() => setPaymentModalOpen(true)}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-900 ring-1 ring-slate-200 transition hover:bg-slate-50"
-          >
-            <FiDollarSign className="h-4 w-4 text-slate-500" />
-            {selectedUserId ? "Receive for client" : "Receive payment"}
-          </button>
-          {selectedUserId ? (
-            <div className="mt-2 truncate text-xs text-slate-500">
-              {selectedUserLabel}
-            </div>
-          ) : null}
-        </div>
-      </section>
-
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-          <div className="text-sm font-semibold text-slate-900">
-            Client scope
-          </div>
-          <div className="mt-1 text-xs text-slate-500">
-            Choose a client to scope balances and generate an SOA.
-          </div>
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+            <div className="text-sm font-semibold text-slate-900">
+              Client scope
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              Choose a client to scope balances, payments, and reports.
+            </div>
 
-          <div className="mt-4 max-w-xl">
-            <label
-              htmlFor="finance-user-select"
-              className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-            >
-              Client
-            </label>
-            <div className="relative" ref={dropdownRef}>
-              <button
-                type="button"
-                id="finance-user-select"
-                onClick={() => setUserDropdownOpen((open) => !open)}
-                className="flex w-full items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            <div className="mt-4 max-w-xl">
+              <label
+                htmlFor="finance-user-select"
+                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
               >
-                <span className="truncate">{selectedUserLabel}</span>
-                <FiChevronDown className="h-4 w-4 text-slate-400" />
-              </button>
+                Client
+              </label>
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  id="finance-user-select"
+                  onClick={() => setUserDropdownOpen((open) => !open)}
+                  className="flex w-full items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                >
+                  <span className="truncate">{selectedUserLabel}</span>
+                  <FiChevronDown className="h-4 w-4 text-slate-400" />
+                </button>
 
-              {userDropdownOpen ? (
-                <div className="absolute z-30 mt-2 w-full rounded-xl bg-white p-2 shadow-xl ring-1 ring-slate-200">
-                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                    <FiSearch className="h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                      placeholder="Search clients..."
-                      className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
-                    />
+                {userDropdownOpen ? (
+                  <div className="absolute z-30 mt-2 w-full rounded-xl bg-white p-2 shadow-xl ring-1 ring-slate-200">
+                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                      <FiSearch className="h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        placeholder="Search clients..."
+                        className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-100 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedUser(null);
+                          setUserSearch("");
+                          setUserDropdownOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      >
+                        <span>All clients</span>
+                        {!selectedUserId ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                            Selected
+                          </span>
+                        ) : null}
+                      </button>
+
+                      {usersLoading || isDebouncing ? (
+                        <Loader />
+                      ) : usersError ? (
+                        <div className="px-3 py-2 text-xs text-rose-600">
+                          {friendlyApiError(usersErrorMessage)}
+                        </div>
+                      ) : users.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-slate-500">
+                          No clients found.
+                        </div>
+                      ) : (
+                        userOptions.map((user) => {
+                          const userId = user._id || user.id;
+                          const label = user.name
+                            ? `${user.name}${
+                                user.email ? ` - ${user.email}` : ""
+                              }`
+                            : user.email || userId;
+                          const isSelected =
+                            String(userId) === String(selectedUserId);
+                          return (
+                            <button
+                              type="button"
+                              key={userId}
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setUserSearch("");
+                                setUserDropdownOpen(false);
+                              }}
+                              className={[
+                                "flex w-full items-center justify-between px-3 py-2 text-left text-xs",
+                                isSelected
+                                  ? "bg-slate-100 text-slate-900"
+                                  : "text-slate-600 hover:bg-slate-50",
+                              ].join(" ")}
+                            >
+                              <span className="truncate">{label}</span>
+                              {isSelected ? (
+                                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] text-slate-600">
+                                  Selected
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
+                ) : null}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                Open the dropdown to search approved clients.
+              </div>
+            </div>
+          </div>
 
-                  <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-100 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedUser(null);
-                        setUserSearch("");
-                        setUserDropdownOpen(false);
-                      }}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                    >
-                      <span>All clients</span>
-                      {!selectedUserId ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
-                          Selected
-                        </span>
-                      ) : null}
-                    </button>
-
-                    {usersLoading || isDebouncing ? (
-                      <Loader />
-                    ) : usersError ? (
-                      <div className="px-3 py-2 text-xs text-rose-600">
-                        {friendlyApiError(usersErrorMessage)}
-                      </div>
-                    ) : users.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-slate-500">
-                        No clients found.
-                      </div>
-                    ) : (
-                      userOptions.map((user) => {
-                        const userId = user._id || user.id;
-                        const label = user.name
-                          ? `${user.name}${user.email ? ` - ${user.email}` : ""}`
-                          : user.email || userId;
-                        const isSelected =
-                          String(userId) === String(selectedUserId);
-                        return (
-                          <button
-                            type="button"
-                            key={userId}
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setUserSearch("");
-                              setUserDropdownOpen(false);
-                            }}
-                            className={[
-                              "flex w-full items-center justify-between px-3 py-2 text-left text-xs",
-                              isSelected
-                                ? "bg-slate-100 text-slate-900"
-                                : "text-slate-600 hover:bg-slate-50",
-                            ].join(" ")}
-                          >
-                            <span className="truncate">{label}</span>
-                            {isSelected ? (
-                              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] text-slate-600">
-                                Selected
-                              </span>
-                            ) : null}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">
+                  Balance snapshot
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {selectedUserId ? selectedUserLabel : "All clients"}
+                </div>
+              </div>
+              {summaryError ? (
+                <div className="text-xs font-semibold text-rose-600">
+                  Unavailable
                 </div>
               ) : null}
             </div>
-            <div className="mt-2 text-xs text-slate-500">
-              Open the dropdown to search approved clients.
+
+            <div className="mt-4 grid grid-cols-1 border-t border-slate-200 sm:grid-cols-2">
+              <div className="py-3 sm:pr-4">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Unpaid balance
+                </div>
+                <div className="mt-1 text-base font-semibold text-slate-900 tabular-nums">
+                  {summaryLoading
+                    ? "..."
+                    : summaryError
+                    ? "--"
+                    : moneyMinorRounded(
+                        unpaidSummary,
+                        summaryCurrency,
+                        summaryFactor
+                      )}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {summaryLoading
+                    ? "Loading..."
+                    : summaryError
+                    ? "Unavailable"
+                    : `${formatCount(unpaidCount)} invoice${
+                        unpaidCount === 1 ? "" : "s"
+                  }`}
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 py-3 sm:border-l sm:border-t-0 sm:pl-4">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">
+                  Overdue balance
+                </div>
+                <div className="mt-1 text-base font-semibold text-rose-800 tabular-nums">
+                  {summaryLoading
+                    ? "..."
+                    : summaryError
+                    ? "--"
+                    : moneyMinorRounded(
+                        overdueSummary,
+                        summaryCurrency,
+                        summaryFactor
+                      )}
+                </div>
+                <div className="mt-1 text-xs text-rose-700">
+                  {summaryLoading
+                    ? "Loading..."
+                    : summaryError
+                    ? "Unavailable"
+                    : `${formatCount(overdueCount)} overdue`}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-          <div className="text-sm font-semibold text-slate-900">
-            Statement of Account (SOA)
-          </div>
-          <div className="mt-1 text-xs text-slate-500">
-            Generate a current client statement. Add a From Date to highlight
-            that period first.
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="finance-soa-start"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-              >
-                From Date
-              </label>
-              <input
-                id="finance-soa-start"
-                type="date"
-                value={soaStartDate}
-                max={soaCutoffDate || todayInputValue}
-                onChange={(e) => setSoaStartDate(e.target.value)}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              />
-              <div className="mt-1 text-[11px] text-slate-500">
-                Optional. Leave blank to show current due invoices only.
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+            <div className="text-sm font-semibold text-slate-900">
+              Statement of Account
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              Ledger report with account activity, opening balance, payments,
+              and closing balance.
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="finance-soa-start"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  From Date
+                </label>
+                <input
+                  id="finance-soa-start"
+                  type="date"
+                  value={soaStartDate}
+                  max={soaCutoffDate || todayInputValue}
+                  onChange={(e) => setSoaStartDate(e.target.value)}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
+                <div className="mt-1 text-[11px] text-slate-500">
+                  Optional. Leave blank to start from the first account activity.
+                </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="finance-soa-cutoff"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Up To Date
+                </label>
+                <input
+                  id="finance-soa-cutoff"
+                  type="date"
+                  value={soaCutoffDate}
+                  min={soaStartDate || undefined}
+                  max={todayInputValue}
+                  onChange={(e) => setSoaCutoffDate(e.target.value)}
+                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                />
               </div>
             </div>
-            <div>
-              <label
-                htmlFor="finance-soa-cutoff"
-                className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+            <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {selectedUserId
+                ? `Ready for ${selectedUserLabel}. ${soaScopeLabel}`
+                : "Select a client to enable SOA."}
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              Date fields apply only to this report.
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSoa}
+                disabled={
+                  !selectedUserId ||
+                  !soaCutoffDate ||
+                  (isSoaLoading && soaUserId === selectedUserId)
+                }
+                className={[
+                  "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
+                  selectedUserId && soaCutoffDate
+                    ? "bg-violet-600 text-white hover:bg-violet-500"
+                    : "cursor-not-allowed bg-slate-100 text-slate-400",
+                ].join(" ")}
               >
-                Up To Date
-              </label>
-              <input
-                id="finance-soa-cutoff"
-                type="date"
-                value={soaCutoffDate}
-                min={soaStartDate || undefined}
-                max={todayInputValue}
-                onChange={(e) => setSoaCutoffDate(e.target.value)}
-                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-              />
+                <FiFileText className="h-4 w-4" />
+                {isSoaLoading && soaUserId === selectedUserId
+                  ? "Generating..."
+                  : "Generate SOA"}
+              </button>
+              {!selectedUserId ? (
+                <span className="text-xs text-slate-500">
+                  Select a client first.
+                </span>
+              ) : !soaCutoffDate ? (
+                <span className="text-xs text-slate-500">
+                  Choose a cutoff date.
+                </span>
+              ) : null}
             </div>
           </div>
-          <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            {selectedUserId
-              ? `Ready for ${selectedUserLabel}. ${soaScopeLabel}`
-              : "Select a client to enable SOA."}
-          </div>
-          <div className="mt-2 text-xs text-slate-500">
-            Date range adds a focus table above other current due invoices.
-            Without a From Date, only current due invoices are shown.
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSoa}
-              disabled={
-                !selectedUserId ||
-                !soaCutoffDate ||
-                (isSoaLoading && soaUserId === selectedUserId)
-              }
-              className={[
-                "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
-                selectedUserId && soaCutoffDate
-                  ? "bg-violet-600 text-white hover:bg-violet-500"
-                  : "cursor-not-allowed bg-slate-100 text-slate-400",
-              ].join(" ")}
-            >
-              <FiFileText className="h-4 w-4" />
-              {isSoaLoading && soaUserId === selectedUserId
-                ? "Generating..."
-                : "Generate SOA"}
-            </button>
-            {!selectedUserId ? (
-              <span className="text-xs text-slate-500">
-                Select a client first.
-              </span>
-            ) : !soaCutoffDate ? (
-              <span className="text-xs text-slate-500">
-                Choose a cutoff date.
-              </span>
-            ) : null}
+
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+            <div className="text-sm font-semibold text-slate-900">
+              Outstanding Balance Statement
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              Current collection report. Lists only issued invoices that are not
+              fully paid, using today&apos;s recorded balances.
+            </div>
+            <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {selectedUserId
+                ? `Ready for ${selectedUserLabel}. This report is not affected by the SOA date range.`
+                : "Select a client to enable Outstanding Balance Statement."}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleOutstandingBalance}
+                disabled={
+                  !selectedUserId ||
+                  (isOutstandingReportLoading &&
+                    outstandingReportUserId === selectedUserId)
+                }
+                className={[
+                  "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
+                  selectedUserId
+                    ? "bg-slate-900 text-white hover:bg-slate-800"
+                    : "cursor-not-allowed bg-slate-100 text-slate-400",
+                ].join(" ")}
+              >
+                <FiFileText className="h-4 w-4" />
+                {isOutstandingReportLoading &&
+                outstandingReportUserId === selectedUserId
+                  ? "Generating..."
+                  : "Outstanding Balance"}
+              </button>
+              {!selectedUserId ? (
+                <span className="text-xs text-slate-500">
+                  Select a client first.
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>

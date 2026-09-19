@@ -41,10 +41,23 @@ export const analyticsApiSlice = apiSlice.injectEndpoints({
       transformResponse: (response) => response?.data ?? response,
       providesTags: () => [{ type: "Analytics", id: "SKUS" }],
     }),
+    getAnalyticsCharity: builder.query({
+      query: ({ from, to, customerId } = {}) => {
+        const params = new URLSearchParams();
+        if (from) params.set("from", from);
+        if (to) params.set("to", to);
+        if (customerId) params.set("customerId", customerId);
+        const qs = params.toString();
+        return qs ? `/analytics/charity?${qs}` : "/analytics/charity";
+      },
+      transformResponse: (response) => response?.data ?? response,
+      providesTags: () => [{ type: "Analytics", id: "CHARITY" }],
+    }),
   }),
 });
 
 export const {
+  useGetAnalyticsCharityQuery,
   useGetAnalyticsCustomersQuery,
   useGetAnalyticsOverviewQuery,
   useGetAnalyticsSkusQuery,

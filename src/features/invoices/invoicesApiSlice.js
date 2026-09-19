@@ -139,6 +139,14 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       },
       keepUnusedDataFor: 0,
     }),
+    getOutstandingBalancePdf: builder.query({
+      query: (userId) => ({
+        url: `/invoices/outstanding-balance/${userId}`,
+        method: "GET",
+        responseHandler: (response) => response.blob(),
+      }),
+      keepUnusedDataFor: 0,
+    }),
 
     updateInvoiceByAdmin: builder.mutation({
       query: ({ id, ...body }) => ({
@@ -195,6 +203,7 @@ export const {
   useGetInvoiceByIdQuery,
   useLazyGetInvoiceByIdQuery,
   useLazyGetInvoicePdfQuery,
+  useLazyGetOutstandingBalancePdfQuery,
   useLazyGetStatementOfAccountPdfQuery,
   useUpdateInvoiceByAdminMutation,
   useDeleteInvoiceByAdminMutation,
