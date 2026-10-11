@@ -1,4 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit'
+import { setupListeners } from '@reduxjs/toolkit/query'
 import { apiSlice } from './apiSlice'
 import authReducer from '../features/auth/authSlice'
 import cartReducer from '../features/cart/cartSlice'
@@ -53,6 +54,7 @@ export const store = configureStore({
 })
 
 if (isBrowser) {
+  setupListeners(store.dispatch)
   let lastItemsRef = store.getState().cart.items
   let saveTimer
 

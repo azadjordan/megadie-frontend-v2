@@ -1,6 +1,17 @@
 @import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+.maintenance-notice-track { display: flex; width: max-content; }
+.maintenance-notice-text, .maintenance-notice-copy { flex: none; white-space: nowrap; }
+.maintenance-notice-moving > span { padding-right: 3rem; }
+.maintenance-notice-moving { animation: maintenance-notice-scroll 28s linear infinite; }
+@keyframes maintenance-notice-scroll { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .maintenance-notice-track { width: 100%; animation: none; transform: none; }
+  .maintenance-notice-text { flex: 1; white-space: normal; overflow-wrap: anywhere; }
+  .maintenance-notice-copy { display: none; }
+}
+
 @layer base {
   html {
     scrollbar-gutter: stable;

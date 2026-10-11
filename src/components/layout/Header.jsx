@@ -18,6 +18,7 @@ import {
   restartSessionCheck,
 } from "../../features/auth/authSlice";
 import { useLogoutMutation } from "../../features/auth/usersApiSlice";
+import MaintenanceNoticeBanner from "../common/MaintenanceNoticeBanner";
 
 const desktopLink = ({ isActive }) =>
   `inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
@@ -300,6 +301,7 @@ export default function Header() {
             </button>
           </div>
         </nav>
+        <MaintenanceNoticeBanner />
 
         {/* Pending approval banner (more informative) */}
         {isPendingApproval ? (

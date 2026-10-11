@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import MaintenanceNoticeControl from "../../components/admin/MaintenanceNoticeControl";
 
 import { useGetAdminQuotesQuery } from "../../features/quotes/quotesApiSlice";
 import { useGetOrdersAdminQuery } from "../../features/orders/ordersApiSlice";
@@ -250,6 +251,8 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </div>
+
+      <MaintenanceNoticeControl />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-8">
         <StatCard
