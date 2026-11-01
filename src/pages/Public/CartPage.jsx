@@ -13,7 +13,7 @@ import {
 } from "../../features/cart/cartSlice";
 import QuantityControl from "../../components/common/QuantityControl";
 import { useCreateQuoteMutation } from "../../features/quotes/quotesApiSlice";
-import { useGetProductsAvailabilityQuery } from "../../features/products/productsApiSlice";
+import useProductAvailability from "../../hooks/useProductAvailability";
 import {
   PRODUCT_AVAILABILITY_STATUS,
   resolveProductAvailability,
@@ -75,18 +75,7 @@ export default function CartPage() {
     [items]
   );
 
-  const { data: availabilityRows = [] } = useGetProductsAvailabilityQuery(
-    productIds,
-    { skip: productIds.length === 0 }
-  );
-
-  const availabilityByProductId = useMemo(
-    () =>
-      new Map(
-        availabilityRows.map((row) => [String(row.productId), row])
-      ),
-    [availabilityRows]
-  );
+  const { availabilityByProductId } = useProductAvailability(productIds);
 
   const summary = useMemo(() => {
     const lines = items.length;
@@ -228,7 +217,7 @@ export default function CartPage() {
                         isAvailable: availabilityRow.isAvailable,
                         availability: availabilityRow.availability,
                       }
-                    : item;
+                    : { ...item, availability: null };
                   const availability = resolveProductAvailability(
                     itemForAvailability,
                     quantity

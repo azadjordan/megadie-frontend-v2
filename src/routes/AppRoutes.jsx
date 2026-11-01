@@ -39,6 +39,8 @@ import AccountNotFoundPage from "../pages/Account/AccountNotFoundPage";
 // ✅ Billing (Invoices list + Invoice details + Order details)
 import AccountInvoicesReceiptPage from "../pages/Account/AccountInvoicesReceiptPage";
 
+const CatalogPage = lazy(() => import("../pages/Public/CatalogPage"));
+
 const AdminLayout = lazy(() => import("../components/layout/AdminLayout"));
 const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
 const AdminAnalyticsPage = lazy(() => import("../pages/Admin/AdminAnalyticsPage"));
@@ -127,6 +129,16 @@ export default function AppRoutes() {
         <Route element={<RequireAuth />}>
           <Route element={<RequireShopApproval />}>
             <Route path="/shop" element={<ShopPage />} />
+            <Route path="/shop/catalog/:productType" element={
+              <Suspense fallback={<p role="status">Loading catalog…</p>}>
+                <CatalogPage />
+              </Suspense>
+            } />
+            <Route path="/shop/catalog/:productType/:catalogId/:entryId" element={
+              <Suspense fallback={<p role="status">Loading ribbon options…</p>}>
+                <CatalogPage />
+              </Suspense>
+            } />
             <Route path="/shop/:id" element={<ProductDetailsPage />} />
             <Route path="/cart" element={<CartPage />} />
           </Route>

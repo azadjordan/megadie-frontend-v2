@@ -28,6 +28,7 @@ export default function ProductTypeNav({
               key={pt}
               type="button"
               disabled={disabled}
+              aria-pressed={isActive}
               onClick={() => onChange(pt)}
               className={[
                 'inline-flex items-center rounded-xl px-3 py-2 text-sm text-left transition',

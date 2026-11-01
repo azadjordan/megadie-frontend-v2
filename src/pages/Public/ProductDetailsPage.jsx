@@ -8,6 +8,7 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import QuantityControl from "../../components/common/QuantityControl";
 import { addToCart } from "../../features/cart/cartSlice";
 import { useGetProductByIdQuery } from "../../features/products/productsApiSlice";
+import { AVAILABILITY_QUERY_OPTIONS } from "../../features/products/availabilityQueryOptions";
 import {
   PRODUCT_AVAILABILITY_STATUS,
   formatUnitCount,
@@ -59,11 +60,12 @@ export default function ProductDetailsPage() {
   const location = useLocation();
 
   const {
-    data: product,
+    currentData: product,
     isLoading,
+    isFetching,
     isError,
     error,
-  } = useGetProductByIdQuery(id, { skip: !id });
+  } = useGetProductByIdQuery(id, { ...AVAILABILITY_QUERY_OPTIONS, skip: !id });
 
   const [quantity, setQuantity] = useState(1);
   const [isAdded, setIsAdded] = useState(false);
@@ -167,7 +169,7 @@ export default function ProductDetailsPage() {
     navigate("/shop");
   };
 
-  if (isLoading) return <Loader />;
+  if (isLoading || (!product && isFetching)) return <Loader />;
 
   if (isError) {
     return <ErrorMessage error={error} />;

@@ -1,4 +1,5 @@
 import { apiSlice } from '../../app/apiSlice'
+import { AVAILABILITY_TAGS } from './availabilityQueryOptions'
 
 export const productsApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
@@ -32,7 +33,7 @@ export const productsApiSlice = apiSlice.injectEndpoints({
     getProductById: builder.query({
       query: (id) => `/products/${id}`,
       transformResponse: (response) => response?.data, // product object
-      providesTags: (result, error, id) => [{ type: 'Product', id }],
+      providesTags: (result, error, id) => [{ type: 'Product', id }, ...AVAILABILITY_TAGS],
     }),
 
     getProductsAvailability: builder.query({
@@ -50,8 +51,9 @@ export const productsApiSlice = apiSlice.injectEndpoints({
                 id: row.productId,
               })),
               { type: 'Product', id: 'AVAILABILITY' },
+              ...AVAILABILITY_TAGS,
             ]
-          : [{ type: 'Product', id: 'AVAILABILITY' }],
+          : [{ type: 'Product', id: 'AVAILABILITY' }, ...AVAILABILITY_TAGS],
     }),
 
     // Admin product meta (enums for create/edit UI)

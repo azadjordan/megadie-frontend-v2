@@ -1,12 +1,9 @@
 // src/pages/Public/ShopPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigationType } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { FaFilter } from "react-icons/fa";
 
-import {
-  useGetProductsAvailabilityQuery,
-  useGetProductsQuery,
-} from "../../features/products/productsApiSlice";
+import { useGetProductsQuery } from "../../features/products/productsApiSlice";
 import { useGetFilterConfigsQuery } from "../../features/filters/filterConfigsApiSlice";
 import { useGetCategoriesQuery } from "../../features/categories/categoriesApiSlice";
 
@@ -14,9 +11,13 @@ import ErrorMessage from "../../components/common/ErrorMessage";
 import ProductCard from "../../components/common/ProductCard";
 import Pagination from "../../components/common/Pagination";
 import ShopFilters from "../../components/shop/ShopFilters";
-import ProductTypeNav from "../../components/shop/ProductTypeNav";
+import ShopEntrance from "../../components/shop/ShopEntrance";
+import ShopHeader from "../../components/shop/ShopHeader";
 
 import useShopQueryState from "../../hooks/useShopQueryState";
+import useShopScrollRestoration from "../../hooks/useShopScrollRestoration";
+import useProductAvailability from "../../hooks/useProductAvailability";
+import { ribbonCatalogLocation } from "../../utils/ribbonCatalogNavigation";
 
 const DEFAULT_PRODUCT_TYPE = "Ribbon";
 const PAGE_LIMIT = 16;
@@ -84,12 +85,37 @@ function FilterPanelSkeleton() {
 }
 
 export default function ShopPage() {
+  const [params] = useSearchParams();
+  const configsQ = useGetFilterConfigsQuery();
+  const filterConfigs = configsQ.data ?? EMPTY_ARRAY;
+  const productTypes = filterConfigs.map((config) => config.productType);
+  // Preserve old Ribbon filter links that omitted the default product type.
+  const hasLegacyFilters = ["categoryKeys", "categoryIds", "categoryId", "size", "sizes", "catalogCode"]
+    .some((key) => params.has(key));
+  const selectedType = params.get("productType") || (hasLegacyFilters ? DEFAULT_PRODUCT_TYPE : "");
+
+  if (configsQ.isLoading) {
+    return <div role="status" className="py-8 text-slate-600">Loading shop...</div>;
+  }
+  if (configsQ.isError) {
+    return (
+      <div className="space-y-4">
+        <ErrorMessage message="The shop could not load. Please try again." />
+        <button type="button" onClick={() => configsQ.refetch()} className="rounded-xl bg-violet-600 px-4 py-2 text-white">Try again</button>
+      </div>
+    );
+  }
+  if (!selectedType || !productTypes.includes(selectedType)) {
+    return <ShopEntrance productTypes={productTypes} notice={selectedType ? "That product type is unavailable. Please choose another." : undefined} />;
+  }
+  return <ShopProducts key={selectedType} configsQ={configsQ} />;
+}
+
+function ShopProducts({ configsQ }) {
   const location = useLocation();
-  const navigationType = useNavigationType();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const {
     productType,
-    setProductType,
     filters,
     toggleFilterValue,
     clearAllFilters,
@@ -100,15 +126,24 @@ export default function ShopPage() {
     defaultLimit: PAGE_LIMIT,
   });
   const resultsRef = useRef(null);
+  const filterDialogRef = useRef(null);
+  const filterCloseRef = useRef(null);
+  const singleCode = filters.catalogCode?.length === 1 ? filters.catalogCode[0] : null;
+  const singleMaterial = filters.categoryKeys?.length === 1 ? filters.categoryKeys[0] : null;
+  const fromCatalog = typeof location.state?.ribbonCatalogSearch === "string";
+  const catalogReturn = productType === "Ribbon" && fromCatalog
+    ? ribbonCatalogLocation(location.state.ribbonCatalogSearch)
+    : null;
+  const savedSelection = location.state?.ribbonCatalogSelection;
+  const selectedColor = productType === "Ribbon" && singleCode &&
+    savedSelection?.code === singleCode && savedSelection?.materialKey === singleMaterial
+    ? savedSelection : null;
+  const title = singleCode ? selectedColor?.label ? `${singleCode} · ${selectedColor.label}` : `Code ${singleCode}` : productType;
+  const breadcrumbs = [{label:'Home',to:'/'}, {label:'Shop',to:'/shop'},
+    ...(catalogReturn ? [{label:'Ribbon',to:catalogReturn}, {label:singleCode ? title : 'Products'}] : [{label:productType}])];
 
   // 1) Filter configs
-  const configsQ = useGetFilterConfigsQuery();
   const filterConfigs = configsQ.data ?? EMPTY_ARRAY;
-
-  const productTypes = useMemo(
-    () => filterConfigs.map((c) => c.productType),
-    [filterConfigs]
-  );
 
   const activeFilterConfig = useMemo(
     () => filterConfigs.find((c) => c.productType === productType) || null,
@@ -146,6 +181,10 @@ export default function ShopPage() {
     }
     return map;
   }, [needsCategories, categories, activeFilterConfig]);
+  const materialLabel = selectedColor?.materialLabel || categoryLabelByKey[singleMaterial];
+  const description = materialLabel
+    ? `${materialLabel}${productType === 'Ribbon' ? ' ribbon' : ` · ${productType}`}`
+    : singleCode ? productType : undefined;
 
   // 3) Products
   const productsQ = useGetProductsQuery({
@@ -154,8 +193,10 @@ export default function ShopPage() {
     includeAvailability: false,
   });
 
-  const rawProducts = productsQ.data?.products ?? EMPTY_ARRAY;
-  const pagination = productsQ.data?.pagination ?? null;
+  const rawProducts = productsQ.currentData?.products ?? EMPTY_ARRAY;
+  const pagination = productsQ.currentData?.pagination ?? null;
+  const loadingProducts = productsQ.isLoading || (!productsQ.currentData && productsQ.isFetching);
+  const hasMultiplePages = Number(pagination?.totalPages) > 1;
   const productIds = useMemo(
     () =>
       rawProducts
@@ -164,19 +205,7 @@ export default function ShopPage() {
         .map(String),
     [rawProducts]
   );
-  const availabilityQ = useGetProductsAvailabilityQuery(productIds, {
-    skip: productIds.length === 0,
-  });
-  const availabilityRows = availabilityQ.currentData ?? EMPTY_ARRAY;
-  const availabilityByProductId = useMemo(
-    () =>
-      new Map(
-        availabilityRows
-          .filter((row) => row?.productId)
-          .map((row) => [String(row.productId), row])
-      ),
-    [availabilityRows]
-  );
+  const { availabilityByProductId } = useProductAvailability(productIds);
   const products = useMemo(
     () =>
       rawProducts.map((product) => {
@@ -198,8 +227,7 @@ export default function ShopPage() {
     [rawProducts, availabilityByProductId]
   );
 
-  const scrollKey = `shop-scroll:${location.pathname}${location.search}`;
-  const hasRestoredScroll = useRef(false);
+  useShopScrollRestoration(Boolean(productsQ.currentData) || productsQ.isError);
 
   const hasActiveFilters =
     Object.values(filters || {}).some((arr) => Array.isArray(arr) && arr.length);
@@ -215,21 +243,20 @@ export default function ShopPage() {
   const showingText = useMemo(() => {
     if (!pagination) {
       const n = products.length;
-      if (n === 0) return "Showing 0 items";
-      return `Showing 1 to ${n} of ${n} item${n !== 1 ? "s" : ""}`;
+      return `${n} option${n !== 1 ? 's' : ''}`;
     }
 
     const page = pagination.page ?? 1;
     const limit = pagination.limit ?? productsQueryParams?.limit ?? PAGE_LIMIT;
     const total = pagination.total ?? 0;
 
-    if (total === 0) return "Showing 0 items";
+    if (total === 0) return '0 options';
+    if (products.length === 0) return `0 of ${total} options`;
+    if (total <= limit) return `${total} option${total !== 1 ? 's' : ''}`;
 
     const start = (page - 1) * limit + 1;
     const end = Math.min(start + products.length - 1, total);
-    return `Showing ${start} to ${end} of ${total} item${
-      total !== 1 ? "s" : ""
-    }`;
+    return `${start}–${end} of ${total} options`;
   }, [pagination, products.length, productsQueryParams?.limit]);
 
   const handlePageChange = (nextPage) => {
@@ -252,16 +279,20 @@ export default function ShopPage() {
   };
 
   useEffect(() => {
-    return () => {
-      sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
-    };
-  }, [scrollKey]);
-
-  useEffect(() => {
     if (!filtersOpen) return;
-
+    const opener = document.activeElement;
+    filterCloseRef.current?.focus();
     const handleKey = (event) => {
       if (event.key === "Escape") setFiltersOpen(false);
+      if (event.key !== "Tab") return;
+      const controls = filterDialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]');
+      const first = controls?.[0];
+      const last = controls?.[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first?.focus();
+      }
     };
 
     document.addEventListener("keydown", handleKey);
@@ -270,31 +301,9 @@ export default function ShopPage() {
     return () => {
       document.removeEventListener("keydown", handleKey);
       document.body.style.overflow = "";
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, [filtersOpen]);
-
-  useEffect(() => {
-    if (hasRestoredScroll.current) return;
-    if (navigationType !== "POP") return;
-    if (productsQ.isLoading || productsQ.isFetching) return;
-
-    const raw = sessionStorage.getItem(scrollKey);
-    const y = raw ? parseInt(raw, 10) : 0;
-
-    if (Number.isFinite(y)) {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, y);
-      });
-    }
-
-    hasRestoredScroll.current = true;
-  }, [
-    navigationType,
-    productsQ.isLoading,
-    productsQ.isFetching,
-    products.length,
-    scrollKey,
-  ]);
 
   const renderFilterNotice = (message) => (
     <div className="rounded-2xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/80">
@@ -302,7 +311,7 @@ export default function ShopPage() {
     </div>
   );
 
-  const renderFilterControls = ({ stacked = false } = {}) => {
+  const renderFilterControls = () => {
     if (configsQ.isLoading) {
       return <FilterPanelSkeleton />;
     }
@@ -313,15 +322,6 @@ export default function ShopPage() {
 
     return (
       <>
-        <ProductTypeNav
-          productTypes={productTypes}
-          value={productType}
-          onChange={(v) => {
-            setProductType(v);
-          }}
-          stacked={stacked}
-        />
-
         {activeFilterConfig ? (
           <ShopFilters
             config={activeFilterConfig}
@@ -342,30 +342,10 @@ export default function ShopPage() {
     );
   };
 
-  if (productsQ.isError) {
-    const msg =
-      productsQ.error?.data?.message ||
-      productsQ.error?.error ||
-      "Failed to load products from server.";
-    return <ErrorMessage message={msg} />;
-  }
-
   return (
-    <div className="space-y-5 pt-8 lg:pt-0">
-      <button
-        type="button"
-        onClick={() => setFiltersOpen(true)}
-        className="fixed left-4 z-[60] inline-flex items-center gap-2 rounded-lg bg-violet-50/80 px-3 py-1.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200/70 shadow-sm shadow-violet-200/30 backdrop-blur lg:hidden"
-        style={{ top: "calc(var(--app-header-h, 64px) + 0.75rem)" }}
-      >
-        <FaFilter className="h-4 w-4" />
-        Filters
-        {activeFilterCount > 0 ? (
-          <span className="rounded-full bg-violet-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800">
-            {activeFilterCount}
-          </span>
-        ) : null}
-      </button>
+    <div className="space-y-3">
+      <ShopHeader title={title} description={description} breadcrumbs={breadcrumbs}
+        parent={{label:catalogReturn ? 'Ribbon colors' : 'Product types',to:catalogReturn || '/shop'}} />
 
       {filtersOpen ? (
         <div className="fixed inset-0 z-[70] lg:hidden">
@@ -374,10 +354,14 @@ export default function ShopPage() {
             onClick={() => setFiltersOpen(false)}
           />
           <div
+            ref={filterDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shop-filter-title"
             className="absolute inset-2 flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
-              <div className="text-sm font-semibold text-slate-900">
+              <div id="shop-filter-title" className="text-sm font-semibold text-slate-900">
                 Filters
                 {activeFilterCount > 0 ? (
                   <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
@@ -386,6 +370,7 @@ export default function ShopPage() {
                 ) : null}
               </div>
               <button
+                ref={filterCloseRef}
                 type="button"
                 onClick={() => setFiltersOpen(false)}
                 className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
@@ -395,7 +380,7 @@ export default function ShopPage() {
             </div>
 
             <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-4 py-4">
-              {renderFilterControls({ stacked: true })}
+              {renderFilterControls()}
             </div>
 
             <div className="shrink-0 border-t border-slate-200 bg-white p-3">
@@ -411,29 +396,19 @@ export default function ShopPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* Filters + product types (left rail) */}
-        <aside className="hidden space-y-4 lg:col-span-3 lg:block">
-          <div className="space-y-4 lg:sticky lg:top-16 lg:self-start">
-            {renderFilterControls()}
-          </div>
-        </aside>
-
-        {/* Results */}
-        <section ref={resultsRef} className="space-y-4 lg:col-span-9">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {productsQ.isLoading ? (
-              <span
-                aria-hidden="true"
-                className="h-3.5 w-32 animate-pulse rounded-full bg-slate-200"
-              />
-            ) : (
-              <span className="whitespace-nowrap text-xs text-slate-500">
-                {showingText}
-              </span>
-            )}
-            {!productsQ.isLoading && pagination ? (
-              <div className="w-full sm:w-auto">
+      <div ref={resultsRef} className="space-y-3">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          <div className="flex min-h-6 flex-wrap items-center gap-x-3 gap-y-3 lg:col-span-9 lg:col-start-4">
+            <button type="button" onClick={() => setFiltersOpen(true)}
+              className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-violet-700 lg:hidden">
+              <FaFilter aria-hidden="true" className="h-4 w-4" />Filters
+              {activeFilterCount > 0 && <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-xs">{activeFilterCount}</span>}
+            </button>
+            <span role="status" className="text-sm text-slate-500">
+              {loadingProducts ? 'Loading options…' : productsQ.isError ? 'Options unavailable' : showingText}
+            </span>
+            {!loadingProducts && hasMultiplePages ? (
+              <div className="w-full sm:ml-auto sm:w-auto">
                 <div className="sm:hidden">
                   <Pagination
                     pagination={pagination}
@@ -460,40 +435,56 @@ export default function ShopPage() {
               </div>
             ) : null}
           </div>
+        </div>
 
-          {productsQ.isLoading ? (
-            <ProductGridSkeleton />
-          ) : products.length === 0 ? (
-            <div className="rounded-2xl bg-white/90 p-4 text-sm text-slate-500 ring-1 ring-slate-200/80">
-              No products available for this selection.
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          {/* Filters and product cards share the same starting edge. */}
+          <aside className="hidden space-y-4 lg:col-span-3 lg:block">
+            <div className="space-y-4 lg:sticky lg:top-16 lg:self-start">
+              {renderFilterControls()}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {products.map((p) => (
-                <ProductCard key={p._id || p.id} product={p} />
-              ))}
-            </div>
-          )}
+          </aside>
 
-          {!productsQ.isLoading ? (
-            <div className="flex justify-center">
-              <Pagination
-                variant="full"
-                pagination={pagination}
-                onPageChange={handlePageChange}
-                showSummary={false}
-                density="comfortable"
-                tone="violet"
-              />
-            </div>
-          ) : null}
+          <section className="space-y-4 lg:col-span-9">
+            {productsQ.isError ? (
+              <div className="space-y-3">
+                <ErrorMessage message="Products could not load. Please try again." />
+                <button type="button" onClick={() => productsQ.refetch()} className="rounded-xl bg-violet-600 px-4 py-2 text-white">Try again</button>
+              </div>
+            ) : loadingProducts ? (
+              <ProductGridSkeleton />
+            ) : products.length === 0 ? (
+              <div className="rounded-2xl bg-white/90 p-4 text-sm text-slate-500 ring-1 ring-slate-200/80">
+                No products available for this selection.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {products.map((p, index) => (
+                  <ProductCard key={p._id || p.id} product={p} priority={index < 2} />
+                ))}
+              </div>
+            )}
 
-          {productsQ.isFetching && !productsQ.isLoading ? (
-            <p className="text-[11px] text-right text-slate-400">
-              Updating products...
-            </p>
-          ) : null}
-        </section>
+            {!loadingProducts && hasMultiplePages ? (
+              <div className="flex justify-center">
+                <Pagination
+                  variant="full"
+                  pagination={pagination}
+                  onPageChange={handlePageChange}
+                  showSummary={false}
+                  density="comfortable"
+                  tone="violet"
+                />
+              </div>
+            ) : null}
+
+            {productsQ.isFetching && !productsQ.isLoading ? (
+              <p className="text-[11px] text-right text-slate-400">
+                Updating products...
+              </p>
+            ) : null}
+          </section>
+        </div>
       </div>
     </div>
   );

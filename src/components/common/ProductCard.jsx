@@ -68,7 +68,7 @@ const resolveProduct = (raw) => {
   return firstNested || raw
 }
 
-export default function ProductCard({ product }) {
+export default function ProductCard({ product, priority = false }) {
   const dispatch = useDispatch()
   const item = useMemo(() => resolveProduct(product), [product])
   const image = pickOptimizedImage(item)
@@ -116,8 +116,6 @@ export default function ProductCard({ product }) {
       'bg-emerald-50 text-emerald-700 ring-emerald-200',
     [PRODUCT_AVAILABILITY_STATUS.PARTIAL]:
       'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    [PRODUCT_AVAILABILITY_STATUS.MAYBE]:
-      'bg-slate-50 text-slate-700 ring-slate-200',
     [PRODUCT_AVAILABILITY_STATUS.UNAVAILABLE]:
       'bg-rose-50 text-rose-700 ring-rose-200',
   }[availability.status]
@@ -150,14 +148,16 @@ export default function ProductCard({ product }) {
           <span className="truncate">Current stock: 0</span>
         </span>
       ) : null}
-      <span
-        className={[
-          'inline-flex max-w-full items-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none shadow-sm ring-1',
-          availabilityClass,
-        ].join(' ')}
-      >
-        <span className="truncate">{availabilityBadgeText}</span>
-      </span>
+      {availability.status !== PRODUCT_AVAILABILITY_STATUS.MAYBE && (
+        <span
+          className={[
+            'inline-flex max-w-full items-center rounded-full px-2 py-1 text-[11px] font-semibold leading-none shadow-sm ring-1',
+            availabilityClass,
+          ].join(' ')}
+        >
+          <span className="truncate">{availabilityBadgeText}</span>
+        </span>
+      )}
       {showSourcingBadge ? (
         <span className="inline-flex max-w-full items-center rounded-full bg-white/95 px-2 py-1 text-[11px] font-semibold leading-none text-amber-800 shadow-sm ring-1 ring-amber-200">
           <span className="truncate">
@@ -183,7 +183,9 @@ export default function ProductCard({ product }) {
               src={image}
               alt={name}
               className="h-full w-full object-cover"
-              loading="lazy"
+              width="600"
+              height="400"
+              loading={priority ? 'eager' : 'lazy'}
               decoding="async"
               onContextMenu={(e) => e.preventDefault()}
               onDragStart={(e) => e.preventDefault()}
@@ -208,7 +210,9 @@ export default function ProductCard({ product }) {
             src={image}
             alt={name}
             className="h-full w-full object-cover"
-            loading="lazy"
+            width="600"
+            height="400"
+            loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             onContextMenu={(e) => e.preventDefault()}
             onDragStart={(e) => e.preventDefault()}

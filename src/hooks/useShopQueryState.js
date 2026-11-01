@@ -1,6 +1,6 @@
 // src/hooks/useShopQueryState.js
 import { useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 const DEFAULT_PRODUCT_TYPE = "Ribbon";
 const DEFAULT_PAGE = 1;
@@ -30,6 +30,7 @@ export default function useShopQueryState(options = {}) {
   const defaultLimit = options.defaultLimit || DEFAULT_LIMIT;
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const { state: navigationState } = useLocation();
 
   const state = useMemo(() => {
     const productType = searchParams.get("productType") || defaultProductType;
@@ -64,10 +65,10 @@ export default function useShopQueryState(options = {}) {
           next.set("page", String(p));
           return next;
         },
-        { replace: true }
+        { replace: true, state: navigationState }
       );
     },
-    [setSearchParams]
+    [setSearchParams, navigationState]
   );
 
   const setProductType = useCallback(
@@ -82,10 +83,10 @@ export default function useShopQueryState(options = {}) {
           if (sort) next.set("sort", sort);
           return next;
         },
-        { replace: true }
+        { replace: false, state: nextProductType === state.productType ? navigationState : null }
       );
     },
-    [setSearchParams, defaultProductType]
+    [setSearchParams, defaultProductType, state.productType, navigationState]
   );
 
   const toggleFilterValue = useCallback(
@@ -118,10 +119,10 @@ export default function useShopQueryState(options = {}) {
           next.set("page", "1"); // reset pagination on filter change
           return next;
         },
-        { replace: true }
+        { replace: true, state: navigationState }
       );
     },
-    [setSearchParams]
+    [setSearchParams, navigationState]
   );
 
   const setFilter = useCallback(
@@ -139,10 +140,10 @@ export default function useShopQueryState(options = {}) {
           next.set("page", "1");
           return next;
         },
-        { replace: true }
+        { replace: true, state: navigationState }
       );
     },
-    [setSearchParams]
+    [setSearchParams, navigationState]
   );
 
   const clearAllFilters = useCallback(() => {
@@ -157,9 +158,9 @@ export default function useShopQueryState(options = {}) {
         next.set("page", "1");
         return next;
       },
-      { replace: true }
+      { replace: true, state: navigationState }
     );
-  }, [setSearchParams]);
+  }, [setSearchParams, navigationState]);
 
   // This is what you pass into useGetProductsQuery(...)
   const productsQueryParams = useMemo(() => {

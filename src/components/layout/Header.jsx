@@ -36,6 +36,7 @@ const drawerLink = ({ isActive }) =>
 
 export default function Header() {
   const { pathname } = useLocation();
+  const isShopSection = pathname === '/shop' || pathname.startsWith('/shop/');
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
@@ -188,10 +189,10 @@ export default function Header() {
 
           {/* Desktop nav */}
           <div className="hidden items-center gap-4 md:flex">
-            <NavLink to="/shop" className={desktopLink}>
+            <Link to="/shop" aria-current={isShopSection ? 'page' : undefined} className={desktopLink({isActive:isShopSection})}>
               <FaStore size={18} />
               Shop
-            </NavLink>
+            </Link>
 
             <NavLink to="/cart" className={desktopLink}>
               <span className="relative flex items-center">
@@ -261,7 +262,8 @@ export default function Header() {
               type="button"
               onClick={() => navigate("/shop")}
               aria-label="Shop"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-violet-200 hover:text-violet-700"
+              aria-current={isShopSection ? 'page' : undefined}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm transition hover:border-violet-200 hover:text-violet-700 ${isShopSection ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-700'}`}
             >
               <FaStore size={18} />
               Shop
@@ -357,12 +359,12 @@ export default function Header() {
               {/* Scrollable content */}
               <div className="flex-1 space-y-2 overflow-y-auto p-4">
                 {/* Primary navigation */}
-                <NavLink to="/shop" className={drawerLink}>
+                <Link to="/shop" aria-current={isShopSection ? 'page' : undefined} className={drawerLink({isActive:isShopSection})}>
                   <span className="flex items-center gap-3">
                     <FaStore size={20} />
                     Shop
                   </span>
-                </NavLink>
+                </Link>
 
                 <NavLink to="/cart" className={drawerLink}>
                   <span className="flex items-center gap-3">
