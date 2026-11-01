@@ -6,9 +6,9 @@ import useShopScrollRestoration from '../../hooks/useShopScrollRestoration';
 import { productTypeCatalogPath } from '../../utils/ribbonCatalogNavigation';
 
 const PRODUCT_TYPE_IMAGES = {
-  Ribbon: 'https://megadie.s3.eu-central-1.amazonaws.com/product+types/ribbon.png',
-  'Creasing Matrix': 'https://megadie.s3.eu-central-1.amazonaws.com/product+types/creasing.png',
-  'Double Face Tape': 'https://megadie.s3.eu-central-1.amazonaws.com/product+types/dft.png',
+  Ribbon: 'https://megadie.s3.eu-central-1.amazonaws.com/product+types/ribbons.webp',
+  'Creasing Matrix': 'https://megadie.s3.eu-central-1.amazonaws.com/product+types/creasing.webp',
+  'Double Face Tape': 'https://megadie.s3.eu-central-1.amazonaws.com/product+types/dft.webp',
 };
 
 function ProductTypeImage({ type, priority }) {
