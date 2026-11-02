@@ -6,7 +6,7 @@ import { buildCourierShareText, getCourierMissingFields, hasCourierProfileChange
 const white = "RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL";
 const cream = "RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL";
 const details = { contactName: "Order Recipient", phoneNumber: "+123456", address: "Alain Sinaiyah", googleMapsUrl: "https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic", secondaryPhoneNumber: "PRIVATE-BACKUP-PHONE", notes: "PRIVATE-DELIVERY-NOTES" };
-const sheet = { label: "ASPP-9E7D51", orderNumber: "ORD-261101-9E7D51", status: "Shipping", delivery: { details }, problems: [], notices: [],
+const sheet = { assignedTo: "Ahmed", label: "ASPP-9E7D51", orderNumber: "ORD-261101-9E7D51", status: "Shipping", delivery: { details }, problems: [], notices: [],
   picks: [
     { slot: "L2-AE1", sku: white, name: "FORBIDDEN-WHITE-DESCRIPTION", qty: 3 },
     { slot: "E7-AE1", sku: cream, name: "FORBIDDEN-CREAM-DESCRIPTION", qty: 2 },
@@ -17,6 +17,7 @@ const sheet = { label: "ASPP-9E7D51", orderNumber: "ORD-261101-9E7D51", status: 
 const expected = `*PREPARE & DELIVER*
 _Order:_ ORD-261101-9E7D51
 _Carton Tag:_ *ASPP-9E7D51*
+_Assigned To:_ *Ahmed*
 *2 items — 10 units*
 
 *1. PICK*
@@ -39,11 +40,14 @@ test("matches the exact compact WhatsApp template, markup, and line breaks", () 
   assert.equal(buildWorkerOrderShareText(sheet), expected);
 });
 
-test("assignment appears in the header only when a name is supplied", () => {
-  const assigned = buildWorkerOrderShareText({ ...sheet, assignedTo: "  Ahmed  " });
-  assert.equal(assigned, expected.replace("_Carton Tag:_ *ASPP-9E7D51*\n", "_Carton Tag:_ *ASPP-9E7D51*\n_Assigned To:_ *Ahmed*\n"));
-  assert.equal(buildWorkerOrderShareText({ ...sheet, assignedTo: "   " }), expected);
-  assert.equal(buildWorkerOrderShareText({ ...sheet, assignedTo: "" }), expected);
+test("unassigned messages are draft previews and valid names are trimmed", () => {
+  assert.equal(buildWorkerOrderShareText({ ...sheet, assignedTo: "  Ahmed  " }), expected);
+  for (const assignedTo of [undefined, "", "   "]) {
+    const preview = buildWorkerOrderShareText({ ...sheet, assignedTo });
+    assert.match(preview, /^\*PREPARATION DRAFT — HOLD\*/);
+    assert.match(preview, /_Assigned To:_ \*Required\*/);
+    assert.match(preview, /Assigned To is required/);
+  }
 });
 
 test("omits all product names/descriptions, contacts, notes, store and financial details", () => {

@@ -851,9 +851,12 @@ export default function AdminOrdersPage() {
     setCourierInstructionNotes(getDefaultCourierInstructionNotes());
   }
 
-  async function submitCourierDetails(copyAfter = true) {
+  async function submitCourierDetails(copyAfter = true, draftCopy = false) {
     if (!courierTarget || deliveryLock.current) return;
-    if (copyAfter && courierMissingFields.length) {
+    if (deliveryMode === "worker" && !assignedTo.trim()) {
+      toast.warning("Assigned To is required."); return;
+    }
+    if (copyAfter && !draftCopy && courierMissingFields.length) {
       toast.warning("Add the required delivery fields first."); return;
     }
     deliveryLock.current = true;
@@ -885,13 +888,15 @@ export default function AdminOrdersPage() {
         }
       }
       if (!copyAfter) { toast.success(deliveryMode === "worker" ? "Preparation details saved for this order." : "Delivery details saved for this order."); return; }
-      if (deliveryMode === "worker" && sheet.problems.length) {
+      if (deliveryMode === "worker" && sheet.problems.length && !draftCopy) {
         toast.warning("Delivery saved. Resolve the remaining issues or copy the preparation draft."); return;
       }
-      const text = deliveryMode === "worker" ? buildWorkerOrderShareText(sheet)
+      const copySheet = draftCopy && !sheet.problems.length
+        ? { ...sheet, problems: ["Preparation draft — confirm before delivery."] } : sheet;
+      const text = deliveryMode === "worker" ? buildWorkerOrderShareText(copySheet)
         : buildCourierShareText(finalOrder, { pickupConfig: { ...courierPickupConfig, courierNotes: courierInstructionNotes } });
       await copyTextToClipboard(text);
-      toast.success(deliveryMode === "worker" ? "Prepare & Deliver sheet copied." : "Courier details copied.");
+      toast.success(draftCopy ? "Preparation draft copied — resolve warnings before delivery." : deliveryMode === "worker" ? "Prepare & Deliver sheet copied." : "Courier details copied.");
       closeCourierModal();
     } catch (error) {
       toast.error(friendlyApiError(error, "Could not save or copy. Your details remain available to review and retry."));
@@ -899,14 +904,7 @@ export default function AdminOrdersPage() {
   }
 
   async function copyWorkerDraft() {
-    if (deliveryLock.current) return;
-    deliveryLock.current = true;
-    setDeliveryWorking(true);
-    try {
-      await copyTextToClipboard(courierPreviewText);
-      toast.success("Preparation draft copied — resolve warnings before delivery.");
-    } catch { toast.error("Copy failed. Select and copy the preview text."); }
-    finally { deliveryLock.current = false; setDeliveryWorking(false); }
+    await submitCourierDetails(true, true);
   }
 
   async function reloadDeliveryDetails() {

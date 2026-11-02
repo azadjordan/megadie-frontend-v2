@@ -142,6 +142,7 @@ export default function CourierDetailsModal({
   }, [open]);
   if (!open) return null;
   const worker = mode === "worker";
+  const assignmentMissing = worker && !assignedTo.trim();
   const needsSave = hasChanges || requiresSave;
   function onKeyDown(event) {
     if (event.key === "Escape" && !isSaving) { event.stopPropagation(); onClose(); }
@@ -163,7 +164,7 @@ export default function CourierDetailsModal({
     !clean(courierPickupConfig.googleMapsUrl) ? "pickup map" : "",
     !pickupPhones ? "pickup phone" : "",
   ].filter(Boolean);
-  const primaryDisabled = isSaving || missingFields.length > 0 || (readOnly && requiresSave) || (worker && sheet?.problems?.length > 0 && !needsSave);
+  const primaryDisabled = isSaving || assignmentMissing || missingFields.length > 0 || (readOnly && requiresSave) || (worker && sheet?.problems?.length > 0 && !needsSave);
 
   return createPortal(
     <div onKeyDown={onKeyDown} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 px-3 py-6">
@@ -237,10 +238,10 @@ export default function CourierDetailsModal({
             )}
 
             {worker && <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-              <label htmlFor="order-assigned-to" className="mb-2 block text-sm font-semibold text-slate-900">Assigned To (optional)</label>
-              <input id="order-assigned-to" value={assignedTo} onChange={(event) => onAssignedToChange(event.target.value)} maxLength={120} disabled={readOnly || isSaving} placeholder="e.g. Ahmed"
+              <label htmlFor="order-assigned-to" className="mb-2 block text-sm font-semibold text-slate-900">Assigned To</label>
+              <input id="order-assigned-to" required aria-required="true" aria-invalid={assignmentMissing} aria-describedby="order-assigned-to-hint" value={assignedTo} onChange={(event) => onAssignedToChange(event.target.value)} maxLength={120} disabled={readOnly || isSaving} placeholder="e.g. Ahmed"
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50" />
-              <p className="mt-2 text-xs text-slate-500">Saved on this order for the person preparing and delivering it.</p>
+              <p id="order-assigned-to-hint" className={`mt-2 text-xs ${assignmentMissing ? "text-amber-700" : "text-slate-500"}`}>{assignmentMissing ? "Assigned To is required before saving or copying." : "Saved on this order for the person preparing and delivering it."}</p>
             </section>}
 
             <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
@@ -376,8 +377,8 @@ export default function CourierDetailsModal({
             Close
           </button>
           {onRefresh && <button type="button" onClick={onRefresh} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Reload details</button>}
-          {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Save for this order</button>}
-          {worker && sheet?.problems?.length > 0 && <button type="button" onClick={onCopyDraft} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Copy preparation draft</button>}
+          {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving || assignmentMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Save for this order</button>}
+          {worker && sheet?.problems?.length > 0 && <button type="button" onClick={onCopyDraft} disabled={isSaving || assignmentMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{needsSave ? "Save & Copy Draft" : "Copy preparation draft"}</button>}
           <button
             type="button"
             onClick={onSubmit}

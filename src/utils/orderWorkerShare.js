@@ -28,15 +28,18 @@ export function buildWorkerOrderShareText(sheet) {
   const numberedItems = [...items].map(([sku, item], index) => ({
     ...item, sku, number: String(index + 1).padStart(2, "0"),
   }));
-  const draft = Boolean(sheet.problems?.length);
+  const assignedTo = line(sheet.assignedTo);
+  const problems = [...(sheet.problems || [])];
+  if (!assignedTo) problems.push("Assigned To is required.");
+  const draft = problems.length > 0;
   const lines = [
     `*${draft ? "PREPARATION DRAFT — HOLD" : "PREPARE & DELIVER"}*`,
     `_Order:_ ${line(sheet.orderNumber)}`,
     `_Carton Tag:_ *${line(sheet.label)}*`,
   ];
-  if (line(sheet.assignedTo)) lines.push(`_Assigned To:_ *${line(sheet.assignedTo)}*`);
+  lines.push(`_Assigned To:_ *${assignedTo || "Required"}*`);
   lines.push(`*${summary}*`);
-  if (draft) lines.push("", ...sheet.problems.map((problem) => `⚠ ${line(problem)}`));
+  if (draft) lines.push("", ...problems.map((problem) => `⚠ ${line(problem)}`));
   if (sheet.notices?.length) lines.push("", ...sheet.notices.map((notice) => `⚠ ${line(notice)}`));
   lines.push("", "*1. PICK*");
   for (const item of numberedItems) {

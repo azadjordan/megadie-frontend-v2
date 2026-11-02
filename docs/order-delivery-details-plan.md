@@ -21,9 +21,9 @@ The first plan added too much: a customer-default migration, a store directory/s
 Always open the review modal for the selected order, including complete orders:
 
 1. Click Prepare & Deliver and make one fresh sheet request. Opening never copies, saves, reserves, or deducts anything.
-2. Show the optional saved Assigned To name, delivery address/map, and a live read-only message preview. Names, phones, and notes used by Courier stay in the full form state but are hidden in worker mode, so saving an address cannot erase them.
+2. Show the required Assigned To name, delivery address/map, and a live read-only message preview. Names, phones, and notes used by Courier stay in the full form state but are hidden in worker mode, so saving an address cannot erase them.
 3. Use Copy for an unchanged saved order and Save & Copy when delivery/assignment edits or legacy confirmation need saving. The save sends both values in the existing version-guarded order update, then refreshes the staff sheet once before copying.
-4. Optional assignment is omitted from the message when blank. Cancel/close discards unsaved edits; reopening loads the last saved name. Clearing and saving removes the assignment.
+4. Assigned To is mandatory before saving or copying preparation details, including drafts. Empty and whitespace-only values are invalid; a saved assignee can be replaced but cannot be cleared. Cancel/close still discards unsaved edits.
 5. Keep SKU/slot quantities read-only, with a link to the existing order/reservation screen for corrections. Actual preparation problems still produce a clearly marked draft/HOLD. Save for this order can persist incomplete details before copying a preparation draft.
 6. Preserve the modal and preview when clipboard copying fails. Retry uses the saved text without another read or write. Revision conflicts retain entered text and offer explicit reload/review.
 
@@ -92,7 +92,7 @@ _Address:_ Alain Sinaiyah
 _Map:_ https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic
 ```
 
-DELIVER includes only the saved address and map link. Customer names, phones, contact details, notes, product descriptions, prices, and internal information are excluded. The optional assigned staff name is deliberately included in the header. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
+DELIVER includes only the saved address and map link. Customer names, phones, contact details, notes, product descriptions, prices, and internal information are excluded. The required assigned staff name is deliberately included in the header. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
 
 The backend returns `problems` (draft/HOLD) and `notices` (advisory). Display them plainly rather than implementing a second client readiness engine. Processing orders can produce a preparation draft; complete Shipping orders can produce the normal sheet. Cancelled/Delivered staff actions are disabled; there is no new historical-reference copy mode.
 
@@ -158,6 +158,14 @@ Compact-format verification: 10 frontend helper/formatter tests and 9 delivery b
 
 ## 13. Saved assignee and mandatory review modal
 
-An optional top-level Order.assignedTo string (120 characters maximum) is saved with the existing delivery revision guard; it is not part of the customer profile or six-field delivery value. Add `_Assigned To:_ *Ahmed*` after the carton tag when set. Every Prepare & Deliver click opens the modal; typing changes only local state and the live preview. The same saved assignment returns on reopening, clears when explicitly saved blank, and is preserved when a Courier edit omits the field. It is not exposed by customer-facing order reads. Existing stock/status workflows remain independent.
+A top-level Order.assignedTo string (120 characters maximum), required for Prepare & Deliver, is saved with the existing delivery revision guard; it is not part of the customer profile or six-field delivery value. Add `_Assigned To:_ *Ahmed*` after the carton tag when set. Every Prepare & Deliver click opens the modal; typing changes only local state and the live preview. The same saved assignment returns on reopening, rejects empty or whitespace-only updates, and is preserved when a Courier edit omits the field. It is not exposed by customer-facing order reads. Existing stock/status workflows remain independent.
 
 Assignment/review verification: 25 backend/helper/API integration/regression tests, 11 frontend formatter/helper tests, and 11 browser tests on each of the dev and production builds passed. Full frontend lint/build passed. Coverage includes no copy on opening, one fresh read per opening, live assignment preview without requests, explicit save/reopen/clear, discarded unsaved edits, conflicts, hidden-contact preservation, optional legacy assignment, and clipboard retry without another write or refresh. Deploy the backend before the frontend; no database backfill is needed.
+
+## 14. Mandatory Assigned To
+
+Assigned To is required for preparation saves and every copy path, including preparation drafts. The modal labels it as required, shows a trimmed-value error, and disables Save, Copy, and draft-copy actions while blank. The action handlers also guard against missing names. Backend updates reject blank/whitespace strings; existing orders can remain unassigned until preparation, and Courier-only updates may still omit the field without changing it.
+
+An unassigned preview is always labeled DRAFT/HOLD and shows Assigned To as Required. A draft that needs saving uses Save & Copy Draft, persists the assignee through the existing revision guard, refreshes the sheet, and copies a clearly marked draft. It cannot bypass mandatory assignment. The normal message format is unchanged for assigned orders.
+
+Mandatory-assignee verification: 25 backend/helper/API integration/regression tests, 11 frontend helper/formatter tests, and 12 browser tests on each of the dev and production builds passed. Full frontend lint/build passed. Tests reject empty and whitespace-only assignment updates, retain saved names on rejected clears, disable normal and draft copy while blank, and verify Save & Copy Draft persists a valid assignee before copying.
