@@ -19,6 +19,17 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: "Order", id }],
     }),
 
+    getOrderFulfillmentSheet: builder.query({
+      query: (id) => `/orders/${id}/fulfillment-sheet`,
+      keepUnusedDataFor: 0,
+    }),
+    updateOrderDelivery: builder.mutation({
+      query: ({ id, ...body }) => ({ url: `/orders/${id}/delivery-details`, method: "PUT", body }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Order", id: arg.id }, { type: "Order", id: "LIST" },
+      ],
+    }),
+
     // User: my orders (paginated)
     getMyOrders: builder.query({
       query: ({ page = 1, limit = 5 } = {}) =>
@@ -163,6 +174,8 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
 export const {
   useGetOrderByIdQuery,
   useLazyGetOrderByIdQuery,
+  useLazyGetOrderFulfillmentSheetQuery,
+  useUpdateOrderDeliveryMutation,
   useGetMyOrdersQuery,
   useGetOrdersAdminQuery,
   useGetOrdersWorkSummaryQuery,

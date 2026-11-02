@@ -281,6 +281,8 @@ export default function AdminUserDetailsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [deliveryContactName, setDeliveryContactName] = useState("");
+  const [deliveryPhoneNumber, setDeliveryPhoneNumber] = useState("");
   const [secondaryPhoneNumber, setSecondaryPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
   const [deliveryGoogleMapsUrl, setDeliveryGoogleMapsUrl] = useState("");
@@ -310,6 +312,8 @@ export default function AdminUserDetailsPage() {
     setEmail(user.email || "");
     setPhoneNumber(user.phoneNumber || "");
     setSecondaryPhoneNumber(user.secondaryPhoneNumber || "");
+    setDeliveryContactName(user.deliveryContactName || "");
+    setDeliveryPhoneNumber(user.deliveryPhoneNumber || "");
     setAddress(user.address || "");
     setDeliveryGoogleMapsUrl(user.deliveryGoogleMapsUrl || "");
     setDeliveryNotes(user.deliveryNotes || "");
@@ -373,6 +377,8 @@ export default function AdminUserDetailsPage() {
       email: String(user.email || "").trim().toLowerCase(),
       phoneNumber: String(user.phoneNumber || "").trim(),
       secondaryPhoneNumber: String(user.secondaryPhoneNumber || "").trim(),
+      deliveryContactName: String(user.deliveryContactName || "").trim(),
+      deliveryPhoneNumber: String(user.deliveryPhoneNumber || "").trim(),
       address: String(user.address || "").trim(),
       deliveryGoogleMapsUrl: String(user.deliveryGoogleMapsUrl || "").trim(),
       deliveryNotes: String(user.deliveryNotes || "").trim(),
@@ -383,6 +389,8 @@ export default function AdminUserDetailsPage() {
       email: String(email || "").trim().toLowerCase(),
       phoneNumber: String(phoneNumber || "").trim(),
       secondaryPhoneNumber: String(secondaryPhoneNumber || "").trim(),
+      deliveryContactName: deliveryContactName.trim(),
+      deliveryPhoneNumber: deliveryPhoneNumber.trim(),
       address: String(address || "").trim(),
       deliveryGoogleMapsUrl: String(deliveryGoogleMapsUrl || "").trim(),
       deliveryNotes: String(deliveryNotes || "").trim(),
@@ -395,6 +403,8 @@ export default function AdminUserDetailsPage() {
     email,
     phoneNumber,
     secondaryPhoneNumber,
+    deliveryContactName,
+    deliveryPhoneNumber,
     address,
     deliveryGoogleMapsUrl,
     deliveryNotes,
@@ -433,6 +443,8 @@ export default function AdminUserDetailsPage() {
       email: email.trim(),
       phoneNumber: phoneNumber.trim(),
       secondaryPhoneNumber: secondaryPhoneNumber.trim(),
+      deliveryContactName: deliveryContactName.trim(),
+      deliveryPhoneNumber: deliveryPhoneNumber.trim(),
       address: address.trim(),
       deliveryGoogleMapsUrl: deliveryGoogleMapsUrl.trim(),
       deliveryNotes: deliveryNotes.trim(),
@@ -724,6 +736,18 @@ export default function AdminUserDetailsPage() {
                 />
               </div>
 
+              <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-4">
+                <h3 className="text-sm font-semibold text-slate-900">Default delivery details</h3>
+                <p className="mt-1 text-xs text-slate-500">Used for new orders. Existing orders keep their saved delivery details.</p>
+              </div>
+              <div>
+                <label htmlFor="default-delivery-name" className="mb-1 block text-xs font-semibold text-slate-600">Delivery contact name (optional)</label>
+                <input id="default-delivery-name" value={deliveryContactName} onChange={(e) => setDeliveryContactName(e.target.value)} maxLength={200} placeholder="Leave empty to use account name" className="w-full rounded-xl px-3 py-2 text-sm ring-1 ring-slate-200" />
+              </div>
+              <div>
+                <label htmlFor="default-delivery-phone" className="mb-1 block text-xs font-semibold text-slate-600">Delivery phone (optional)</label>
+                <input id="default-delivery-phone" type="tel" value={deliveryPhoneNumber} onChange={(e) => setDeliveryPhoneNumber(e.target.value)} maxLength={50} placeholder="Leave empty to use account phone" className="w-full rounded-xl px-3 py-2 text-sm ring-1 ring-slate-200" />
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
                   Secondary phone

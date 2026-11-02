@@ -1,5 +1,5 @@
-import { courierPickupConfig } from "../config/courierConfig";
-import { getOrderTotals } from "./orderTotals";
+import { courierPickupConfig } from "../config/courierConfig.js";
+import { getOrderTotals } from "./orderTotals.js";
 
 const clean = (value) => String(value || "").trim();
 
@@ -29,12 +29,13 @@ const money = (amount, currency = "AED") => {
 const getPhoneValues = (phones = []) =>
   phones.map(formatPhoneForCourier).filter(Boolean);
 
-export const getCourierDeliveryProfile = (user = {}) => ({
-  phoneNumber: clean(user.phoneNumber),
-  secondaryPhoneNumber: clean(user.secondaryPhoneNumber),
-  address: clean(user.address),
-  deliveryGoogleMapsUrl: clean(user.deliveryGoogleMapsUrl),
-  deliveryNotes: clean(user.deliveryNotes),
+export const getCourierDeliveryProfile = (value = {}) => ({
+  contactName: clean(value?.contactName),
+  phoneNumber: clean(value?.phoneNumber),
+  secondaryPhoneNumber: clean(value?.secondaryPhoneNumber),
+  address: clean(value?.address),
+  googleMapsUrl: clean(value?.googleMapsUrl),
+  notes: clean(value?.notes),
 });
 
 export const hasCourierProfileChanges = (base = {}, current = {}) => {
@@ -49,6 +50,10 @@ export const getCourierMissingFields = (profile = {}) => {
   const normalized = getCourierDeliveryProfile(profile);
   const missing = [];
 
+  if (!normalized.contactName) {
+    missing.push({ key: "contactName", label: "Recipient name", message: "Recipient name is required." });
+  }
+
   if (!normalized.phoneNumber) {
     missing.push({
       key: "phoneNumber",
@@ -57,7 +62,7 @@ export const getCourierMissingFields = (profile = {}) => {
     });
   }
 
-  if (!normalized.address && !normalized.deliveryGoogleMapsUrl) {
+  if (!normalized.address && !normalized.googleMapsUrl) {
     missing.push({
       key: "addressOrLocation",
       label: "Address or Google Maps location",
@@ -72,8 +77,7 @@ export const buildCourierShareText = (
   order,
   { pickupConfig = courierPickupConfig, deliveryProfile } = {}
 ) => {
-  const user = order?.user && typeof order.user === "object" ? order.user : {};
-  const delivery = getCourierDeliveryProfile(deliveryProfile || user);
+  const delivery = getCourierDeliveryProfile(deliveryProfile || order?.resolvedDelivery?.details || order?.deliveryDetails);
   const pickup = {
     storeName: clean(pickupConfig.storeName) || "Megadie",
     address: clean(pickupConfig.address),
@@ -88,7 +92,7 @@ export const buildCourierShareText = (
       : [],
   };
   const orderNumber = clean(order?.orderNumber) || clean(order?._id) || "-";
-  const clientName = clean(user.name) || "Unnamed";
+  const clientName = delivery.contactName || "Unnamed";
   const total = getOrderTotals(order).total;
 
   const lines = [];
@@ -113,11 +117,11 @@ export const buildCourierShareText = (
     lines.push(`📞 ${formatPhoneForCourier(delivery.secondaryPhoneNumber)}`);
   }
   if (delivery.address) lines.push(`📍 ${delivery.address}`);
-  if (delivery.deliveryGoogleMapsUrl) {
-    lines.push(delivery.deliveryGoogleMapsUrl);
+  if (delivery.googleMapsUrl) {
+    lines.push(delivery.googleMapsUrl);
   }
-  if (delivery.deliveryNotes) {
-    lines.push(`📝 ${delivery.deliveryNotes}`);
+  if (delivery.notes) {
+    lines.push(`📝 ${delivery.notes}`);
   }
   lines.push("");
   lines.push("_ORDER_");

@@ -1,6 +1,6 @@
 # Order delivery details — reviewed frontend plan
 
-Status: planning only; application behavior is unchanged.
+Status: implemented and locally verified; merge/push to main authorized.
 Reviewed: 2026-11-02. This version replaces the first plan.
 Branch in both repositories: `feat/order-delivery-details`.
 Contract: [backend plan](../../megadie-backend/docs/order-delivery-details-plan.md).
@@ -65,11 +65,11 @@ Keep the existing external Courier pickup block and configuration: its recipient
 
 ## 6. Staff text and minimal state rules
 
-Evolve the existing pure `orderWorkerShare.js` formatter to accept the dedicated allowlisted response. Keep order number/customer initials on the carton label. Use this sequence:
+Evolve the existing pure `orderWorkerShare.js` formatter to accept the dedicated allowlisted response. Put the compact carton label on the first line: customer initials without dots/spaces, a hyphen, and the complete final segment of the order number (for example `ABC-023AD`). Do not repeat it lower down. Use this sequence:
 
 ```text
+ABC-023AD
 PREPARE & DELIVER — ORDER #...
-Carton tag: #... · customer initials
 
 COLLECT & PICK
 Slot A2-AE1 · SKU / order product name · quantity
@@ -128,4 +128,10 @@ Extend existing pure helper/formatter tests. Use a disposable test database for 
 
 Backend deploys first, frontend second in one coordinated release. Avoid order creation/courier edits in between, because the old form writes User while the new backend saves destinations on orders; review affected active orders if either action occurred during that gap. No store setup or address confirmation is needed for this internal message. Unexpected AE2 allocations require data review because that code is unused. Keep the existing Courier pickup configuration. No bulk address migration, completed-order backfill, inventory workflow change, new historical-reference view, store-settings feature, or profile redesign is included.
 
-Both repositories stay on `feat/order-delivery-details`. Existing unfinished work is preserved and unrelated backend inventory scripts are excluded. This revision changes the plans only; implementation and release remain subsequent work.
+Developed on `feat/order-delivery-details`; the user authorized merging and pushing the verified feature to `main` in both repositories. The existing pick-list prototype was evolved, and unrelated backend inventory scripts are excluded. No Render deployment or production data migration was performed.
+
+## 10. Verification record
+
+Full ESLint, production build, and 6 pure frontend helper/formatter tests passed. The delivery browser suite passed all 8 tests against both dev and compiled production servers; it covers one-click freshness, legacy confirmation, order-only saves, stale edits, incomplete saves, customer contact overrides, mobile clipboard retry, and closed orders. The 19-test production catalog browser regression suite also passed. Backend helper/API integration/regression checks passed 21 tests using an isolated local database for writes.
+
+The delivery dialog is portaled above the mobile navigation, traps keyboard focus while open, restores focus on close, and preserves the preview for clipboard retry without a new request. Successful destination saves refresh a staff sheet once; a failed refresh keeps it as a draft until reload succeeds.

@@ -1,9 +1,10 @@
 ﻿// src/pages/Admin/AdminOrdersPage.jsx
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   FiChevronDown,
   FiChevronUp,
+  FiClipboard,
   FiFileText,
   FiRefreshCw,
   FiSend,
@@ -30,6 +31,7 @@ import {
   hasCourierProfileChanges,
 } from "../../utils/orderCourierShare";
 import { buildAdminOrderShareText } from "../../utils/orderShare";
+import { buildWorkerOrderShareText } from "../../utils/orderWorkerShare";
 import { getOrderTotals } from "../../utils/orderTotals";
 import {
   ADMIN_ORDER_ACTION_IDS,
@@ -44,6 +46,9 @@ import {
   useDeleteOrderByAdminMutation,
   useGetOrdersAdminQuery,
   useGetOrdersWorkSummaryQuery,
+  useLazyGetOrderByIdQuery,
+  useLazyGetOrderFulfillmentSheetQuery,
+  useUpdateOrderDeliveryMutation,
   useLazyGetOrderDeletePreviewQuery,
   useMarkOrderDeliveredMutation,
   useUpdateOrderByAdminMutation,
@@ -52,9 +57,10 @@ import {
   useCreateInvoiceFromOrderMutation,
   useLazyGetInvoicePdfQuery,
 } from "../../features/invoices/invoicesApiSlice";
-import { useFinalizeOrderAllocationsMutation } from "../../features/orderAllocations/orderAllocationsApiSlice";
+import {
+  useFinalizeOrderAllocationsMutation,
+} from "../../features/orderAllocations/orderAllocationsApiSlice";
 import { useAddPaymentToInvoiceMutation } from "../../features/payments/paymentsApiSlice";
-import { useUpdateUserMutation } from "../../features/users/usersApiSlice";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import useMediaQuery from "../../hooks/useMediaQuery";
 
@@ -293,6 +299,27 @@ function InvoicePdfButton({
     >
       <FiFileText className="h-3.5 w-3.5" aria-hidden="true" />
       {iconOnly ? <span className="sr-only">{label}</span> : label}
+    </button>
+  );
+}
+
+function WorkerPickListButton({ order, isCopying, disabled, compact = false, onClick }) {
+  const isClosed = ["Cancelled", "Delivered"].includes(order?.status);
+  return (
+    <button
+      type="button"
+      className={[
+        "inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50",
+        compact ? "h-8 w-8" : "gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider",
+      ].join(" ")}
+      disabled={disabled || isClosed}
+      onClick={() => onClick(order)}
+      aria-label="Copy prepare and deliver sheet"
+      aria-busy={isCopying}
+      title={isClosed ? "Closed orders cannot be prepared" : "Copy prepare and deliver sheet"}
+    >
+      <FiClipboard className={`h-4 w-4 ${isCopying ? "animate-pulse" : ""}`} />
+      {!compact && (isCopying ? "Copying..." : "Prepare & Deliver")}
     </button>
   );
 }
@@ -585,6 +612,7 @@ export default function AdminOrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copyId, setCopyId] = useState(null);
+  const [workerCopyId, setWorkerCopyId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [deletePreviewId, setDeletePreviewId] = useState(null);
@@ -593,6 +621,11 @@ export default function AdminOrdersPage() {
   const [deleteConfirmValue, setDeleteConfirmValue] = useState("");
   const [deleteFormError, setDeleteFormError] = useState("");
   const [courierTarget, setCourierTarget] = useState(null);
+  const [deliveryMode, setDeliveryMode] = useState("courier");
+  const [workerSheet, setWorkerSheet] = useState(null);
+  const [courierLoadingId, setCourierLoadingId] = useState(null);
+  const [deliveryWorking, setDeliveryWorking] = useState(false);
+  const deliveryLock = useRef(false);
   const [courierBaseForm, setCourierBaseForm] = useState(() =>
     getCourierDeliveryProfile()
   );
@@ -644,6 +677,8 @@ export default function AdminOrdersPage() {
   const [deleteOrderByAdmin, { isLoading: isDeleting }] =
     useDeleteOrderByAdminMutation();
   const [getOrderDeletePreview] = useLazyGetOrderDeletePreviewQuery();
+  const [getDeliveryOrder] = useLazyGetOrderByIdQuery();
+  const [getWorkerSheet] = useLazyGetOrderFulfillmentSheetQuery();
   const [updateOrderStatus, { isLoading: isUpdatingStatus }] =
     useUpdateOrderByAdminMutation();
   const [
@@ -659,13 +694,14 @@ export default function AdminOrdersPage() {
   const [addPaymentToInvoice, { isLoading: isAddingPayment, error: addPaymentError }] =
     useAddPaymentToInvoiceMutation();
   const [
-    updateUserDelivery,
+    updateOrderDelivery,
     {
-      isLoading: isSavingCourier,
+      isLoading: isSavingDelivery,
       error: courierSaveError,
       reset: resetCourierSaveError,
     },
-  ] = useUpdateUserMutation();
+  ] = useUpdateOrderDeliveryMutation();
+  const isSavingCourier = isSavingDelivery || Boolean(courierLoadingId) || deliveryWorking;
 
   const trimmedSearch = search.trim();
   const debouncedSearch = useDebouncedValue(trimmedSearch, 1000);
@@ -705,36 +741,41 @@ export default function AdminOrdersPage() {
     () => hasCourierProfileChanges(courierBaseForm, courierForm),
     [courierBaseForm, courierForm]
   );
-  const courierPreviewOrder = useMemo(() => {
-    if (!courierTarget) return null;
-    const user =
-      courierTarget.user && typeof courierTarget.user === "object"
-        ? courierTarget.user
-        : {};
-    return {
-      ...courierTarget,
-      user: {
-        ...user,
-        ...courierForm,
-      },
-    };
-  }, [courierTarget, courierForm]);
-  const courierPreviewText = useMemo(
-    () =>
-      courierPreviewOrder
-        ? buildCourierShareText(courierPreviewOrder, {
-            deliveryProfile: courierForm,
-            pickupConfig: {
-              ...courierPickupConfig,
-              courierNotes: courierInstructionNotes,
-            },
-          })
-        : "",
-    [courierPreviewOrder, courierForm, courierInstructionNotes]
-  );
+  const deliveryRequiresSave = Boolean(courierTarget && !courierTarget.resolvedDelivery?.savedToOrder);
+  const deliveryReadOnly = Boolean(courierTarget && !["Processing", "Shipping"].includes(courierTarget.status));
+  const courierPreviewText = useMemo(() => {
+    if (!courierTarget) return "";
+    if (deliveryMode === "worker" && workerSheet) {
+      return buildWorkerOrderShareText({
+        ...workerSheet,
+        delivery: { ...workerSheet.delivery, details: getCourierDeliveryProfile(courierForm) },
+        problems: courierHasChanges ? [...workerSheet.problems, "Delivery changes are not saved. Review before delivery."] : workerSheet.problems,
+      });
+    }
+    return buildCourierShareText(courierTarget, {
+      deliveryProfile: courierForm,
+      pickupConfig: { ...courierPickupConfig, courierNotes: courierInstructionNotes },
+    });
+  }, [courierTarget, deliveryMode, workerSheet, courierForm, courierHasChanges, courierInstructionNotes]);
+
+  function showDeliveryDialog(order, mode = "courier", sheet = null) {
+    const form = getCourierDeliveryProfile(order.resolvedDelivery?.details);
+    resetCourierSaveError();
+    setDeliveryMode(mode);
+    setWorkerSheet(sheet);
+    setCourierTarget(order);
+    setCourierBaseForm(form);
+    setCourierForm(form);
+    setCourierInstructionNotes(getDefaultCourierInstructionNotes());
+  }
+
+  function showWorkerDialog(sheet) {
+    showDeliveryDialog({ _id: sheet.orderId, orderNumber: sheet.orderNumber, status: sheet.status,
+      resolvedDelivery: sheet.delivery }, "worker", sheet);
+  }
 
   async function onCopy(order) {
-    if (!order || copyId) return;
+    if (!order || copyId || workerCopyId) return;
     try {
       setCopyId(order._id);
       const text = buildAdminOrderShareText(order);
@@ -747,20 +788,41 @@ export default function AdminOrdersPage() {
     }
   }
 
-  function openCourierModal(order) {
-    if (!order?._id || isSavingCourier) return;
-    const form = getCourierDeliveryProfile(order.user || {});
-    resetCourierSaveError();
-    setCourierTarget(order);
-    setCourierBaseForm(form);
-    setCourierForm(form);
-    setCourierInstructionNotes(getDefaultCourierInstructionNotes());
+  async function onCopyWorkerPickList(order) {
+    if (!order?._id || workerCopyId || copyId || deliveryLock.current) return;
+    deliveryLock.current = true;
+    try {
+      setWorkerCopyId(order._id);
+      const response = await getWorkerSheet(order._id, false).unwrap();
+      const sheet = response.data;
+      if (sheet.problems.length) { showWorkerDialog(sheet); return; }
+      try { await copyTextToClipboard(buildWorkerOrderShareText(sheet)); }
+      catch (error) { showWorkerDialog(sheet); throw error; }
+      toast.success("Prepare & Deliver sheet copied.");
+    } catch (err) {
+      toast.error(friendlyApiError(err, "Could not copy the sheet. Use the preview to retry or select the text."));
+    } finally {
+      setWorkerCopyId(null);
+      deliveryLock.current = false;
+    }
+  }
+
+  async function openCourierModal(order) {
+    if (!order?._id || deliveryLock.current) return;
+    deliveryLock.current = true;
+    setCourierLoadingId(order._id);
+    try {
+      const response = await getDeliveryOrder(order._id, false).unwrap();
+      showDeliveryDialog(response.data);
+    } catch (error) { toast.error(friendlyApiError(error, "Could not load order delivery details.")); }
+    finally { setCourierLoadingId(null); deliveryLock.current = false; }
   }
 
   function closeCourierModal() {
     if (isSavingCourier) return;
     resetCourierSaveError();
     setCourierTarget(null);
+    setWorkerSheet(null);
     setCourierBaseForm(getCourierDeliveryProfile());
     setCourierForm(getCourierDeliveryProfile());
     setCourierInstructionNotes(getDefaultCourierInstructionNotes());
@@ -783,59 +845,71 @@ export default function AdminOrdersPage() {
     setCourierInstructionNotes(getDefaultCourierInstructionNotes());
   }
 
-  async function submitCourierDetails() {
-    if (!courierTarget || isSavingCourier) return;
-    if (courierMissingFields.length) {
-      toast.warning("Add the required delivery fields first.");
-      return;
+  async function submitCourierDetails(copyAfter = true) {
+    if (!courierTarget || deliveryLock.current) return;
+    if (copyAfter && courierMissingFields.length) {
+      toast.warning("Add the required delivery fields first."); return;
     }
-
+    deliveryLock.current = true;
+    setDeliveryWorking(true);
     try {
-      let finalOrder = courierPreviewOrder;
-
-      if (courierHasChanges) {
-        const user = courierTarget.user;
-        const userId =
-          user && typeof user === "object" ? user._id : String(user || "");
-
-        if (!userId) {
-          toast.error("Client details are missing for this order.");
-          return;
-        }
-
-        const normalizedForm = getCourierDeliveryProfile(courierForm);
-        const res = await updateUserDelivery({
-          id: userId,
-          ...normalizedForm,
+      let finalOrder = courierTarget;
+      let sheet = workerSheet;
+      if (courierHasChanges || deliveryRequiresSave) {
+        if (deliveryReadOnly) throw new Error("Closed orders are read-only.");
+        const response = await updateOrderDelivery({ id: courierTarget._id,
+          deliveryDetails: getCourierDeliveryProfile(courierForm),
+          expectedRevision: courierTarget.resolvedDelivery.revision,
         }).unwrap();
-        const updatedUser = res?.data || {};
-        finalOrder = {
-          ...courierTarget,
-          user: {
-            ...(user && typeof user === "object" ? user : {}),
-            ...normalizedForm,
-            ...updatedUser,
-          },
-        };
+        finalOrder = { ...courierTarget, resolvedDelivery: response.data.resolvedDelivery };
+        const savedForm = getCourierDeliveryProfile(finalOrder.resolvedDelivery.details);
+        setCourierTarget(finalOrder);
+        setCourierBaseForm(savedForm);
+        setCourierForm(savedForm);
+        if (deliveryMode === "worker") {
+          try { sheet = (await getWorkerSheet(courierTarget._id, false).unwrap()).data; }
+          catch (error) {
+            setWorkerSheet({ ...sheet, problems: [...sheet.problems, "Could not refresh the sheet. Reload details before copying final instructions."] });
+            throw error;
+          }
+          setWorkerSheet(sheet);
+          setCourierTarget({ ...finalOrder, resolvedDelivery: sheet.delivery });
+        }
       }
-
-      const text = buildCourierShareText(finalOrder, {
-        deliveryProfile: finalOrder?.user || courierForm,
-        pickupConfig: {
-          ...courierPickupConfig,
-          courierNotes: courierInstructionNotes,
-        },
-      });
+      if (!copyAfter) { toast.success("Delivery details saved for this order."); return; }
+      if (deliveryMode === "worker" && sheet.problems.length) {
+        toast.warning("Delivery saved. Resolve the remaining issues or copy the preparation draft."); return;
+      }
+      const text = deliveryMode === "worker" ? buildWorkerOrderShareText(sheet)
+        : buildCourierShareText(finalOrder, { pickupConfig: { ...courierPickupConfig, courierNotes: courierInstructionNotes } });
       await copyTextToClipboard(text);
-      toast.success(
-        courierHasChanges
-          ? "Courier details saved and copied."
-          : "Courier details copied."
-      );
+      toast.success(deliveryMode === "worker" ? "Prepare & Deliver sheet copied." : "Courier details copied.");
       closeCourierModal();
-    } catch (err) {
-      toast.error(friendlyApiError(err, "Failed to copy courier details."));
-    }
+    } catch (error) {
+      toast.error(friendlyApiError(error, "Could not save or copy. Your details remain available to review and retry."));
+    } finally { deliveryLock.current = false; setDeliveryWorking(false); }
+  }
+
+  async function copyWorkerDraft() {
+    if (deliveryLock.current) return;
+    deliveryLock.current = true;
+    setDeliveryWorking(true);
+    try {
+      await copyTextToClipboard(courierPreviewText);
+      toast.success("Preparation draft copied — resolve warnings before delivery.");
+    } catch { toast.error("Copy failed. Select and copy the preview text."); }
+    finally { deliveryLock.current = false; setDeliveryWorking(false); }
+  }
+
+  async function reloadDeliveryDetails() {
+    if (!courierTarget || deliveryLock.current) return;
+    if (courierHasChanges && !window.confirm("Reload details and discard your unsaved changes?")) return;
+    if (deliveryMode !== "worker") { await openCourierModal(courierTarget); return; }
+    deliveryLock.current = true;
+    setDeliveryWorking(true);
+    try { showWorkerDialog((await getWorkerSheet(courierTarget._id, false).unwrap()).data); }
+    catch (error) { toast.error(friendlyApiError(error, "Could not reload this order. It may have changed or closed.")); }
+    finally { deliveryLock.current = false; setDeliveryWorking(false); }
   }
 
   async function onInvoicePdf(order) {
@@ -1401,7 +1475,7 @@ export default function AdminOrdersPage() {
 	  {rows.map((o) => {
 	    const row = getOrderRowMeta(o);
 	    const rowCopy = copyId === o._id;
-	    const rowCourier = courierTarget?._id === o._id;
+	    const rowCourier = courierTarget?._id === o._id || courierLoadingId === o._id;
 	    const rowDelete = deleteId === o._id;
 	    const rowDeletePreview = deletePreviewId === o._id;
     const state = row.actionState;
@@ -1544,13 +1618,19 @@ export default function AdminOrdersPage() {
                 ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                 : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
             ].join(" ")}
-            disabled={rowCopy}
+            disabled={Boolean(copyId || workerCopyId)}
             onClick={() => onCopy(o)}
             title="Copy order"
           >
             <FiSend className="h-3.5 w-3.5" />
             Copy
           </button>
+          <WorkerPickListButton
+            order={o}
+            isCopying={workerCopyId === o._id}
+            disabled={Boolean(workerCopyId || copyId)}
+            onClick={onCopyWorkerPickList}
+          />
           <Link
             to={buildOrderDetailsHref(o._id, listQueryString)}
             className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
@@ -1599,7 +1679,7 @@ export default function AdminOrdersPage() {
 	                  {rows.map((o) => {
 	                    const row = getOrderRowMeta(o);
 	                    const rowCopy = copyId === o._id;
-	                    const rowCourier = courierTarget?._id === o._id;
+	                    const rowCourier = courierTarget?._id === o._id || courierLoadingId === o._id;
 	                    const rowDelete = deleteId === o._id;
 	                    const rowDeletePreview = deletePreviewId === o._id;
                     const state = row.actionState;
@@ -1724,13 +1804,20 @@ export default function AdminOrdersPage() {
                                 "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
                                 rowCopy ? "cursor-not-allowed text-slate-300" : "",
                               ].join(" ")}
-                              disabled={rowCopy}
+                              disabled={Boolean(copyId || workerCopyId)}
                               onClick={() => onCopy(o)}
                               aria-label="Copy order"
                               title="Copy order"
                             >
                               <FiSend className="h-4 w-4" />
                             </button>
+                            <WorkerPickListButton
+                              order={o}
+                              isCopying={workerCopyId === o._id}
+                              disabled={Boolean(workerCopyId || copyId)}
+                              onClick={onCopyWorkerPickList}
+                              compact
+                            />
                             <Link
                               to={buildOrderDetailsHref(o._id, listQueryString)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -1830,7 +1917,14 @@ export default function AdminOrdersPage() {
         onCourierNoteChange={updateCourierInstructionNote}
         onCourierNotesReset={resetCourierInstructionNotes}
         onClose={closeCourierModal}
-        onSubmit={submitCourierDetails}
+        onSubmit={() => submitCourierDetails(true)}
+        onSaveOnly={() => submitCourierDetails(false)}
+        onCopyDraft={copyWorkerDraft}
+        onRefresh={reloadDeliveryDetails}
+        requiresSave={deliveryRequiresSave}
+        readOnly={deliveryReadOnly}
+        mode={deliveryMode}
+        sheet={workerSheet}
         isSaving={isSavingCourier}
         error={courierSaveError}
       />

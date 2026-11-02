@@ -167,7 +167,7 @@ function AccountProfileForm({
 
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Address
+                    Default delivery address
                   </label>
                   <textarea
                     className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500"
@@ -177,6 +177,7 @@ function AccountProfileForm({
                     placeholder="Street, building, city, country"
                     disabled={!isEditing}
                   />
+                  <p className="mt-2 text-xs text-slate-500">Used for new orders. Existing orders keep their saved delivery details.</p>
                 </div>
               </div>
             </div>

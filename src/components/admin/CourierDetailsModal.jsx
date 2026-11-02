@@ -1,4 +1,6 @@
-import { FiRefreshCw, FiTruck, FiX } from "react-icons/fi";
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { FiClipboard, FiRefreshCw, FiTruck, FiX } from "react-icons/fi";
 
 import ErrorMessage from "../common/ErrorMessage";
 import { courierPickupConfig } from "../../config/courierConfig";
@@ -34,7 +36,7 @@ function DeliveryField({
   multiline = false,
 }) {
   const className = [
-    "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 placeholder:text-slate-400 focus:outline-none focus:ring-2",
+    "w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 placeholder:text-slate-400 focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-500",
     missing
       ? "ring-amber-300 focus:ring-amber-400/50"
       : "ring-slate-200 focus:ring-slate-900/20",
@@ -111,6 +113,10 @@ export default function CourierDetailsModal({
   form,
   missingFields = [],
   hasChanges = false,
+  requiresSave = false,
+  readOnly = false,
+  mode = "courier",
+  sheet,
   courierNotes = [],
   previewText = "",
   onFieldChange,
@@ -118,14 +124,33 @@ export default function CourierDetailsModal({
   onCourierNotesReset,
   onClose,
   onSubmit,
+  onSaveOnly,
+  onCopyDraft,
+  onRefresh,
   isSaving = false,
   error,
 }) {
+  const dialog = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement;
+    dialog.current?.querySelector("button")?.focus();
+    return () => { if (previous?.isConnected) previous.focus(); };
+  }, [open]);
   if (!open) return null;
+  const worker = mode === "worker";
+  const needsSave = hasChanges || requiresSave;
+  function onKeyDown(event) {
+    if (event.key === "Escape" && !isSaving) { event.stopPropagation(); onClose(); }
+    if (event.key !== "Tab") return;
+    const nodes = [...dialog.current.querySelectorAll("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href]")];
+    const first = nodes[0], last = nodes.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  }
 
   const missingKeys = new Set(missingFields.map((field) => field.key));
   const addressOrLocationMissing = missingKeys.has("addressOrLocation");
-  const user = order?.user && typeof order.user === "object" ? order.user : {};
   const orderNumber = order?.orderNumber || order?._id || "-";
   const pickupPhones = Array.isArray(courierPickupConfig.phoneNumbers)
     ? courierPickupConfig.phoneNumbers.map(clean).filter(Boolean).join(" / ")
@@ -135,11 +160,12 @@ export default function CourierDetailsModal({
     !clean(courierPickupConfig.googleMapsUrl) ? "pickup map" : "",
     !pickupPhones ? "pickup phone" : "",
   ].filter(Boolean);
-  const primaryDisabled = isSaving || missingFields.length > 0;
+  const primaryDisabled = isSaving || missingFields.length > 0 || (readOnly && requiresSave) || (worker && sheet?.problems?.length > 0 && !needsSave);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-3 py-6">
+  return createPortal(
+    <div onKeyDown={onKeyDown} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 px-3 py-6">
       <div
+        ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="courier-details-title"
@@ -149,14 +175,14 @@ export default function CourierDetailsModal({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100">
-                <FiTruck className="h-4 w-4" aria-hidden="true" />
+                {worker ? <FiClipboard className="h-4 w-4" aria-hidden="true" /> : <FiTruck className="h-4 w-4" aria-hidden="true" />}
               </span>
               <div>
                 <h2
                   id="courier-details-title"
                   className="text-base font-semibold text-slate-900"
                 >
-                  Courier details
+                  {worker ? "Prepare & Deliver" : "Courier details"}
                 </h2>
                 <div className="text-xs text-slate-500">Order {orderNumber}</div>
               </div>
@@ -167,7 +193,7 @@ export default function CourierDetailsModal({
             onClick={onClose}
             disabled={isSaving}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300"
-            aria-label="Close courier details"
+            aria-label={worker ? "Close prepare and deliver" : "Close courier details"}
           >
             <FiX className="h-4 w-4" />
           </button>
@@ -175,6 +201,7 @@ export default function CourierDetailsModal({
 
         <div className="grid gap-4 p-4 lg:grid-cols-[1fr_1fr]">
           <div className="space-y-4">
+            {!worker && (
             <section className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
               <div className="text-sm font-semibold text-slate-900">Pickup</div>
               <div className="mt-1 text-xs text-slate-500">
@@ -204,20 +231,24 @@ export default function CourierDetailsModal({
                 />
               </div>
             </section>
+            )}
 
             <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-              <div className="text-sm font-semibold text-slate-900">Drop-off</div>
+              <div className="text-sm font-semibold text-slate-900">Delivery for this order</div>
               <div className="mt-1 text-xs text-slate-500">
-                Saved to the client delivery profile.
+                {readOnly ? "This order is closed. Delivery details are read-only." : "Changes apply to this order only. An address or map is sufficient."}
               </div>
+              {requiresSave && !readOnly && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Suggested from customer profile — review and save for this order.</p>}
+              {readOnly && !order?.resolvedDelivery?.details && <p className="mt-3 text-sm text-amber-800">Historical delivery details are unavailable.</p>}
               {missingFields.length ? (
                 <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
                   Add {missingFields.map((field) => field.label).join(", ")} before
                   copying.
                 </div>
               ) : null}
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ReadOnlyLine label="Client" value={user.name || "-"} />
+              <fieldset disabled={readOnly || isSaving} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <DeliveryField id="courier-contact-name" label="Recipient name" value={form.contactName}
+                  onChange={(value) => onFieldChange("contactName", value)} missing={missingKeys.has("contactName")} />
                 <DeliveryField
                   id="courier-phone"
                   label="Primary phone"
@@ -236,8 +267,8 @@ export default function CourierDetailsModal({
                 <DeliveryField
                   id="courier-map"
                   label="Google Maps location"
-                  value={form.deliveryGoogleMapsUrl}
-                  onChange={(value) => onFieldChange("deliveryGoogleMapsUrl", value)}
+                  value={form.googleMapsUrl}
+                  onChange={(value) => onFieldChange("googleMapsUrl", value)}
                   placeholder="https://maps..."
                   missing={addressOrLocationMissing}
                   missingHint="Address or map required"
@@ -258,15 +289,16 @@ export default function CourierDetailsModal({
                   <DeliveryField
                     id="courier-notes"
                     label="Delivery notes"
-                    value={form.deliveryNotes}
-                    onChange={(value) => onFieldChange("deliveryNotes", value)}
+                    value={form.notes}
+                    onChange={(value) => onFieldChange("notes", value)}
                     placeholder="Optional notes for courier"
                     multiline
                   />
                 </div>
-              </div>
+              </fieldset>
             </section>
 
+            {!worker && (
             <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-slate-900">
@@ -294,11 +326,16 @@ export default function CourierDetailsModal({
                 ))}
               </div>
             </section>
+            )}
           </div>
 
           <section className="rounded-2xl bg-slate-950 p-3 text-white">
             <div className="text-sm font-semibold">Message preview</div>
+            {worker && sheet?.generatedAt && <p className="mt-1 text-xs text-slate-300">Loaded {new Date(sheet.generatedAt).toLocaleString()}</p>}
+            {worker && sheet?.problems?.length > 0 && <ul className="mt-2 list-disc pl-4 text-xs text-amber-200">{sheet.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
+            {worker && sheet?.problems?.length > 0 && <p className="mt-2 text-xs text-amber-200">Resolve slot/quantity issues in the order reservation panel.</p>}
             <textarea
+              aria-label="Message preview"
               readOnly
               value={previewText}
               className="mt-3 h-[28rem] w-full resize-none rounded-xl border border-white/10 bg-slate-900 px-3 py-2 font-mono text-xs leading-5 text-slate-100 outline-none"
@@ -321,6 +358,9 @@ export default function CourierDetailsModal({
           >
             Cancel
           </button>
+          {onRefresh && <button type="button" onClick={onRefresh} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Reload details</button>}
+          {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Save for this order</button>}
+          {worker && (sheet?.problems?.length > 0 || hasChanges) && <button type="button" onClick={onCopyDraft} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Copy preparation draft</button>}
           <button
             type="button"
             onClick={onSubmit}
@@ -328,9 +368,9 @@ export default function CourierDetailsModal({
             title={
               missingFields.length
                 ? "Add the required delivery fields first."
-                : hasChanges
-                ? "Save delivery details and copy courier message."
-                : "Copy courier message."
+                : needsSave
+                ? "Save delivery details for this order and copy the message."
+                : worker ? "Copy prepare and deliver sheet." : "Copy courier message."
             }
             className={[
               "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white transition",
@@ -339,10 +379,10 @@ export default function CourierDetailsModal({
                 : "bg-slate-900 hover:bg-slate-800",
             ].join(" ")}
           >
-            {isSaving ? "Saving..." : hasChanges ? "Save & Copy" : "Copy"}
+            {isSaving ? "Saving..." : needsSave && !readOnly ? "Save & Copy" : "Copy"}
           </button>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 }
