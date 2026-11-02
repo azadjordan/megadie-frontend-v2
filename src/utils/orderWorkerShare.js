@@ -25,35 +25,34 @@ export function buildWorkerOrderShareText(sheet) {
   }
   const total = [...items.values()].reduce((sum, item) => sum + item.orderedQty, 0);
   const summary = `${items.size} ${items.size === 1 ? "item" : "items"} — ${units(total)}`;
+  const numberedItems = [...items].map(([sku, item], index) => ({
+    ...item, sku, number: String(index + 1).padStart(2, "0"),
+  }));
   const draft = Boolean(sheet.problems?.length);
   const lines = [
-    `*Carton Tag: ${line(sheet.label)}*`,
-    "",
-    `*${draft ? "PREPARATION DRAFT — HOLD" : "PREPARE & DELIVER"} — ORDER #${line(sheet.orderNumber)}*`,
-    "",
+    `*${draft ? "PREPARATION DRAFT — HOLD" : "PREPARE & DELIVER"}*`,
+    `_Order:_ ${line(sheet.orderNumber)}`,
+    `_Carton Tag:_ *${line(sheet.label)}*`,
     `*${summary}*`,
   ];
   if (draft) lines.push("", ...sheet.problems.map((problem) => `⚠ ${line(problem)}`));
   if (sheet.notices?.length) lines.push("", ...sheet.notices.map((notice) => `⚠ ${line(notice)}`));
   lines.push("", "*1. PICK*");
-  for (const [sku, item] of items) {
-    lines.push("", `• *${sku}*`, "");
-    let pickedQty = 0;
+  for (const item of numberedItems) {
+    lines.push(`*${item.number})* ${item.sku}`);
     for (const [slot, allocation] of [...item.slots].sort(([a], [b]) => slotSort.compare(a, b))) {
       const deducted = allocation.deductedQty ? ` (${allocation.deductedQty} deducted)` : "";
-      lines.push(`- ${slot}: ${units(allocation.qty)}${deducted}`);
-      pickedQty += allocation.qty;
+      lines.push(`   ↳ ${slot}: *${units(allocation.qty)}*${deducted}`);
     }
-    if (!item.slots.size) lines.push("No reserved slots — confirm before picking.");
-    lines.push(`- Total: ${units(pickedQty)}`);
+    if (!item.slots.size) lines.push("   ↳ No reserved slots — confirm before picking.");
   }
-  lines.push("", "*2. PACK & CHECK*", "");
-  for (const [sku, item] of items) {
-    lines.push(`- ${sku} — ${units(item.orderedQty)}`);
+  lines.push("", "*2. PACK & CHECK*");
+  for (const item of numberedItems) {
+    lines.push(`☐ *${item.number})* ${item.sku} — *${item.orderedQty}*`);
   }
-  lines.push("", `*Total: ${summary}*`, "", "*3. DELIVER*", "");
+  lines.push(`*Total: ${summary}*`, "", "*3. DELIVER*");
   const delivery = sheet.delivery?.details || {};
-  if (delivery.address) lines.push(`Address: ${delivery.address.trim()}`);
-  if (delivery.googleMapsUrl) lines.push("", `Map: ${line(delivery.googleMapsUrl)}`);
+  if (delivery.address) lines.push(`_Address:_ ${line(delivery.address)}`);
+  if (delivery.googleMapsUrl) lines.push(`_Map:_ ${line(delivery.googleMapsUrl)}`);
   return lines.join("\n");
 }

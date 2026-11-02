@@ -65,40 +65,31 @@ Keep the existing external Courier pickup block and configuration: its recipient
 
 ## 6. Staff text and minimal state rules
 
-The pure `orderWorkerShare.js` formatter groups by distinct SKU and then naturally sorts that SKU's slots. It sums duplicate SKU/slot rows, shows the quantity for each slot and the total to pick for that SKU, and lists the expected per-SKU quantities again under Pack & Check. Product names and descriptions are never displayed, including when older API payloads still contain them.
+The pure `orderWorkerShare.js` formatter groups by distinct SKU and then naturally sorts that SKU's slots. It sums duplicate SKU/slot rows and shows each slot quantity under a numbered SKU. PICK has no per-SKU subtotal; Pack & Check uses the same item numbers with the ordered totals. Product names and descriptions are never displayed, including when older API payloads still contain them.
 
-The carton tag is labeled at the top; its identifier retains the compact initials-plus-order-suffix format. Count distinct SKUs as items and sum ordered quantities as units, with the same summary at the top and the bottom of Pack & Check. Use this sequence:
+The compact header contains the title, italic Order label, italic Carton Tag label with the identifier in bold, and the item/unit summary. The identifier retains its initials-plus-order-suffix format. Count distinct SKUs as items and sum ordered quantities as units, with the same summary at the top and the bottom of Pack & Check. Use this sequence:
 
 ```text
-Carton Tag: ASPP-9E7D51
+*PREPARE & DELIVER*
+_Order:_ ORD-261101-9E7D51
+_Carton Tag:_ *ASPP-9E7D51*
+*2 items — 10 units*
 
-PREPARE & DELIVER — ORDER #ORD-261101-9E7D51
+*1. PICK*
+*01)* RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL
+   ↳ L1-AE1: *5 units*
+   ↳ L2-AE1: *3 units*
+*02)* RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL
+   ↳ E7-AE1: *2 units*
 
-2 items — 10 units
+*2. PACK & CHECK*
+☐ *01)* RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL — *8*
+☐ *02)* RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL — *2*
+*Total: 2 items — 10 units*
 
-1. PICK
-
-• RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL
-- L1-AE1: 5 units
-- L2-AE1: 3 units
-- Total: 8 units
-
-• RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL
-- E7-AE1: 2 units
-- Total: 2 units
-
-2. PACK & CHECK
-
-- RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL — 8 units
-- RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL — 2 units
-
-Total: 2 items — 10 units
-
-3. DELIVER
-
-Address: Alain Sinaiyah
-
-Map: https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic
+*3. DELIVER*
+_Address:_ Alain Sinaiyah
+_Map:_ https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic
 ```
 
 DELIVER includes only the saved address and map link. Names, phones, secondary phones, contact details, notes, product descriptions, prices, and internal information are excluded. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
@@ -158,3 +149,9 @@ The delivery dialog is portaled above the mobile navigation, traps keyboard focu
 The follow-up regression suite checks the exact requested two-item/10-unit message, multiple slots per SKU, duplicate SKU/slot aggregation, natural slot sorting, singular quantities, draft allocation totals, and omission of names/descriptions/contacts/notes. Browser coverage also checks location-only saved and legacy orders; contact completeness is enforced only for Courier. The same formatter serves direct copy, preview, draft copy, and clipboard retry for every order.
 
 Refinement verification: 22 backend/helper/API integration/regression tests, 8 frontend helper/formatter tests, and 9 delivery browser tests against each of the dev and production builds passed. Full frontend lint and production build passed. Database mutations used an isolated local replica set; browser API/clipboard interception prevented production access and OS clipboard writes.
+
+## 12. Compact WhatsApp presentation
+
+The latest format uses actual WhatsApp single-asterisk bold and underscore italic markup. Items are numbered once per distinct SKU and keep the same minimum-two-digit number in PICK and PACK & CHECK, including lists above 99 items. PICK uses indented arrow slot lines with bold quantities and no individual SKU totals. Packing uses checkbox lines with bold numeric totals. Only the address and map appear in DELIVER, with italic labels and no extra blank lines. Multiline addresses are flattened to one line. Existing draft/allocation warnings remain visible for incomplete orders.
+
+Compact-format verification: 10 frontend helper/formatter tests and 9 delivery browser tests on each of the dev and production builds passed, together with full frontend lint and build. Exact-output coverage includes the supplied WhatsApp template, matching item numbers above 99, multiple slots, no PICK subtotals, location-only delivery, and compact address lines. This presentation update changes no backend runtime logic.
