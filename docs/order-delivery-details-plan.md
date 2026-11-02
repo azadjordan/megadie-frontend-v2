@@ -12,9 +12,9 @@ Retain two actions on the existing admin order rows:
 - **Courier**, with the existing truck icon and courier message.
 - **Prepare & Deliver**, replacing the unfinished Pick list action, with a clipboard/checklist icon.
 
-Both use the destination saved on the order. Store pickup details appear only in the staff sheet, grouped by the actual stores used. The external courier keeps the existing handoff point and commercial instructions until its relationship to AE1/AE2 is confirmed.
+Both use the destination saved on the order. AE1 identifies the first UAE store, and currently there is only one UAE store. The staff sheet therefore shows one AE1 pickup followed by its slots. The earlier assumption of two existing physical stores is withdrawn; AE2's meaning needs clarification. The external courier keeps its existing handoff point and commercial instructions until its relationship to AE1 is confirmed.
 
-The first plan added too much: a customer-default migration, a separate store directory, a full profile UI expansion, and a preview/refetch/comparison loop. The reviewed backend retains existing customer address fields and uses existing SiteSettings for two locations. The frontend follows those simpler contracts.
+The first plan added too much: a customer-default migration, a separate store directory, a full profile UI expansion, and a preview/refetch/comparison loop. The reviewed backend retains existing customer address fields and uses existing SiteSettings for the confirmed pickup location. The frontend follows those simpler contracts.
 
 ## 2. Prepare & Deliver interaction
 
@@ -59,14 +59,14 @@ The correct profile API is `/users/account/profile`. There is no nested `default
 
 ## 5. Store locations: a small settings dialog
 
-Add a **Store locations** button beside the existing inventory tabs, opening two short forms for AE1 and AE2. No new admin page or route is required. Read/save through the existing siteSettings API slice:
+Add a **Store location** button beside the existing inventory tabs, opening one short AE1 form. Do not create an AE2 form or an add-store workflow based on the earlier assumption. No new admin page or route is required. Read/save through the existing siteSettings API slice:
 
 - GET `/site-settings/store-locations`.
 - PUT `/site-settings/store-locations/:code`.
 
-Fields: optional display name (otherwise use AE1/AE2), address, map link, up to two phone numbers, and optional pickup notes. Codes are read-only. An address or map makes the pickup usable; phones are optional. Incomplete setup is saved but clearly flagged when an order sheet needs it.
+Fields: display name (suggest Megadie UAE), address, map link, up to two phone numbers, and optional pickup notes. AE1 is read-only as the code. An address or map makes the pickup usable; phones are optional. Incomplete setup is saved but clearly flagged when an order sheet needs it.
 
-Only fetch these settings when the dialog opens. Keep the public maintenance notice unchanged and do not put store locations in customer-facing screens. Do not copy the existing courier pin into either store automatically.
+Only fetch these settings when the dialog opens. Keep the public maintenance notice unchanged and do not put store locations in customer-facing screens. Confirm whether the existing courier pin is AE1 before reusing it. Do not relabel/delete inventory codes or map AE2 to AE1 without clarification.
 
 ## 6. Staff text and minimal state rules
 
@@ -77,10 +77,9 @@ PREPARE & DELIVER — ORDER #...
 Carton tag: #... · customer initials
 
 COLLECT & PICK
-AE1 — address / map / optional phone
+Megadie UAE (AE1) — address / map / optional phone
 Slot A2-AE1 · SKU / order product name · quantity
-AE2 — address / map / optional phone
-Slot B1-AE2 · SKU / order product name · quantity
+Slot B1-AE1 · SKU / order product name · quantity
 
 PACK & CHECK
 SKU · ordered quantity / allocated quantity
@@ -91,7 +90,7 @@ Recipient name / phone / optional secondary phone
 Address / map / delivery notes
 ```
 
-Show only used stores, naturally sort slots, and include one per-SKU packing check across stores. Use the order's existing SKU/product-name snapshot; fall back to SKU when a historical name is missing. Use units without adding a selling-unit model or per-product requests.
+Show one pickup for the current AE1 store, naturally sort its slots, and include one per-SKU packing check. Do not invent another pickup for an unconfigured code; show a clear location issue instead. Additional physical pickups can be shown if they are confirmed later. Use the order's existing SKU/product-name snapshot; fall back to SKU when a historical name is missing. Use units without adding a selling-unit model or per-product requests.
 
 The backend returns `problems` (draft/HOLD) and `notices` (advisory). Display them plainly rather than implementing a second client readiness engine. Processing orders can produce a preparation draft; complete Shipping orders can produce the normal sheet. Cancelled/Delivered staff actions are disabled; there is no new historical-reference copy mode.
 
@@ -108,7 +107,7 @@ Include recipient contact and delivery instructions intentionally. Exclude price
 | Delivery fields and pure share helpers | Reuse inputs where actually needed; share normalization, keep separate staff/courier formatters |
 | `AdminUserDetailsPage.jsx` / user APIs | Two optional contact override fields; retain existing address storage |
 | `AccountProfilePage.jsx` | Clarify default address scope; preserve existing form |
-| `siteSettingsApiSlice.js` / inventory tabs | Two settings endpoints and a small AE1/AE2 editor dialog |
+| `siteSettingsApiSlice.js` / inventory tabs | Two settings endpoints and a small AE1 editor dialog |
 
 Use the existing React, RTK Query, icons, styling, and clipboard utility. No new dependencies. Preserve the four local pick-list prototype files and evolve them rather than adding a third action.
 
@@ -124,16 +123,16 @@ Implement backend order/default storage and editing first, then switch Courier. 
 - Order contact edits leave account identity/defaults alone; optional default contact overrides work and can be cleared back to account contact.
 - Legacy active suggestions require explicit saving; completed legacy orders do not show invented historical details; saved blank fields stay blank.
 - Stale saves preserve the form and show a conflict; cancelled/delivered order edits are blocked.
-- One/two stores, slot ordering, duplicate SKU quantities, missing locations, and partial/excess/mixed allocations produce the right text/issues.
+- AE1 appears once with correctly ordered slots and SKU quantities; missing/unconfigured locations and partial/excess/mixed allocations produce clear issues.
 - Staff text contains necessary delivery contacts and excludes financial/internal fields; Courier uses the same saved destination.
 - Clipboard failure preserves text, duplicate clicks are blocked, copying performs no writes, and the order list creates no sheet requests.
-- The two-form settings dialog preserves other settings. Existing account form saves preserve unedited delivery values.
+- The AE1 settings form preserves other settings. Existing account form saves preserve unedited delivery values.
 - Labels, keyboard/focus behavior, compact action names, and mobile long-address wrapping remain usable.
 
 Extend existing pure helper/formatter tests. Use a disposable test database for integration, then run focused browser checks plus `npm run lint` and `npm run build`. No application tests or production writes are needed for this planning review.
 
 ## 9. Scope and release
 
-Backend deploys first, frontend second in one coordinated release. Avoid order creation/courier edits in between, because the old form writes User while the new backend saves destinations on orders; review affected active orders if either action occurred during that gap. Real AE1/AE2 addresses/maps are still needed before operational use; the existing courier handoff remains unchanged until clarified. No bulk address migration, completed-order backfill, inventory workflow change, new historical-reference view, or profile redesign is included.
+Backend deploys first, frontend second in one coordinated release. Avoid order creation/courier edits in between, because the old form writes User while the new backend saves destinations on orders; review affected active orders if either action occurred during that gap. AE1's actual address/map is still needed before operational use; clarify AE2 if it appears in allocations, and keep the existing courier handoff unchanged until its location is confirmed. No bulk address migration, completed-order backfill, inventory workflow change, new historical-reference view, or profile redesign is included.
 
 Both repositories stay on `feat/order-delivery-details`. Existing unfinished work is preserved and unrelated backend inventory scripts are excluded. This revision changes the plans only; implementation and release remain subsequent work.
