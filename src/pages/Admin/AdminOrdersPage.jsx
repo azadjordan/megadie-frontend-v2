@@ -303,7 +303,7 @@ function InvoicePdfButton({
   );
 }
 
-function WorkerPickListButton({ order, isCopying, disabled, compact = false, onClick }) {
+function PrepareDeliverButton({ order, isLoading, disabled, compact = false, onClick }) {
   const isClosed = ["Cancelled", "Delivered"].includes(order?.status);
   return (
     <button
@@ -314,12 +314,12 @@ function WorkerPickListButton({ order, isCopying, disabled, compact = false, onC
       ].join(" ")}
       disabled={disabled || isClosed}
       onClick={() => onClick(order)}
-      aria-label="Copy prepare and deliver sheet"
-      aria-busy={isCopying}
-      title={isClosed ? "Closed orders cannot be prepared" : "Copy prepare and deliver sheet"}
+      aria-label="Prepare and deliver order"
+      aria-busy={isLoading}
+      title={isClosed ? "Closed orders cannot be prepared" : "Prepare and deliver order"}
     >
-      <FiClipboard className={`h-4 w-4 ${isCopying ? "animate-pulse" : ""}`} />
-      {!compact && (isCopying ? "Copying..." : "Prepare & Deliver")}
+      <FiClipboard className={`h-4 w-4 ${isLoading ? "animate-pulse" : ""}`} />
+      {!compact && (isLoading ? "Loading..." : "Prepare & Deliver")}
     </button>
   );
 }
@@ -612,7 +612,7 @@ export default function AdminOrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copyId, setCopyId] = useState(null);
-  const [workerCopyId, setWorkerCopyId] = useState(null);
+  const [workerLoadingId, setWorkerLoadingId] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [deletePreviewId, setDeletePreviewId] = useState(null);
@@ -623,6 +623,8 @@ export default function AdminOrdersPage() {
   const [courierTarget, setCourierTarget] = useState(null);
   const [deliveryMode, setDeliveryMode] = useState("courier");
   const [workerSheet, setWorkerSheet] = useState(null);
+  const [assignedTo, setAssignedTo] = useState("");
+  const [assignedToBase, setAssignedToBase] = useState("");
   const [courierLoadingId, setCourierLoadingId] = useState(null);
   const [deliveryWorking, setDeliveryWorking] = useState(false);
   const deliveryLock = useRef(false);
@@ -741,8 +743,9 @@ export default function AdminOrdersPage() {
     [courierForm, deliveryMode]
   );
   const courierHasChanges = useMemo(
-    () => hasCourierProfileChanges(courierBaseForm, courierForm),
-    [courierBaseForm, courierForm]
+    () => hasCourierProfileChanges(courierBaseForm, courierForm)
+      || (deliveryMode === "worker" && assignedTo.trim() !== assignedToBase),
+    [courierBaseForm, courierForm, deliveryMode, assignedTo, assignedToBase]
   );
   const deliveryRequiresSave = Boolean(courierTarget && !courierTarget.resolvedDelivery?.savedToOrder);
   const deliveryReadOnly = Boolean(courierTarget && !["Processing", "Shipping"].includes(courierTarget.status));
@@ -752,20 +755,22 @@ export default function AdminOrdersPage() {
       return buildWorkerOrderShareText({
         ...workerSheet,
         delivery: { ...workerSheet.delivery, details: getCourierDeliveryProfile(courierForm) },
-        problems: courierHasChanges ? [...workerSheet.problems, "Delivery changes are not saved. Review before delivery."] : workerSheet.problems,
+        assignedTo: assignedTo.trim(),
       });
     }
     return buildCourierShareText(courierTarget, {
       deliveryProfile: courierForm,
       pickupConfig: { ...courierPickupConfig, courierNotes: courierInstructionNotes },
     });
-  }, [courierTarget, deliveryMode, workerSheet, courierForm, courierHasChanges, courierInstructionNotes]);
+  }, [courierTarget, deliveryMode, workerSheet, courierForm, assignedTo, courierInstructionNotes]);
 
   function showDeliveryDialog(order, mode = "courier", sheet = null) {
     const form = getCourierDeliveryProfile(order.resolvedDelivery?.details);
     resetCourierSaveError();
     setDeliveryMode(mode);
     setWorkerSheet(sheet);
+    setAssignedTo(order.assignedTo || "");
+    setAssignedToBase(order.assignedTo || "");
     setCourierTarget(order);
     setCourierBaseForm(form);
     setCourierForm(form);
@@ -774,11 +779,11 @@ export default function AdminOrdersPage() {
 
   function showWorkerDialog(sheet) {
     showDeliveryDialog({ _id: sheet.orderId, orderNumber: sheet.orderNumber, status: sheet.status,
-      resolvedDelivery: sheet.delivery }, "worker", sheet);
+      resolvedDelivery: sheet.delivery, assignedTo: sheet.assignedTo || "" }, "worker", sheet);
   }
 
   async function onCopy(order) {
-    if (!order || copyId || workerCopyId) return;
+    if (!order || copyId || workerLoadingId) return;
     try {
       setCopyId(order._id);
       const text = buildAdminOrderShareText(order);
@@ -791,21 +796,17 @@ export default function AdminOrdersPage() {
     }
   }
 
-  async function onCopyWorkerPickList(order) {
-    if (!order?._id || workerCopyId || copyId || deliveryLock.current) return;
+  async function openPrepareDeliver(order) {
+    if (!order?._id || workerLoadingId || copyId || deliveryLock.current) return;
     deliveryLock.current = true;
     try {
-      setWorkerCopyId(order._id);
+      setWorkerLoadingId(order._id);
       const response = await getWorkerSheet(order._id, false).unwrap();
-      const sheet = response.data;
-      if (sheet.problems.length) { showWorkerDialog(sheet); return; }
-      try { await copyTextToClipboard(buildWorkerOrderShareText(sheet)); }
-      catch (error) { showWorkerDialog(sheet); throw error; }
-      toast.success("Prepare & Deliver sheet copied.");
+      showWorkerDialog(response.data);
     } catch (err) {
-      toast.error(friendlyApiError(err, "Could not copy the sheet. Use the preview to retry or select the text."));
+      toast.error(friendlyApiError(err, "Could not load preparation and delivery details."));
     } finally {
-      setWorkerCopyId(null);
+      setWorkerLoadingId(null);
       deliveryLock.current = false;
     }
   }
@@ -826,6 +827,8 @@ export default function AdminOrdersPage() {
     resetCourierSaveError();
     setCourierTarget(null);
     setWorkerSheet(null);
+    setAssignedTo("");
+    setAssignedToBase("");
     setCourierBaseForm(getCourierDeliveryProfile());
     setCourierForm(getCourierDeliveryProfile());
     setCourierInstructionNotes(getDefaultCourierInstructionNotes());
@@ -863,10 +866,13 @@ export default function AdminOrdersPage() {
         const response = await updateOrderDelivery({ id: courierTarget._id,
           deliveryDetails: getCourierDeliveryProfile(courierForm),
           expectedRevision: courierTarget.resolvedDelivery.revision,
+          ...(deliveryMode === "worker" ? { assignedTo: assignedTo.trim() } : {}),
         }).unwrap();
-        finalOrder = { ...courierTarget, resolvedDelivery: response.data.resolvedDelivery };
+        finalOrder = { ...courierTarget, resolvedDelivery: response.data.resolvedDelivery, assignedTo: response.data.assignedTo || "" };
         const savedForm = getCourierDeliveryProfile(finalOrder.resolvedDelivery.details);
         setCourierTarget(finalOrder);
+        setAssignedTo(finalOrder.assignedTo);
+        setAssignedToBase(finalOrder.assignedTo);
         setCourierBaseForm(savedForm);
         setCourierForm(savedForm);
         if (deliveryMode === "worker") {
@@ -875,11 +881,10 @@ export default function AdminOrdersPage() {
             setWorkerSheet({ ...sheet, problems: [...sheet.problems, "Could not refresh the sheet. Reload details before copying final instructions."] });
             throw error;
           }
-          setWorkerSheet(sheet);
-          setCourierTarget({ ...finalOrder, resolvedDelivery: sheet.delivery });
+          showWorkerDialog(sheet);
         }
       }
-      if (!copyAfter) { toast.success("Delivery details saved for this order."); return; }
+      if (!copyAfter) { toast.success(deliveryMode === "worker" ? "Preparation details saved for this order." : "Delivery details saved for this order."); return; }
       if (deliveryMode === "worker" && sheet.problems.length) {
         toast.warning("Delivery saved. Resolve the remaining issues or copy the preparation draft."); return;
       }
@@ -1621,18 +1626,18 @@ export default function AdminOrdersPage() {
                 ? "cursor-not-allowed bg-white text-slate-300 ring-slate-200"
                 : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
             ].join(" ")}
-            disabled={Boolean(copyId || workerCopyId)}
+            disabled={Boolean(copyId || workerLoadingId)}
             onClick={() => onCopy(o)}
             title="Copy order"
           >
             <FiSend className="h-3.5 w-3.5" />
             Copy
           </button>
-          <WorkerPickListButton
+          <PrepareDeliverButton
             order={o}
-            isCopying={workerCopyId === o._id}
-            disabled={Boolean(workerCopyId || copyId)}
-            onClick={onCopyWorkerPickList}
+            isLoading={workerLoadingId === o._id}
+            disabled={Boolean(workerLoadingId || copyId)}
+            onClick={openPrepareDeliver}
           />
           <Link
             to={buildOrderDetailsHref(o._id, listQueryString)}
@@ -1807,18 +1812,18 @@ export default function AdminOrdersPage() {
                                 "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
                                 rowCopy ? "cursor-not-allowed text-slate-300" : "",
                               ].join(" ")}
-                              disabled={Boolean(copyId || workerCopyId)}
+                              disabled={Boolean(copyId || workerLoadingId)}
                               onClick={() => onCopy(o)}
                               aria-label="Copy order"
                               title="Copy order"
                             >
                               <FiSend className="h-4 w-4" />
                             </button>
-                            <WorkerPickListButton
+                            <PrepareDeliverButton
                               order={o}
-                              isCopying={workerCopyId === o._id}
-                              disabled={Boolean(workerCopyId || copyId)}
-                              onClick={onCopyWorkerPickList}
+                              isLoading={workerLoadingId === o._id}
+                              disabled={Boolean(workerLoadingId || copyId)}
+                              onClick={openPrepareDeliver}
                               compact
                             />
                             <Link
@@ -1928,6 +1933,8 @@ export default function AdminOrdersPage() {
         readOnly={deliveryReadOnly}
         mode={deliveryMode}
         sheet={workerSheet}
+        assignedTo={assignedTo}
+        onAssignedToChange={setAssignedTo}
         isSaving={isSavingCourier}
         error={courierSaveError}
       />

@@ -18,23 +18,22 @@ The first plan added too much: a customer-default migration, a store directory/s
 
 ## 2. Prepare & Deliver interaction
 
-Preserve the current pick-list prototype's normal one-click behavior:
+Always open the review modal for the selected order, including complete orders:
 
-1. Click Prepare & Deliver. Show loading on that action and prevent duplicate clicks.
-2. Make one fresh lazy GET `/orders/:id/fulfillment-sheet`, bypassing a cached result.
-3. If the Shipping order has no blocking problems, format and copy the returned sheet. Show success only when clipboard writing succeeds.
-4. If there are problems, show a small dialog with the draft, the concrete issues, and a clearly labeled **Copy preparation draft** action. Missing customer delivery details can be reviewed/edited there; reservation/slot issues use the existing reservation UI. Store addresses are not required and do not create warnings.
-5. A cancelled/delivered order has no actionable staff copy. The backend also checks this, because the row's status may be stale.
+1. Click Prepare & Deliver and make one fresh sheet request. Opening never copies, saves, reserves, or deducts anything.
+2. Show the optional saved Assigned To name, delivery address/map, and a live read-only message preview. Names, phones, and notes used by Courier stay in the full form state but are hidden in worker mode, so saving an address cannot erase them.
+3. Use Copy for an unchanged saved order and Save & Copy when delivery/assignment edits or legacy confirmation need saving. The save sends both values in the existing version-guarded order update, then refreshes the staff sheet once before copying.
+4. Optional assignment is omitted from the message when blank. Cancel/close discards unsaved edits; reopening loads the last saved name. Clearing and saving removes the assignment.
+5. Keep SKU/slot quantities read-only, with a link to the existing order/reservation screen for corrections. Actual preparation problems still produce a clearly marked draft/HOLD. Save for this order can persist incomplete details before copying a preparation draft.
+6. Preserve the modal and preview when clipboard copying fails. Retry uses the saved text without another read or write. Revision conflicts retain entered text and offer explicit reload/review.
 
-Do not require a preview dialog for every complete copy, refetch automatically on every dialog Copy click, compare response fingerprints, or introduce confirmation loops. A displayed draft/failed-copy preview can have a simple Refresh action. Copy its currently displayed text. After a destination save, fetch the updated sheet once before copying because it contains allocation/slot information too.
-
-Reuse `src/utils/clipboard.js`. If asynchronous clipboard access fails, keep the prepared text visible for a direct retry or manual selection; do not run another network read merely to retry the clipboard. No inventory, reservation, or order-status mutation is part of copying.
+Reuse the existing shared modal, styling, RTK Query, and clipboard helper. No new employee accounts, staff directory, assignment workflow, or notification system is needed.
 
 ## 3. Edit delivery for this order
 
 Reuse the existing CourierDetailsModal and extract a small delivery-fields component only where the staff dialog needs the same inputs. No generic form framework or new modal system is needed.
 
-Fields: recipient name, primary phone, optional secondary phone, written address, map link, and delivery notes/receiving hours. Both forms read backend `resolvedDelivery`; neither falls back independently to `order.user` when a saved destination exists.
+Courier fields remain recipient name, primary phone, optional secondary phone, written address, map link, and notes. Worker mode shows only Assigned To, written address, and map, while preserving the hidden delivery fields when saving. Both forms read backend `resolvedDelivery`; neither falls back independently to `order.user` when a saved destination exists.
 
 - Label the form **Delivery for this order**, with **Changes apply to this order only.**
 - Existing active orders without a saved destination show **Suggested from customer profile — review and save for this order.** Opening a dialog does not save or confirm it.
@@ -73,6 +72,7 @@ The compact header contains the title, italic Order label, italic Carton Tag lab
 *PREPARE & DELIVER*
 _Order:_ ORD-261101-9E7D51
 _Carton Tag:_ *ASPP-9E7D51*
+_Assigned To:_ *Ahmed*
 *2 items — 10 units*
 
 *1. PICK*
@@ -92,7 +92,7 @@ _Address:_ Alain Sinaiyah
 _Map:_ https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic
 ```
 
-DELIVER includes only the saved address and map link. Names, phones, secondary phones, contact details, notes, product descriptions, prices, and internal information are excluded. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
+DELIVER includes only the saved address and map link. Customer names, phones, contact details, notes, product descriptions, prices, and internal information are excluded. The optional assigned staff name is deliberately included in the header. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
 
 The backend returns `problems` (draft/HOLD) and `notices` (advisory). Display them plainly rather than implementing a second client readiness engine. Processing orders can produce a preparation draft; complete Shipping orders can produce the normal sheet. Cancelled/Delivered staff actions are disabled; there is no new historical-reference copy mode.
 
@@ -112,7 +112,7 @@ Staff text allows SKUs, slots, quantities, carton tag, order information, and de
 
 Use the existing React, RTK Query, icons, styling, and clipboard utility. No new dependencies. Preserve the four local pick-list prototype files and evolve them rather than adding a third action.
 
-One normal staff click makes one combined request. There are no per-row fulfillment fetches, store lookups per allocation, polling, or automatic second read on Copy. Force fresh reads on each new row action; no elaborate sheet cache invalidation network is needed. Keep ordinary order/list invalidation after a destination save. Refresh a displayed draft explicitly or after its destination is saved. Clipboard retry reuses the prepared text.
+Each staff modal opening makes one combined request. There are no per-row fulfillment fetches, store lookups per allocation, polling, or automatic second read on Copy. Force fresh reads on each new row action; no elaborate sheet cache invalidation network is needed. Keep ordinary order/list invalidation after a destination save. Refresh a displayed draft explicitly or after its destination is saved. Clipboard retry reuses the prepared text.
 
 The sheet is an informational read, not an atomic inventory snapshot. Show its generation time in a dialog. Existing transactional reservation/delivery/finalization code remains the authority; do not redesign it to guarantee the lifetime of copied text.
 
@@ -155,3 +155,9 @@ Refinement verification: 22 backend/helper/API integration/regression tests, 8 f
 The latest format uses actual WhatsApp single-asterisk bold and underscore italic markup. Items are numbered once per distinct SKU and keep the same minimum-two-digit number in PICK and PACK & CHECK, including lists above 99 items. PICK uses indented arrow slot lines with bold quantities and no individual SKU totals. Packing uses checkbox lines with bold numeric totals. Only the address and map appear in DELIVER, with italic labels and no extra blank lines. Multiline addresses are flattened to one line. Existing draft/allocation warnings remain visible for incomplete orders.
 
 Compact-format verification: 10 frontend helper/formatter tests and 9 delivery browser tests on each of the dev and production builds passed, together with full frontend lint and build. Exact-output coverage includes the supplied WhatsApp template, matching item numbers above 99, multiple slots, no PICK subtotals, location-only delivery, and compact address lines. This presentation update changes no backend runtime logic.
+
+## 13. Saved assignee and mandatory review modal
+
+An optional top-level Order.assignedTo string (120 characters maximum) is saved with the existing delivery revision guard; it is not part of the customer profile or six-field delivery value. Add `_Assigned To:_ *Ahmed*` after the carton tag when set. Every Prepare & Deliver click opens the modal; typing changes only local state and the live preview. The same saved assignment returns on reopening, clears when explicitly saved blank, and is preserved when a Courier edit omits the field. It is not exposed by customer-facing order reads. Existing stock/status workflows remain independent.
+
+Assignment/review verification: 25 backend/helper/API integration/regression tests, 11 frontend formatter/helper tests, and 11 browser tests on each of the dev and production builds passed. Full frontend lint/build passed. Coverage includes no copy on opening, one fresh read per opening, live assignment preview without requests, explicit save/reopen/clear, discarded unsaved edits, conflicts, hidden-contact preservation, optional legacy assignment, and clipboard retry without another write or refresh. Deploy the backend before the frontend; no database backfill is needed.

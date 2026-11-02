@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { FiClipboard, FiRefreshCw, FiTruck, FiX } from "react-icons/fi";
 
 import ErrorMessage from "../common/ErrorMessage";
@@ -117,6 +118,8 @@ export default function CourierDetailsModal({
   readOnly = false,
   mode = "courier",
   sheet,
+  assignedTo = "",
+  onAssignedToChange,
   courierNotes = [],
   previewText = "",
   onFieldChange,
@@ -233,6 +236,13 @@ export default function CourierDetailsModal({
             </section>
             )}
 
+            {worker && <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+              <label htmlFor="order-assigned-to" className="mb-2 block text-sm font-semibold text-slate-900">Assigned To (optional)</label>
+              <input id="order-assigned-to" value={assignedTo} onChange={(event) => onAssignedToChange(event.target.value)} maxLength={120} disabled={readOnly || isSaving} placeholder="e.g. Ahmed"
+                className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50" />
+              <p className="mt-2 text-xs text-slate-500">Saved on this order for the person preparing and delivering it.</p>
+            </section>}
+
             <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
               <div className="text-sm font-semibold text-slate-900">Delivery for this order</div>
               <div className="mt-1 text-xs text-slate-500">
@@ -247,6 +257,7 @@ export default function CourierDetailsModal({
                 </div>
               ) : null}
               <fieldset disabled={readOnly || isSaving} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {!worker && <>
                 <DeliveryField id="courier-contact-name" label="Recipient name" value={form.contactName}
                   onChange={(value) => onFieldChange("contactName", value)} missing={missingKeys.has("contactName")} />
                 <DeliveryField
@@ -264,6 +275,8 @@ export default function CourierDetailsModal({
                   onChange={(value) => onFieldChange("secondaryPhoneNumber", value)}
                   placeholder="Optional backup phone"
                 />
+                </>}
+                <div className={worker ? "sm:col-span-2" : ""}>
                 <DeliveryField
                   id="courier-map"
                   label="Google Maps location"
@@ -273,6 +286,7 @@ export default function CourierDetailsModal({
                   missing={addressOrLocationMissing}
                   missingHint="Address or map required"
                 />
+                </div>
                 <div className="sm:col-span-2">
                   <DeliveryField
                     id="courier-address"
@@ -285,6 +299,7 @@ export default function CourierDetailsModal({
                     multiline
                   />
                 </div>
+                {!worker && (
                 <div className="sm:col-span-2">
                   <DeliveryField
                     id="courier-notes"
@@ -295,6 +310,7 @@ export default function CourierDetailsModal({
                     multiline
                   />
                 </div>
+                )}
               </fieldset>
             </section>
 
@@ -331,6 +347,7 @@ export default function CourierDetailsModal({
 
           <section className="rounded-2xl bg-slate-950 p-3 text-white">
             <div className="text-sm font-semibold">Message preview</div>
+            {worker && <p className="mt-2 text-xs text-slate-300">Items, slots, and quantities come from the order&apos;s reservations. <Link to={`/admin/orders/${order?._id}`} className="underline underline-offset-2">View order and reservations</Link></p>}
             {worker && sheet?.generatedAt && <p className="mt-1 text-xs text-slate-300">Loaded {new Date(sheet.generatedAt).toLocaleString()}</p>}
             {worker && sheet?.problems?.length > 0 && <ul className="mt-2 list-disc pl-4 text-xs text-amber-200">{sheet.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
             {worker && sheet?.problems?.length > 0 && <p className="mt-2 text-xs text-amber-200">Resolve slot/quantity issues in the order reservation panel.</p>}
@@ -356,11 +373,11 @@ export default function CourierDetailsModal({
             disabled={isSaving}
             className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
           >
-            Cancel
+            Close
           </button>
           {onRefresh && <button type="button" onClick={onRefresh} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Reload details</button>}
           {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Save for this order</button>}
-          {worker && (sheet?.problems?.length > 0 || hasChanges) && <button type="button" onClick={onCopyDraft} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Copy preparation draft</button>}
+          {worker && sheet?.problems?.length > 0 && <button type="button" onClick={onCopyDraft} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Copy preparation draft</button>}
           <button
             type="button"
             onClick={onSubmit}

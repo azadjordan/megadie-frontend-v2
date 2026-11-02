@@ -39,6 +39,13 @@ test("matches the exact compact WhatsApp template, markup, and line breaks", () 
   assert.equal(buildWorkerOrderShareText(sheet), expected);
 });
 
+test("assignment appears in the header only when a name is supplied", () => {
+  const assigned = buildWorkerOrderShareText({ ...sheet, assignedTo: "  Ahmed  " });
+  assert.equal(assigned, expected.replace("_Carton Tag:_ *ASPP-9E7D51*\n", "_Carton Tag:_ *ASPP-9E7D51*\n_Assigned To:_ *Ahmed*\n"));
+  assert.equal(buildWorkerOrderShareText({ ...sheet, assignedTo: "   " }), expected);
+  assert.equal(buildWorkerOrderShareText({ ...sheet, assignedTo: "" }), expected);
+});
+
 test("omits all product names/descriptions, contacts, notes, store and financial details", () => {
   const text = buildWorkerOrderShareText({ ...sheet, store: { address: "PRIVATE-STORE" }, totalPrice: 999999,
     adminToAdminNote: "SECRET-NOTE", invoice: "SECRET-INVOICE", user: { email: "SECRET-EMAIL" } });

@@ -33,8 +33,9 @@ export function buildWorkerOrderShareText(sheet) {
     `*${draft ? "PREPARATION DRAFT — HOLD" : "PREPARE & DELIVER"}*`,
     `_Order:_ ${line(sheet.orderNumber)}`,
     `_Carton Tag:_ *${line(sheet.label)}*`,
-    `*${summary}*`,
   ];
+  if (line(sheet.assignedTo)) lines.push(`_Assigned To:_ *${line(sheet.assignedTo)}*`);
+  lines.push(`*${summary}*`);
   if (draft) lines.push("", ...sheet.problems.map((problem) => `⚠ ${line(problem)}`));
   if (sheet.notices?.length) lines.push("", ...sheet.notices.map((notice) => `⚠ ${line(notice)}`));
   lines.push("", "*1. PICK*");
