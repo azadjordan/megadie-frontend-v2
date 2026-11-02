@@ -12,7 +12,7 @@ Retain two actions on the existing admin order rows:
 - **Courier**, with the existing truck icon and courier message.
 - **Prepare & Deliver**, replacing the unfinished Pick list action, with a clipboard/checklist icon.
 
-Both use the destination saved on the order. AE1 identifies the first UAE store, and currently there is only one UAE store. The staff sheet therefore shows one AE1 pickup followed by its slots. The earlier assumption of two existing physical stores is withdrawn; AE2's meaning needs clarification. The external courier keeps its existing handoff point and commercial instructions until its relationship to AE1 is confirmed.
+Both use the destination saved on the order. AE1 identifies the first UAE store, and currently there is only one UAE store. AE2 is confirmed to be an unused code. The staff sheet therefore shows one AE1 pickup followed by its slots. The earlier assumption of two existing physical stores is withdrawn. The external courier keeps its existing handoff point and commercial instructions until its relationship to AE1 is confirmed.
 
 The first plan added too much: a customer-default migration, a separate store directory, a full profile UI expansion, and a preview/refetch/comparison loop. The reviewed backend retains existing customer address fields and uses existing SiteSettings for the confirmed pickup location. The frontend follows those simpler contracts.
 
@@ -66,7 +66,7 @@ Add a **Store location** button beside the existing inventory tabs, opening one 
 
 Fields: display name (suggest Megadie UAE), address, map link, up to two phone numbers, and optional pickup notes. AE1 is read-only as the code. An address or map makes the pickup usable; phones are optional. Incomplete setup is saved but clearly flagged when an order sheet needs it.
 
-Only fetch these settings when the dialog opens. Keep the public maintenance notice unchanged and do not put store locations in customer-facing screens. Confirm whether the existing courier pin is AE1 before reusing it. Do not relabel/delete inventory codes or map AE2 to AE1 without clarification.
+Only fetch these settings when the dialog opens. Keep the public maintenance notice unchanged and do not put store locations in customer-facing screens. Confirm whether the existing courier pin is AE1 before reusing it. AE2 stays an unused code with no location form; this feature does not rename/delete it or map it to AE1.
 
 ## 6. Staff text and minimal state rules
 
@@ -133,6 +133,6 @@ Extend existing pure helper/formatter tests. Use a disposable test database for 
 
 ## 9. Scope and release
 
-Backend deploys first, frontend second in one coordinated release. Avoid order creation/courier edits in between, because the old form writes User while the new backend saves destinations on orders; review affected active orders if either action occurred during that gap. AE1's actual address/map is still needed before operational use; clarify AE2 if it appears in allocations, and keep the existing courier handoff unchanged until its location is confirmed. No bulk address migration, completed-order backfill, inventory workflow change, new historical-reference view, or profile redesign is included.
+Backend deploys first, frontend second in one coordinated release. Avoid order creation/courier edits in between, because the old form writes User while the new backend saves destinations on orders; review affected active orders if either action occurred during that gap. AE1's actual address/map is still needed before operational use; unexpected AE2 allocations require data review because that code is unused. Keep the existing courier handoff unchanged until its location is confirmed. No bulk address migration, completed-order backfill, inventory workflow change, new historical-reference view, or profile redesign is included.
 
 Both repositories stay on `feat/order-delivery-details`. Existing unfinished work is preserved and unrelated backend inventory scripts are excluded. This revision changes the plans only; implementation and release remain subsequent work.
