@@ -1,183 +1,139 @@
-# Order delivery details — frontend implementation plan
+# Order delivery details — reviewed frontend plan
 
-Status: proposed implementation plan; application behavior is unchanged by this document.
-Date: 2026-11-02.
+Status: planning only; application behavior is unchanged.
+Reviewed: 2026-11-02. This version replaces the first plan.
 Branch in both repositories: `feat/order-delivery-details`.
-Frontend starting commit: `d1f574e` (`main`, synchronized with GitHub when branching).
-Backend starting commit: `93c2970`.
-Shared data/API contract: `../../megadie-backend/docs/order-delivery-details-plan.md`.
+Contract: [backend plan](../../megadie-backend/docs/order-delivery-details-plan.md).
 
-## 1. User-facing outcome
+## 1. Keep the workflow small
 
-Keep two clear actions in the admin orders page:
+Retain two actions on the existing admin order rows:
 
-- **Courier** — details for an external courier, using the existing courier handoff point and its current commercial/instruction content.
-- **Prepare & Deliver** — a checklist for the person collecting the order from AE1/AE2, packing it, and delivering it to the customer.
+- **Courier**, with the existing truck icon and courier message.
+- **Prepare & Deliver**, replacing the unfinished Pick list action, with a clipboard/checklist icon.
 
-Both actions use the same destination saved on the order. The editing form says **Delivery for this order**. Saving there changes that order only. Customer defaults are edited in the customer's own delivery section, and store addresses are edited in a small admin location section.
+Both use the destination saved on the order. Store pickup details appear only in the staff sheet, grouped by the actual stores used. The external courier keeps the existing handoff point and commercial instructions until its relationship to AE1/AE2 is confirmed.
 
-No order-row background fetching, new checkout steps, or extra confirmation dialog for copying a complete, already saved order is needed.
+The first plan added too much: a customer-default migration, a separate store directory, a full profile UI expansion, and a preview/refetch/comparison loop. The reviewed backend retains existing customer address fields and uses existing SiteSettings for two locations. The frontend follows those simpler contracts.
 
-## 2. Existing work to carry forward
+## 2. Prepare & Deliver interaction
 
-The branch preserves four existing local pick-list prototype files:
+Preserve the current pick-list prototype's normal one-click behavior:
 
-- `src/pages/Admin/AdminOrdersPage.jsx`
-- `src/features/orderAllocations/orderAllocationsApiSlice.js`
-- `src/utils/orderWorkerShare.js`
-- `src/utils/orderWorkerShare.test.mjs`
+1. Click Prepare & Deliver. Show loading on that action and prevent duplicate clicks.
+2. Make one fresh lazy GET `/orders/:id/fulfillment-sheet`, bypassing a cached result.
+3. If the Shipping order has no blocking problems, format and copy the returned sheet. Show success only when clipboard writing succeeds.
+4. If there are problems, show a small dialog with the draft, the concrete issues, and a clearly labeled **Copy preparation draft** action. Missing order delivery details can be reviewed/edited there; missing pickups link to store editing; reservation issues use the existing reservation UI.
+5. A cancelled/delivered order has no actionable staff copy. The backend also checks this, because the row's status may be stale.
 
-The prototype currently fetches the order and allocations separately, groups primarily by SKU, uses customer initials on a carton label, and avoids financial/contact fields. Evolve it into the shared-contract flow rather than adding a third overlapping action. Recipient contact data is now intentional in the staff sheet; financial and internal data still stay out. Keep the carton tag based on order number and customer initials, separate from the recipient's full delivery name.
+Do not require a preview dialog for every complete copy, refetch automatically on every dialog Copy click, compare response fingerprints, or introduce confirmation loops. A displayed draft/failed-copy preview can have a simple Refresh action. Copy its currently displayed text. After a destination save, fetch the updated sheet once before copying because it contains allocation/pickup information too.
 
-The planning mockup is `../../work/prepare-deliver-sheet.html` (local design reference, not a bundled application asset). It demonstrates collect/pick, pack/check, and deliver sections and several order conditions. Actual store locations remain unconfirmed placeholders there.
+Reuse `src/utils/clipboard.js`. If asynchronous clipboard access fails, keep the prepared text visible for a direct retry or manual selection; do not run another network read merely to retry the clipboard. No inventory, reservation, or order-status mutation is part of copying.
 
-## 3. Screen and interaction design
+## 3. Edit delivery for this order
 
-### Order actions and sheet preview
+Reuse the existing CourierDetailsModal and extract a small delivery-fields component only where the staff dialog needs the same inputs. No generic form framework or new modal system is needed.
 
-Use the existing orders-page action placement. Give Prepare & Deliver a clipboard/checklist icon, a visible label where space permits, and the accessible label **Copy prepare and deliver sheet** in compact layouts. Keep Courier's truck icon. Do not add another heavy panel to every row.
+Fields: recipient name, primary phone, optional secondary phone, written address, map link, and delivery notes/receiving hours. Both forms read backend `resolvedDelivery`; neither falls back independently to `order.user` when a saved destination exists.
 
-On opening Prepare & Deliver:
+- Label the form **Delivery for this order**, with **Changes apply to this order only.**
+- Existing active orders without a saved destination show **Suggested from customer profile — review and save for this order.** Opening a dialog does not save or confirm it.
+- Save through PUT `/orders/:id/delivery-details` with the six-field `deliveryDetails` value and `expectedRevision`. Remove the courier order dialog's `updateUserDelivery` call.
+- **Save for this order** permits incomplete details. **Save & Copy** explicitly saves reviewed values and then copies when complete; the label must disclose the save. Plain **Copy** never saves.
+- Final delivery text needs recipient name, primary phone, and address or map. Show simple field errors and keep entered text on failure.
+- On 409, retain entered text and offer reload/review. Do not force overwrite or automatically merge different recipients.
+- A saved empty field stays empty; a background refetch must not fill it from the account. Do not reset a form with unsaved edits when data refetches.
+- Delivered/cancelled delivery details are read-only. An older completed order with no saved destination displays unavailable rather than today's customer address.
 
-1. Fetch one fresh fulfillment-sheet response for the selected order; show loading on that action/dialog and prevent duplicate requests.
-2. Show a compact preview arranged in work order: **Collect & Pick → Pack & Check → Deliver**. Copy text preserves the same sequence.
-3. For a complete order, enable **Copy sheet**. For incomplete data, show the specific fixes and an explicitly labeled **Copy preparation draft** with HOLD text. A draft is never presented as ready for delivery.
-4. Offer **Edit order delivery** when the destination is missing or needs correction. If pickup details are missing, link to location settings. If allocations are incomplete, use the existing reservation workflow.
-5. Copy only after an explicit user action. Show success only after clipboard writing succeeds; preserve preview text for retry/select-and-copy when clipboard permission fails.
+Keep Courier's existing preview, pickup, total, and instruction notes. Load the selected order fresh when opening the form; a plain Copy uses the shown values. A save returns the authoritative destination/revision and can update that preview without another full read. The staff formatter and courier formatter share destination fields, not their whole message templates.
 
-Courier also reads fresh order details when opened and uses `resolvedDelivery`, rather than repopulating its form from `order.user`. It retains its own pickup, totals, notes, and preview layout. Shared delivery fields/validation can be reused inside the existing CourierDetailsModal; keep courier-only instruction fields out of the staff sheet.
+No preselected also-update-customer checkbox or automatic default reset is needed. Customer default edits remain on the customer page.
 
-### Delivery for this order
+## 4. Customer defaults: extend existing forms
 
-Fields in this order:
+`AdminUserDetailsPage.jsx` already edits address, map, secondary phone, and delivery notes. Keep those fields and flat payload names. Add only optional **Delivery contact name** and **Delivery phone** overrides, labeled **Leave empty to use the account name/phone**. Account identity fields remain separate; delivery phone overrides are not unique.
 
-1. Delivery contact name.
-2. Primary phone and optional second phone.
-3. Written address.
-4. Google Maps link.
-5. Delivery notes / receiving hours.
+Explain that these defaults are used for new orders and existing orders keep their saved destination. Keep the customer AccountProfilePage's current form; label its address as the default delivery address and add that explanation. Do not build a new self-service delivery settings area in this feature. Existing account saves omit unrelated delivery fields and therefore preserve them.
 
-Use ordinary text inputs, a telephone input, and short textareas. Explain that an address or map link is sufficient. Show validation beside the relevant field and preserve input on server/network failure.
+The correct profile API is `/users/account/profile`. There is no nested `defaultDeliveryDetails` write, duplicate address value, or client-side synchronization of old/new fields.
 
-- Main save label: **Save for this order**. Supporting text: **Changes apply to this order only.**
-- Allow incomplete details to be saved; final copy needs a contact name, primary phone, and address or map.
-- For an active older order with no saved destination, label the initial values **Suggested from customer profile — review and save for this order**. Do not silently confirm them when the preview opens.
-- An explicit **Use customer default** action may replace the form values. It remains a draft until saved and must not run automatically on rerender/refetch. If it would discard unsaved edits, ask within the form before replacing them.
-- Do not add a preselected “also update customer” checkbox. Default delivery editing remains on the customer page for this version, where its scope is clear.
-- After a successful save, refresh the relevant preview from the server before final copying. A revision conflict keeps unsaved text and offers reload/review; it must not retry an overwrite automatically.
-- Delivered/cancelled orders are read-only. An older completed order without a saved destination says it is unavailable, rather than displaying today's address as historical fact.
+## 5. Store locations: a small settings dialog
 
-### Customer default delivery details
+Add a **Store locations** button beside the existing inventory tabs, opening two short forms for AE1 and AE2. No new admin page or route is required. Read/save through the existing siteSettings API slice:
 
-Update `AdminUserDetailsPage.jsx` and `AccountProfilePage.jsx` with a clearly separated **Default delivery details** section using the shared fields. Keep account name/email/unique phone in the account section. Explain: **Used for new orders. Existing orders keep their saved delivery details.**
+- GET `/site-settings/store-locations`.
+- PUT `/site-settings/store-locations/:code`.
 
-Read the resolved `defaultDeliveryDetails` response, including legacy suggestions. Send the nested value only when that section is saved; account-only editing must not clear or overwrite it. Preserve full-map/notes/secondary-phone values when other fields are edited. Registration can keep its existing simple account fields; a full delivery form is not required at signup.
+Fields: optional display name (otherwise use AE1/AE2), address, map link, up to two phone numbers, and optional pickup notes. Codes are read-only. An address or map makes the pickup usable; phones are optional. Incomplete setup is saved but clearly flagged when an order sheet needs it.
 
-### Store locations
+Only fetch these settings when the dialog opens. Keep the public maintenance notice unchanged and do not put store locations in customer-facing screens. Do not copy the existing courier pin into either store automatically.
 
-Add a lightweight **Store locations** section within existing admin inventory/settings navigation. Show two short forms, labeled AE1 and AE2. Fields: display name, address, Google Maps link, up to two phones, optional contact name and pickup notes. Store codes are read-only. Support incomplete setup with a clear missing-details state.
+## 6. Staff text and minimal state rules
 
-Do not expose stock pickup locations in customer-facing profile/order pages. Do not guess their addresses from the existing courier configuration. Show actual pickup locations inside the staff preview only when the selected order has allocations there.
-
-## 4. Copied content
-
-Use a pure formatter with an explicit staff-sheet DTO, not a raw spread of the order, User, or courier message. Shared destination normalization is reused by both formatters; each owns its content.
+Evolve the existing pure `orderWorkerShare.js` formatter to accept the dedicated allowlisted response. Keep order number/customer initials on the carton label. Use this sequence:
 
 ```text
 PREPARE & DELIVER — ORDER #...
 Carton tag: #... · customer initials
 
 COLLECT & PICK
-AE1 — location name
-Address / map / pickup phone
-Slot A2-AE1 · SKU / readable variant · quantity
-
-AE2 — location name
-Address / map / pickup phone
-Slot B1-AE2 · SKU / readable variant · quantity
+AE1 — address / map / optional phone
+Slot A2-AE1 · SKU / order product name · quantity
+AE2 — address / map / optional phone
+Slot B1-AE2 · SKU / order product name · quantity
 
 PACK & CHECK
-SKU / readable variant · ordered / allocated quantities
-Total quantities and carton label
+SKU · ordered quantity / allocated quantity
+Total quantities
 
 DELIVER
-Recipient name
-Phone / optional second phone
+Recipient name / phone / optional secondary phone
 Address / map / delivery notes
 ```
 
-Omit unused stores/empty optional lines. Group by store, then naturally sorted slot, and keep one final per-SKU packing check across all stores. Prefer immutable order labels when available. Use neutral `units` until a reliable unit is available; do not hard-code rolls for every product type.
+Show only used stores, naturally sort slots, and include one per-SKU packing check across stores. Use the order's existing SKU/product-name snapshot; fall back to SKU when a historical name is missing. Use units without adding a selling-unit model or per-product requests.
 
-No prices, totals, invoice/payment information, account email, internal notes, or staff identities enter this formatter. The courier formatter retains its existing appropriate financial/instruction content.
+The backend returns `problems` (draft/HOLD) and `notices` (advisory). Display them plainly rather than implementing a second client readiness engine. Processing orders can produce a preparation draft; complete Shipping orders can produce the normal sheet. Cancelled/Delivered staff actions are disabled; there is no new historical-reference copy mode.
 
-| State | UI and copy behavior |
+Respect the existing sequence: reserve during Shipping, deliver, then finalize stock. A deducted record does not prove collection/packing; retain the check-before-picking-again warning. Do not automatically change stock, mark a line picked, or assume deducted units never need physical collection.
+
+Include recipient contact and delivery instructions intentionally. Exclude prices, totals, invoices/payments, internal notes, account email, and staff identities from staff text. Courier retains its own content rules.
+
+## 7. Implementation surface and performance
+
+| Area | Necessary change |
 | --- | --- |
-| Complete active order | Final preview and Copy sheet |
-| Incomplete/mismatched allocations | Specific warning and preparation draft/HOLD; link to reservations |
-| Missing destination or pickup location | Identify missing fields and editing destination; draft only |
-| Active legacy order | Review and save suggested destination before final copy |
-| Deducted/finalized stock | Prominent check-packed-goods warning; no instruction to pick deducted items again |
-| Delivered | Completed reference only; no active preparation instruction |
-| Cancelled | No actionable copy; explain why |
+| `ordersApiSlice.js` | Lazy fresh sheet read and guarded order-delivery mutation |
+| `AdminOrdersPage.jsx` / CourierDetailsModal | Use resolved order destination; remove profile write; rename/evolve Pick list; show issues only when needed |
+| Delivery fields and pure share helpers | Reuse inputs where actually needed; share normalization, keep separate staff/courier formatters |
+| `AdminUserDetailsPage.jsx` / user APIs | Two optional contact override fields; retain existing address storage |
+| `AccountProfilePage.jsx` | Clarify default address scope; preserve existing form |
+| `siteSettingsApiSlice.js` / inventory tabs | Two settings endpoints and a small AE1/AE2 editor dialog |
 
-Do not treat the backend's sheet completeness as proof of physical packing or completed delivery. Copying leaves order and inventory state unchanged.
+Use the existing React, RTK Query, icons, styling, and clipboard utility. No new dependencies. Preserve the four local pick-list prototype files and evolve them rather than adding a third action.
 
-## 5. Files and API integration
+One normal staff click makes one combined request. There are no per-row fulfillment fetches, store lookups per allocation, polling, or automatic second read on Copy. Force fresh reads on each new row action; no elaborate sheet cache invalidation network is needed. Keep ordinary order/list invalidation after a destination save. Refresh a displayed draft explicitly or after its destination is saved. Clipboard retry reuses the prepared text.
 
-| Area | Planned change |
-| --- | --- |
-| `src/features/orders/ordersApiSlice.js` | Add order-delivery mutation and lazy fulfillment-sheet query; retain existing single-order read for Courier |
-| `src/pages/Admin/AdminOrdersPage.jsx` | Replace worker prototype with Prepare & Deliver flow; route delivery edits to the order mutation; remove `updateUserDelivery` from courier save |
-| `src/components/admin/CourierDetailsModal.jsx` | Reuse order-scoped delivery fields, display saved/suggested state, and preserve courier-only instructions |
-| Shared delivery form/helper (new) | Consistent field labels, normalization, completeness, and form behavior across order/default editing |
-| `src/utils/orderCourierShare.js` | Use explicit resolved order destination/contact name; keep pickup and commercial content |
-| `src/utils/orderWorkerShare.js` or renamed fulfillment helper | Pure store-first staff-sheet formatter using the dedicated DTO; update its imports and meaningful tests together |
-| User API slice and account/admin user pages | Read/write nested customer defaults separately from account identity |
-| New store-location API slice and admin section | Fixed AE1/AE2 forms; wire into `src/routes/AppRoutes.jsx` and existing admin navigation if a separate route is needed |
-| `src/app/apiSlice.js` | Add StoreLocation cache tag only if needed by the new endpoints |
+The sheet is an informational read, not an atomic inventory snapshot. Show its generation time in a dialog. Existing transactional reservation/delivery/finalization code remains the authority; do not redesign it to guarantee the lifetime of copied text.
 
-Keep the backend companion document as the authority for field names, response shapes, source values, revision semantics, and API permissions. Do not create a second client-side resolver that silently falls back to `order.user` once a saved order destination exists.
+## 8. Build order and focused acceptance
 
-### Performance and freshness
+Implement backend order/default storage and editing first, then switch Courier. Add store settings next, then the combined staff sheet and button. Verify these useful cases:
 
-- Fetch sheet details only for the selected order, not every listed row. The new endpoint replaces the prototype's independent order/allocation calls.
-- Force a fresh read on opening/reopening and on the final-copy action. Handle a changed response by refreshing the preview and requiring a new deliberate copy; do not silently copy different instructions than shown. These are bounded requests for the selected order, not repeated requests for the list.
-- Treat the sheet as an as-of-time document. Display its generated time. Do not add polling; final on-copy refresh is enough for this small workflow.
-- A plain final-copy click can perform the fresh read and copy when the returned sheet is unchanged. If browser clipboard restrictions prevent asynchronous writing, retain the fresh preview and offer Copy again/select text.
-- Use short-lived/no-retained sheet caching (`keepUnusedDataFor: 0`) and refetch when a dialog mounts; avoid an allocation/store cache that can hide changes made elsewhere.
-- Order destination mutations invalidate that order's details/list and its sheet. Allocation/finalization/cancellation/delivery changes invalidate the affected sheet; location updates invalidate sheets or force their next read. Customer default changes invalidate User data but must not replace saved order destinations.
-- Cache the two store configuration records for the settings UI; the backend resolves fresh pickup records for the sheet. Do not make the browser fetch stores individually for each allocation.
-- Reuse current React/RTK Query, dialog styling, and icons. No maps SDK, new UI library, image assets, or large dependency is needed.
+- Editing a customer default leaves existing saved destinations unchanged; two orders for that customer can differ.
+- Order contact edits leave account identity/defaults alone; optional default contact overrides work and can be cleared back to account contact.
+- Legacy active suggestions require explicit saving; completed legacy orders do not show invented historical details; saved blank fields stay blank.
+- Stale saves preserve the form and show a conflict; cancelled/delivered order edits are blocked.
+- One/two stores, slot ordering, duplicate SKU quantities, missing locations, and partial/excess/mixed allocations produce the right text/issues.
+- Staff text contains necessary delivery contacts and excludes financial/internal fields; Courier uses the same saved destination.
+- Clipboard failure preserves text, duplicate clicks are blocked, copying performs no writes, and the order list creates no sheet requests.
+- The two-form settings dialog preserves other settings. Existing account form saves preserve unedited delivery values.
+- Labels, keyboard/focus behavior, compact action names, and mobile long-address wrapping remain usable.
 
-## 6. Implementation order
+Extend existing pure helper/formatter tests. Use a disposable test database for integration, then run focused browser checks plus `npm run lint` and `npm run build`. No application tests or production writes are needed for this planning review.
 
-1. Agree the backend contract and implement pure delivery/formatter fixtures against it.
-2. Add customer-default editing and the lightweight store settings, once their backend endpoints exist.
-3. Add the order-only form/mutation, revision handling, and visible legacy confirmation flow.
-4. Change Courier to use the saved order destination and stop updating User from the order dialog.
-5. Evolve the worker prototype into Prepare & Deliver using the combined endpoint and state rules.
-6. Verify both actions against the same order, then run focused UI checks plus full lint/build. Review frontend and backend together before release.
+## 9. Scope and release
 
-## 7. Acceptance and validation
+Backend deploys first, frontend second in one coordinated release. Avoid order creation/courier edits in between, because the old form writes User while the new backend saves destinations on orders; review affected active orders if either action occurred during that gap. Real AE1/AE2 addresses/maps are still needed before operational use; the existing courier handoff remains unchanged until clarified. No bulk address migration, completed-order backfill, inventory workflow change, new historical-reference view, or profile redesign is included.
 
-Extend the existing pure formatter tests to cover one/two stores, slot ordering, repeated SKUs, readable labels, every warning state, exact expected quantities, international contact text, and absence of financial/internal fields. Add focused tests for saved blanks, revision conflicts, and delivery/default isolation where the behavior lives; do not mirror JSX in brittle tests.
-
-Exercise these integration flows using a disposable test database:
-
-- Create an order from a customer default, edit the default, and confirm that both copy actions still use the order's saved destination.
-- Edit one order's recipient/phone/address and confirm the account identity, default, and another order are unchanged.
-- Open a legacy active order, review the suggestion, save, and copy. Confirm opening/copying a draft alone performs no writes.
-- Change a customer on an eligible order and show the reset destination; confirm existing invoice restrictions remain effective.
-- Two admins save stale versions: show conflict without discarding entered text or overwriting the winner.
-- Missing location, partial/excess reservation, deducted stock, cancelled, and completed orders each show the correct copy mode.
-- Clipboard failure preserves the text and permits retry. Double-clicks do not duplicate fetch/save operations or success notifications.
-- Keyboard/focus behavior, form labels, compact icon labels, small mobile viewports, and long addresses/map links remain usable.
-- Opening the order list produces no per-row fulfillment calls; one selected sheet uses one combined request per freshness check. Copying performs no inventory/order writes.
-
-Commands after implementation: targeted `node --test` formatter/helper suites, `npm run lint`, `npm run build`, and focused browser coverage of these flows. No application tests are needed merely for adding this plan.
-
-## 8. Release and scope control
-
-Backend deploys first with additive compatibility, then frontend. Before operational use, enter the real AE1/AE2 locations and confirm the meaning of the current courier pickup point. Historical orders are not mass-backfilled. Legacy fields are retained for this release.
-
-All new feature work stays on `feat/order-delivery-details` in each repository. Existing local pick-list changes are preserved on this frontend branch; unrelated backend inventory scripts stay outside feature commits. Planning does not deploy, migrate the database, or push new work to GitHub. Implementation, review, and release are separate next stages.
+Both repositories stay on `feat/order-delivery-details`. Existing unfinished work is preserved and unrelated backend inventory scripts are excluded. This revision changes the plans only; implementation and release remain subsequent work.
