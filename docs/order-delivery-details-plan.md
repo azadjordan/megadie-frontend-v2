@@ -40,7 +40,7 @@ Fields: recipient name, primary phone, optional secondary phone, written address
 - Existing active orders without a saved destination show **Suggested from customer profile — review and save for this order.** Opening a dialog does not save or confirm it.
 - Save through PUT `/orders/:id/delivery-details` with the six-field `deliveryDetails` value and `expectedRevision`. Remove the courier order dialog's `updateUserDelivery` call.
 - **Save for this order** permits incomplete details. **Save & Copy** explicitly saves reviewed values and then copies when complete; the label must disclose the save. Plain **Copy** never saves.
-- Final delivery text needs recipient name, primary phone, and address or map. Show simple field errors and keep entered text on failure.
+- Courier text needs recipient name, primary phone, and address or map. Prepare & Deliver needs only an address or map; missing contacts do not block it. Show simple field errors and keep entered text on failure.
 - On 409, retain entered text and offer reload/review. Do not force overwrite or automatically merge different recipients.
 - A saved empty field stays empty; a background refetch must not fill it from the account. Do not reset a form with unsaved edits when data refetches.
 - Delivered/cancelled delivery details are read-only. An older completed order with no saved destination displays unavailable rather than today's customer address.
@@ -65,32 +65,49 @@ Keep the existing external Courier pickup block and configuration: its recipient
 
 ## 6. Staff text and minimal state rules
 
-Evolve the existing pure `orderWorkerShare.js` formatter to accept the dedicated allowlisted response. Put the compact carton label on the first line: customer initials without dots/spaces, a hyphen, and the complete final segment of the order number (for example `ABC-023AD`). Do not repeat it lower down. Use this sequence:
+The pure `orderWorkerShare.js` formatter groups by distinct SKU and then naturally sorts that SKU's slots. It sums duplicate SKU/slot rows, shows the quantity for each slot and the total to pick for that SKU, and lists the expected per-SKU quantities again under Pack & Check. Product names and descriptions are never displayed, including when older API payloads still contain them.
+
+The carton tag is labeled at the top; its identifier retains the compact initials-plus-order-suffix format. Count distinct SKUs as items and sum ordered quantities as units, with the same summary at the top and the bottom of Pack & Check. Use this sequence:
 
 ```text
-ABC-023AD
-PREPARE & DELIVER — ORDER #...
+Carton Tag: ASPP-9E7D51
 
-COLLECT & PICK
-Slot A2-AE1 · SKU / order product name · quantity
-Slot B1-AE1 · SKU / order product name · quantity
+PREPARE & DELIVER — ORDER #ORD-261101-9E7D51
 
-PACK & CHECK
-SKU · ordered quantity / allocated quantity
-Total quantities
+2 items — 10 units
 
-DELIVER
-Recipient name / phone / optional secondary phone
-Address / map / delivery notes
+1. PICK
+
+• RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL
+- L1-AE1: 5 units
+- L2-AE1: 3 units
+- Total: 8 units
+
+• RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL
+- E7-AE1: 2 units
+- Total: 2 units
+
+2. PACK & CHECK
+
+- RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL — 8 units
+- RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL — 2 units
+
+Total: 2 items — 10 units
+
+3. DELIVER
+
+Address: Alain Sinaiyah
+
+Map: https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic
 ```
 
-Naturally sort the slot lines and include one per-SKU packing check. No store heading or address block is needed. An unexpected unused store code produces a data issue rather than guessed directions. Use the order's existing SKU/product-name snapshot; fall back to SKU when a historical name is missing. Use units without adding a selling-unit model or per-product requests.
+DELIVER includes only the saved address and map link. Names, phones, secondary phones, contact details, notes, product descriptions, prices, and internal information are excluded. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
 
 The backend returns `problems` (draft/HOLD) and `notices` (advisory). Display them plainly rather than implementing a second client readiness engine. Processing orders can produce a preparation draft; complete Shipping orders can produce the normal sheet. Cancelled/Delivered staff actions are disabled; there is no new historical-reference copy mode.
 
 Respect the existing sequence: reserve during Shipping, deliver, then finalize stock. A deducted record does not prove collection/packing; retain the check-before-picking-again warning. Do not automatically change stock, mark a line picked, or assume deducted units never need physical collection.
 
-Include recipient contact and delivery instructions intentionally. Exclude prices, totals, invoices/payments, internal notes, account email, and staff identities from staff text. Courier retains its own content rules.
+Staff text allows SKUs, slots, quantities, carton tag, order information, and delivery location only. Keep draft/quantity warnings where needed so an incomplete order cannot appear ready. Courier retains its own contact and commercial content rules.
 
 ## 7. Implementation surface and performance
 
@@ -117,7 +134,7 @@ Implement backend order/default storage and editing first, then switch Courier, 
 - Legacy active suggestions require explicit saving; completed legacy orders do not show invented historical details; saved blank fields stay blank.
 - Stale saves preserve the form and show a conflict; cancelled/delivered order edits are blocked.
 - Slot labels, ordering, and SKU quantities are correct; missing slots, unused codes, and partial/excess/mixed allocations produce clear issues. Staff text contains no store address/contact block.
-- Staff text contains necessary delivery contacts and excludes financial/internal fields; Courier uses the same saved destination.
+- Staff text contains only the delivery address/map and excludes all product names, contacts, notes, and financial/internal fields. Courier still uses the same saved destination with its own contact requirements.
 - Clipboard failure preserves text, duplicate clicks are blocked, copying performs no writes, and the order list creates no sheet requests.
 - Existing account form saves preserve unedited delivery values; Courier retains its existing pickup details.
 - Labels, keyboard/focus behavior, compact action names, and mobile long-address wrapping remain usable.
@@ -132,6 +149,12 @@ Developed on `feat/order-delivery-details`; the user authorized merging and push
 
 ## 10. Verification record
 
-Full ESLint, production build, and 6 pure frontend helper/formatter tests passed. The delivery browser suite passed all 8 tests against both dev and compiled production servers; it covers one-click freshness, legacy confirmation, order-only saves, stale edits, incomplete saves, customer contact overrides, mobile clipboard retry, and closed orders. The 19-test production catalog browser regression suite also passed. Backend helper/API integration/regression checks passed 21 tests using an isolated local database for writes.
+Initial feature baseline: full ESLint, production build, and 6 pure frontend helper/formatter tests passed. The delivery browser suite passed all 8 tests against both dev and compiled production servers; it covers one-click freshness, legacy confirmation, order-only saves, stale edits, incomplete saves, customer contact overrides, mobile clipboard retry, and closed orders. The 19-test production catalog browser regression suite also passed. Backend helper/API integration/regression checks passed 21 tests using an isolated local database for writes.
 
 The delivery dialog is portaled above the mobile navigation, traps keyboard focus while open, restores focus on close, and preserves the preview for clipboard retry without a new request. Successful destination saves refresh a staff sheet once; a failed refresh keeps it as a draft until reload succeeds.
+
+## 11. SKU-first message refinement
+
+The follow-up regression suite checks the exact requested two-item/10-unit message, multiple slots per SKU, duplicate SKU/slot aggregation, natural slot sorting, singular quantities, draft allocation totals, and omission of names/descriptions/contacts/notes. Browser coverage also checks location-only saved and legacy orders; contact completeness is enforced only for Courier. The same formatter serves direct copy, preview, draft copy, and clipboard retry for every order.
+
+Refinement verification: 22 backend/helper/API integration/regression tests, 8 frontend helper/formatter tests, and 9 delivery browser tests against each of the dev and production builds passed. Full frontend lint and production build passed. Database mutations used an isolated local replica set; browser API/clipboard interception prevented production access and OS clipboard writes.

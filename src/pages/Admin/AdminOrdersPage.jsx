@@ -734,8 +734,11 @@ export default function AdminOrdersPage() {
     typeof pagination?.total === "number" ? pagination.total : rows.length;
   const activeWorkLabel = getOrderWorkLabel(work);
   const courierMissingFields = useMemo(
-    () => getCourierMissingFields(courierForm),
-    [courierForm]
+    () => {
+      const missing = getCourierMissingFields(courierForm);
+      return deliveryMode === "worker" ? missing.filter(({ key }) => key === "addressOrLocation") : missing;
+    },
+    [courierForm, deliveryMode]
   );
   const courierHasChanges = useMemo(
     () => hasCourierProfileChanges(courierBaseForm, courierForm),
