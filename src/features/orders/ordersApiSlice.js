@@ -25,8 +25,9 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
     }),
     updateOrderDelivery: builder.mutation({
       query: ({ id, ...body }) => ({ url: `/orders/${id}/delivery-details`, method: "PUT", body }),
-      invalidatesTags: (_result, _error, arg) => [
+      invalidatesTags: (result, _error, arg) => [
         { type: "Order", id: arg.id }, { type: "Order", id: "LIST" },
+        ...(arg.saveCustomerLocation && result?.data?.customerId ? [{ type: "User", id: result.data.customerId }, { type: "User", id: "LIST" }] : []),
       ],
     }),
 

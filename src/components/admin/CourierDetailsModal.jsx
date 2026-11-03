@@ -118,6 +118,11 @@ export default function CourierDetailsModal({
   readOnly = false,
   mode = "courier",
   sheet,
+  preparationMode = "",
+  onPreparationModeChange,
+  saveCustomerLocation = false,
+  onSaveCustomerLocationChange,
+  onUseCustomerLocation,
   assignedTo = "",
   onAssignedToChange,
   courierNotes = [],
@@ -143,6 +148,11 @@ export default function CourierDetailsModal({
   if (!open) return null;
   const worker = mode === "worker";
   const assignmentMissing = worker && !assignedTo.trim();
+  const taskMissing = worker && !["prepare_only", "prepare_deliver"].includes(preparationMode);
+  const showDelivery = !worker || preparationMode === "prepare_deliver";
+  const customerLocation = sheet?.customerLocation;
+  const canUseCustomerLocation = worker && Boolean(customerLocation?.address || customerLocation?.googleMapsUrl)
+    && (clean(customerLocation.address) !== clean(form.address) || clean(customerLocation.googleMapsUrl) !== clean(form.googleMapsUrl));
   const needsSave = hasChanges || requiresSave;
   function onKeyDown(event) {
     if (event.key === "Escape" && !isSaving) { event.stopPropagation(); onClose(); }
@@ -164,7 +174,8 @@ export default function CourierDetailsModal({
     !clean(courierPickupConfig.googleMapsUrl) ? "pickup map" : "",
     !pickupPhones ? "pickup phone" : "",
   ].filter(Boolean);
-  const primaryDisabled = isSaving || assignmentMissing || missingFields.length > 0 || (readOnly && requiresSave) || (worker && sheet?.problems?.length > 0 && !needsSave);
+  const defaultLocationMissing = worker && saveCustomerLocation && showDelivery && addressOrLocationMissing;
+  const primaryDisabled = isSaving || assignmentMissing || taskMissing || missingFields.length > 0 || (readOnly && requiresSave) || (worker && sheet?.problems?.length > 0 && !needsSave);
 
   return createPortal(
     <div onKeyDown={onKeyDown} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 px-3 py-6">
@@ -186,7 +197,7 @@ export default function CourierDetailsModal({
                   id="courier-details-title"
                   className="text-base font-semibold text-slate-900"
                 >
-                  {worker ? "Prepare & Deliver" : "Courier details"}
+                  {worker ? "Prepare Order" : "Courier details"}
                 </h2>
                 <div className="text-xs text-slate-500">Order {orderNumber}</div>
               </div>
@@ -197,7 +208,7 @@ export default function CourierDetailsModal({
             onClick={onClose}
             disabled={isSaving}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300"
-            aria-label={worker ? "Close prepare and deliver" : "Close courier details"}
+            aria-label={worker ? "Close prepare order" : "Close courier details"}
           >
             <FiX className="h-4 w-4" />
           </button>
@@ -237,17 +248,33 @@ export default function CourierDetailsModal({
             </section>
             )}
 
+            {worker && <fieldset disabled={readOnly || isSaving} className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+              <legend className="px-1 text-sm font-semibold text-slate-900">Task</legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {[["prepare_only", "Prepare Only"], ["prepare_deliver", "Prepare & Deliver"]].map(([value, label]) => (
+                  <label key={value} className={`flex cursor-pointer items-center gap-2 rounded-xl p-3 text-sm font-semibold ring-1 ${preparationMode === value ? "bg-indigo-50 text-indigo-800 ring-indigo-300" : "text-slate-700 ring-slate-200"}`}>
+                    <input type="radio" required name="preparation-mode" value={value} checked={preparationMode === value} onChange={() => onPreparationModeChange(value)} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <p className={`mt-2 text-xs ${taskMissing ? "text-amber-700" : "text-slate-500"}`}>{taskMissing ? "Choose a task before saving or copying." : preparationMode === "prepare_only" ? "Picking and packing only. No delivery information is shared." : "Picking, packing, and delivery to the destination below."}</p>
+            </fieldset>}
+
             {worker && <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
               <label htmlFor="order-assigned-to" className="mb-2 block text-sm font-semibold text-slate-900">Assigned To</label>
               <input id="order-assigned-to" required aria-required="true" aria-invalid={assignmentMissing} aria-describedby="order-assigned-to-hint" value={assignedTo} onChange={(event) => onAssignedToChange(event.target.value)} maxLength={120} disabled={readOnly || isSaving} placeholder="e.g. Ahmed"
                 className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50" />
-              <p id="order-assigned-to-hint" className={`mt-2 text-xs ${assignmentMissing ? "text-amber-700" : "text-slate-500"}`}>{assignmentMissing ? "Assigned To is required before saving or copying." : "Saved on this order for the person preparing and delivering it."}</p>
+              <p id="order-assigned-to-hint" className={`mt-2 text-xs ${assignmentMissing ? "text-amber-700" : "text-slate-500"}`}>{assignmentMissing ? "Assigned To is required before saving or copying." : "Saved on this order for the person responsible for this task."}</p>
             </section>}
 
-            <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-              <div className="text-sm font-semibold text-slate-900">Delivery for this order</div>
+            {showDelivery && <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-slate-900">Delivery for this order</div>
+                {canUseCustomerLocation && <button type="button" onClick={onUseCustomerLocation} disabled={readOnly || isSaving} className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200 disabled:opacity-50">Use customer&apos;s default</button>}
+              </div>
               <div className="mt-1 text-xs text-slate-500">
-                {readOnly ? "This order is closed. Delivery details are read-only." : "Changes apply to this order only. An address or map is sufficient."}
+                {readOnly ? "This order is closed. Delivery details are read-only." : worker ? "An address or map is sufficient. Save as the customer’s default below to reuse it on future orders." : "Changes apply to this order only. An address or map is sufficient."}
               </div>
               {requiresSave && !readOnly && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Suggested from customer profile — review and save for this order.</p>}
               {readOnly && !order?.resolvedDelivery?.details && <p className="mt-3 text-sm text-amber-800">Historical delivery details are unavailable.</p>}
@@ -313,7 +340,11 @@ export default function CourierDetailsModal({
                 </div>
                 )}
               </fieldset>
-            </section>
+              {worker && !readOnly && <label className="mt-3 flex items-start gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={saveCustomerLocation} onChange={(event) => onSaveCustomerLocationChange(event.target.checked)} disabled={isSaving} className="mt-0.5" />
+                <span>Save as customer&apos;s default location<span className="mt-1 block text-slate-500">Updates the customer’s address and map for future orders. Other existing orders keep their locations.</span></span>
+              </label>}
+            </section>}
 
             {!worker && (
             <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
@@ -351,7 +382,7 @@ export default function CourierDetailsModal({
             {worker && <p className="mt-2 text-xs text-slate-300">Items, slots, and quantities come from the order&apos;s reservations. <Link to={`/admin/orders/${order?._id}`} className="underline underline-offset-2">View order and reservations</Link></p>}
             {worker && sheet?.generatedAt && <p className="mt-1 text-xs text-slate-300">Loaded {new Date(sheet.generatedAt).toLocaleString()}</p>}
             {worker && sheet?.problems?.length > 0 && <ul className="mt-2 list-disc pl-4 text-xs text-amber-200">{sheet.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
-            {worker && sheet?.problems?.length > 0 && <p className="mt-2 text-xs text-amber-200">Resolve slot/quantity issues in the order reservation panel.</p>}
+            {worker && sheet?.problems?.length > 0 && <p className="mt-2 text-xs text-amber-200">Review the warnings before copying. Slot and quantity issues can be resolved in the order reservation panel.</p>}
             <textarea
               aria-label="Message preview"
               readOnly
@@ -377,8 +408,8 @@ export default function CourierDetailsModal({
             Close
           </button>
           {onRefresh && <button type="button" onClick={onRefresh} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Reload details</button>}
-          {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving || assignmentMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Save for this order</button>}
-          {worker && sheet?.problems?.length > 0 && <button type="button" onClick={onCopyDraft} disabled={isSaving || assignmentMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{needsSave ? "Save & Copy Draft" : "Copy preparation draft"}</button>}
+          {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving || assignmentMissing || taskMissing || defaultLocationMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{saveCustomerLocation && showDelivery ? "Save details" : "Save for this order"}</button>}
+          {worker && sheet?.problems?.length > 0 && <button type="button" onClick={onCopyDraft} disabled={isSaving || assignmentMissing || taskMissing || defaultLocationMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{needsSave ? "Save & Copy Draft" : "Copy preparation draft"}</button>}
           <button
             type="button"
             onClick={onSubmit}
@@ -387,8 +418,8 @@ export default function CourierDetailsModal({
               missingFields.length
                 ? "Add the required delivery fields first."
                 : needsSave
-                ? "Save delivery details for this order and copy the message."
-                : worker ? "Copy prepare and deliver sheet." : "Copy courier message."
+                ? "Save details and copy the message."
+                : worker ? "Copy preparation message." : "Copy courier message."
             }
             className={[
               "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white transition",

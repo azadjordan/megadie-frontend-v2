@@ -6,7 +6,7 @@ import { buildCourierShareText, getCourierMissingFields, hasCourierProfileChange
 const white = "RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL";
 const cream = "RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL";
 const details = { contactName: "Order Recipient", phoneNumber: "+123456", address: "Alain Sinaiyah", googleMapsUrl: "https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic", secondaryPhoneNumber: "PRIVATE-BACKUP-PHONE", notes: "PRIVATE-DELIVERY-NOTES" };
-const sheet = { assignedTo: "Ahmed", label: "ASPP-9E7D51", orderNumber: "ORD-261101-9E7D51", status: "Shipping", delivery: { details }, problems: [], notices: [],
+const sheet = { preparationMode: "prepare_deliver", assignedTo: "Ahmed", label: "ASPP-9E7D51", orderNumber: "ORD-261101-9E7D51", status: "Shipping", delivery: { details }, problems: [], notices: [],
   picks: [
     { slot: "L2-AE1", sku: white, name: "FORBIDDEN-WHITE-DESCRIPTION", qty: 3 },
     { slot: "E7-AE1", sku: cream, name: "FORBIDDEN-CREAM-DESCRIPTION", qty: 2 },
@@ -130,4 +130,23 @@ test("delivery form recognizes contact, address/map completeness and notes-only 
   assert.equal(getCourierMissingFields({ phoneNumber: "123", googleMapsUrl: "https://maps.example" })[0].key, "contactName");
   assert.ok(hasCourierProfileChanges(details, { ...details, notes: "New hours" }));
   assert.equal(hasCourierProfileChanges(details, { ...details, address: "  Alain Sinaiyah  " }), false);
+});
+
+
+test("preparation-only has its own heading and excludes every delivery field", () => {
+  const text = buildWorkerOrderShareText({ ...sheet, preparationMode: "prepare_only" });
+  assert.equal(text, expected.split("\n\n*3. DELIVER*")[0].replace("*PREPARE & DELIVER*", "*PREPARE ONLY*"));
+  assert.doesNotMatch(text, /DELIVER|Address|Map|Alain|https:|Recipient|123456/);
+  const noLocation = { ...sheet, preparationMode: "prepare_only", delivery: { savedToOrder: false, details: {} } };
+  assert.ok(buildWorkerOrderShareText(noLocation).startsWith("*PREPARE ONLY*"));
+  assert.match(buildWorkerOrderShareText({ ...noLocation, problems: ["Reservations incomplete"] }), /_Task:_ PREPARE ONLY/);
+  const deliveryMissing = buildWorkerOrderShareText({ ...noLocation, preparationMode: "prepare_deliver" });
+  assert.match(deliveryMissing, /PREPARATION DRAFT/);
+  assert.match(deliveryMissing, /location is missing/);
+});
+
+test("an unselected task remains a draft without revealing delivery information", () => {
+  const text = buildWorkerOrderShareText({ ...sheet, preparationMode: "" });
+  assert.match(text, /Choose Prepare Only or Prepare & Deliver/);
+  assert.doesNotMatch(text, /Alain|maps.app|\*3. DELIVER/);
 });

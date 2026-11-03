@@ -2,6 +2,17 @@ const line = (value) => String(value || "").replace(/[\r\n]+/g, " ").trim();
 const units = (qty) => `${qty} ${qty === 1 ? "unit" : "units"}`;
 const slotSort = new Intl.Collator("en", { numeric: true });
 
+export function getWorkerProblems(sheet) {
+  const problems = [...(sheet.preparationProblems ?? sheet.problems ?? [])];
+  if (!line(sheet.assignedTo)) problems.push("Assigned To is required.");
+  if (!["prepare_only", "prepare_deliver"].includes(sheet.preparationMode)) problems.push("Choose Prepare Only or Prepare & Deliver.");
+  if (sheet.preparationMode === "prepare_deliver") {
+    if (sheet.delivery?.savedToOrder === false) problems.push("Review and save the delivery details for this order.");
+    if (!line(sheet.delivery?.details?.address) && !line(sheet.delivery?.details?.googleMapsUrl)) problems.push("Delivery location is missing: add an address or map.");
+  }
+  return [...new Set(problems)];
+}
+
 // This receives the purpose-built sheet, never a raw order/User/courier message.
 export function buildWorkerOrderShareText(sheet) {
   if (["Cancelled", "Delivered"].includes(sheet?.status)) {
@@ -29,11 +40,12 @@ export function buildWorkerOrderShareText(sheet) {
     ...item, sku, number: String(index + 1).padStart(2, "0"),
   }));
   const assignedTo = line(sheet.assignedTo);
-  const problems = [...(sheet.problems || [])];
-  if (!assignedTo) problems.push("Assigned To is required.");
+  const problems = getWorkerProblems(sheet);
   const draft = problems.length > 0;
+  const task = sheet.preparationMode === "prepare_only" ? "PREPARE ONLY" : sheet.preparationMode === "prepare_deliver" ? "PREPARE & DELIVER" : "CHOOSE TASK";
   const lines = [
-    `*${draft ? "PREPARATION DRAFT — HOLD" : "PREPARE & DELIVER"}*`,
+    `*${draft ? "PREPARATION DRAFT — HOLD" : task}*`,
+    ...(draft ? [`_Task:_ ${task}`] : []),
     `_Order:_ ${line(sheet.orderNumber)}`,
     `_Carton Tag:_ *${line(sheet.label)}*`,
   ];
@@ -54,9 +66,12 @@ export function buildWorkerOrderShareText(sheet) {
   for (const item of numberedItems) {
     lines.push(`☐ *${item.number})* ${item.sku} — *${item.orderedQty}*`);
   }
-  lines.push(`*Total: ${summary}*`, "", "*3. DELIVER*");
-  const delivery = sheet.delivery?.details || {};
-  if (delivery.address) lines.push(`_Address:_ ${line(delivery.address)}`);
-  if (delivery.googleMapsUrl) lines.push(`_Map:_ ${line(delivery.googleMapsUrl)}`);
+  lines.push(`*Total: ${summary}*`);
+  if (sheet.preparationMode === "prepare_deliver") {
+    lines.push("", "*3. DELIVER*");
+    const delivery = sheet.delivery?.details || {};
+    if (delivery.address) lines.push(`_Address:_ ${line(delivery.address)}`);
+    if (delivery.googleMapsUrl) lines.push(`_Map:_ ${line(delivery.googleMapsUrl)}`);
+  }
   return lines.join("\n");
 }
