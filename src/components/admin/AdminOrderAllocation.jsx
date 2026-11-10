@@ -1,11 +1,13 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import ErrorMessage from "../common/ErrorMessage";
+import OrderReservationReport from "./OrderReservationReport";
 import { useGetSlotItemsByProductQuery } from "../../features/slotItems/slotItemsApiSlice";
 import {
   useGetOrderAllocationsQuery,
   useUpsertOrderAllocationMutation,
   useDeleteOrderAllocationMutation,
+  useReserveAllOrderAllocationsMutation,
 } from "../../features/orderAllocations/orderAllocationsApiSlice";
 
 function resolveProductId(product) {
@@ -161,6 +163,7 @@ function SlotItemsPanel({
   hideToggle = false,
   hasInvoice = false,
   invoiceWarning = "",
+  onBusyChange,
 }) {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const isDisabled = !productId || !orderId;
@@ -179,6 +182,7 @@ function SlotItemsPanel({
   const [actionError, setActionError] = useState("");
   const [isBulkPicking, setIsBulkPicking] = useState(false);
   const [isBulkUnpicking, setIsBulkUnpicking] = useState(false);
+  const busyId = useId();
   const showHistory =
     showAllocationHistory &&
     Array.isArray(allocationSummaryList) &&
@@ -241,6 +245,10 @@ function SlotItemsPanel({
 
   const combinedError = saveError || deleteError;
   const isBusy = isSaving || isDeleting || isBulkPicking || isBulkUnpicking;
+  useEffect(() => {
+    onBusyChange?.(busyId, isBusy);
+    return () => onBusyChange?.(busyId, false);
+  }, [isBusy, onBusyChange, busyId]);
   const hasReservations =
     Array.isArray(allocationsList) && allocationsList.length > 0;
 
@@ -344,6 +352,7 @@ function SlotItemsPanel({
     }
 
     try {
+      onBusyChange?.(busyId, true);
       await saveAllocation({
         orderId,
         productId,
@@ -353,6 +362,8 @@ function SlotItemsPanel({
     } catch (err) {
       setActionError(err?.data?.message || "Failed to save reservation.");
       return;
+    } finally {
+      onBusyChange?.(busyId, false);
     }
 
     setDrafts((prev) => {
@@ -1179,6 +1190,7 @@ function AllocationItemCard({
   hideSlotToggle = false,
   hasInvoice = false,
   invoiceWarning = "",
+  onBusyChange,
 }) {
   const name =
     item?.product?.name ||
@@ -1304,6 +1316,7 @@ function AllocationItemCard({
             hideToggle={hideSlotToggle}
             hasInvoice={hasInvoice}
             invoiceWarning={invoiceWarning}
+            onBusyChange={onBusyChange}
           />
         </div>
       ) : null}
@@ -1326,11 +1339,21 @@ export default function AdminOrderAllocation({
   invoiceWarning = "",
   mode,
 }) {
-  const rows = useMemo(() => (Array.isArray(items) ? items : []), [items]);
   const money =
     typeof formatMoney === "function" ? formatMoney : (value) => value;
   const resolvedMode = mode || (showSlots && !showPricing ? "allocation" : "summary");
   const isAllocationView = ["allocation", "finalize", "stock"].includes(resolvedMode);
+  const rows = useMemo(() => {
+    const source = Array.isArray(items) ? items : [];
+    if (!isAllocationView) return source;
+    const grouped = new Map();
+    for (const [index, item] of source.entries()) {
+      const key = resolveProductId(item.product) || `missing-${index}`;
+      const previous = grouped.get(key);
+      grouped.set(key, previous ? { ...previous, qty: previous.qty + item.qty, lineTotal: lineTotal(previous) + lineTotal(item) } : item);
+    }
+    return [...grouped.values()];
+  }, [items, isAllocationView]);
   const showSlotActions =
     resolvedMode === "allocation" || resolvedMode === "stock";
   const showFinalizeControls =
@@ -1345,8 +1368,23 @@ export default function AdminOrderAllocation({
     isLoading: isAllocationsLoading,
     isError: isAllocationsError,
     error: allocationsError,
+    isFetching: isAllocationsFetching,
+    refetch: refetchAllocations,
   } = useGetOrderAllocationsQuery(orderId, { skip: !shouldLoadAllocations });
 
+  const [reserveAll] = useReserveAllOrderAllocationsMutation();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [itemBusy, setItemBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
+  const bulkLock = useRef(false);
+  const busyPanels = useRef(new Set());
+  const onItemBusyChange = useCallback((token, busy) => {
+    if (busy) busyPanels.current.add(token);
+    else busyPanels.current.delete(token);
+    setItemBusy(busyPanels.current.size > 0);
+  }, []);
+  const allocationRoot = useRef(null);
+  const [reviewProduct, setReviewProduct] = useState(null);
 
   const allocations = useMemo(() => {
     if (Array.isArray(allocationsResult?.data)) return allocationsResult.data;
@@ -1366,17 +1404,19 @@ export default function AdminOrderAllocation({
     [allocations]
   );
   const hasDeducted = deductedAllocations.length > 0;
+  const report = bulkResult?.orderId === orderId ? bulkResult : null;
+  const needsRefresh = Boolean(report?.needsRefresh);
   const allowDeliveredRelease = Boolean(allowRelease) && orderStatus === "Delivered";
   const isReserveLocked =
     isAllocationView &&
-    (isWorkflowLocked || orderStatus !== "Shipping" || hasDeducted);
+    (isWorkflowLocked || orderStatus !== "Shipping" || hasDeducted || bulkBusy || needsRefresh);
   const isReleaseLocked =
     isAllocationView &&
     (isWorkflowLocked ||
       !allowRelease ||
       orderStatus === "Cancelled" ||
       (orderStatus === "Delivered" && !allowDeliveredRelease) ||
-      hasDeducted);
+      hasDeducted || bulkBusy || needsRefresh);
 
   const allocationsByProduct = useMemo(() => {
     const map = new Map();
@@ -1489,6 +1529,62 @@ export default function AdminOrderAllocation({
     ? activeItemKey
     : itemRows[0]?.key || "";
 
+  const reservationSnapshot = JSON.stringify(allocations.map((row) => [resolveEntityId(row), row.qty, row.status]).sort());
+  const fullyReserved = itemRows.length > 0 && itemRows.every((row) => row.reservedQty === row.orderedQty) && !hasDeducted;
+  const operationBusy = bulkBusy || itemBusy;
+
+  useEffect(() => {
+    if (!reviewProduct) return;
+    const node = [...(allocationRoot.current?.querySelectorAll("[data-reservation-item-details]") || [])].find((el) => el.getClientRects().length);
+    node?.scrollIntoView({ block: "nearest" });
+    node?.focus({ preventScroll: true });
+  }, [reviewProduct, resolvedActiveItemKey]);
+
+  function reviewItem(productId) {
+    const row = itemRows.find((item) => item.productId === productId);
+    if (!row || operationBusy) return;
+    setActiveItemKey(row.key);
+    setReviewProduct({ productId });
+  }
+
+  async function handleReserveAll() {
+    if (bulkLock.current || busyPanels.current.size || isAllocationsFetching) return;
+    if (!needsRefresh && (isReserveLocked || fullyReserved || !rows.length)) return;
+    bulkLock.current = true;
+    setBulkBusy(true);
+    try {
+      if (needsRefresh) {
+        await refetchAllocations().unwrap();
+        setBulkResult({ orderId, type: "info", title: "Reservations refreshed", message: "Review the current quantities before reserving any remaining items." });
+        return;
+      }
+      setBulkResult(null);
+      let saved;
+      try {
+        saved = await reserveAll(orderId).unwrap();
+      } catch (error) {
+        const confirmed = error?.data?.noNewReservations === true;
+        setBulkResult({ orderId, baseline: reservationSnapshot, type: confirmed ? "blocked" : "uncertain", needsRefresh: !confirmed,
+          title: confirmed ? error.data.issues?.length ? `Reservation blocked · ${error.data.issues.length} ${error.data.issues.length === 1 ? "item needs" : "items need"} attention` : "Reservation blocked" : "Reservation result could not be confirmed",
+          message: confirmed ? `${error.data.message} Existing reservations remain unchanged.` : "The request could not be confirmed. Refresh reservations to check what was saved before trying again.",
+          issues: confirmed ? error.data.issues : undefined });
+        return;
+      }
+      const success = { orderId, type: "success", title: "All items fully reserved", message: saved.data.addedQty ? `Added ${saved.data.addedQty} units. Existing reservations were kept unchanged.` : "Every ordered item was already fully reserved." };
+      try {
+        await refetchAllocations().unwrap();
+        setBulkResult(success);
+      } catch {
+        setBulkResult({ ...success, needsRefresh: true, message: `${success.message} Could not refresh the displayed quantities. Refresh reservations to review them.` });
+      }
+    } catch {
+      setBulkResult({ orderId, type: "uncertain", needsRefresh: true, title: "Could not refresh reservations", message: "Try refreshing again before making further reservation changes." });
+    } finally {
+      bulkLock.current = false;
+      setBulkBusy(false);
+    }
+  }
+
   if (isAllocationView) {
     const orderedTotal = rows.reduce(
       (sum, it) => sum + (Number(it?.qty) || 0),
@@ -1540,7 +1636,7 @@ export default function AdminOrderAllocation({
     };
 
     return (
-      <div className="space-y-4">
+      <div ref={allocationRoot} className="space-y-4">
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -1549,8 +1645,18 @@ export default function AdminOrderAllocation({
                 {rows.length} item{rows.length !== 1 ? "s" : ""}
               </div>
             </div>
-
+            {showSlotActions && <button
+              type="button"
+              onClick={handleReserveAll}
+              disabled={operationBusy || isAllocationsFetching || (!needsRefresh && (isReserveLocked || isAllocationsError || fullyReserved || !rows.length))}
+              title={!needsRefresh && isReserveLocked ? allocationLockReason || "Reservations are locked." : undefined}
+              className="min-h-10 w-full rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 sm:w-auto"
+            >
+              {bulkBusy ? needsRefresh ? "Refreshing reservations…" : "Checking & reserving…" : needsRefresh ? "Refresh reservations" : fullyReserved ? "All items reserved" : report?.type === "blocked" ? "Check again & reserve all" : "Reserve all items"}
+            </button>}
           </div>
+          {showSlotActions && <p className="mt-2 text-xs text-slate-500">Checks the whole order. Reserves only when every remaining quantity is available.</p>}
+          {bulkBusy && <p role="status" className="mt-2 text-xs text-slate-600">{needsRefresh ? "Confirming the current saved reservations…" : "Checking current stock for every item and saving the complete reservation only if all checks pass…"}</p>}
 
           <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <span className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">
@@ -1593,6 +1699,7 @@ export default function AdminOrderAllocation({
               {invoiceWarningText}
             </div>
           ) : null}
+          <OrderReservationReport result={report && (report.type !== "success" || fullyReserved || needsRefresh) ? { ...report, stale: report.baseline != null && report.baseline !== reservationSnapshot } : null} onReview={reviewItem} canReview={(productId) => itemRows.some((row) => row.productId === productId)} busy={operationBusy} />
         </div>
 
         {rows.length === 0 ? (
@@ -1617,6 +1724,7 @@ export default function AdminOrderAllocation({
                     <button
                       key={row.key}
                       type="button"
+                      disabled={operationBusy}
                       onClick={() => setActiveItemKey(row.key)}
                       className={[
                         "min-w-[140px] rounded-xl border px-3 py-2 text-left text-[11px] transition",
@@ -1667,6 +1775,7 @@ export default function AdminOrderAllocation({
               </div>
 
               {activeRow ? (
+                <div data-reservation-item-details tabIndex={-1} role="region" aria-label={`Stock slots for ${activeRow.item?.sku || "selected item"}`}>
                 <AllocationItemCard
                   key={activeRow.key}
                   orderId={orderId}
@@ -1685,7 +1794,9 @@ export default function AdminOrderAllocation({
                   hideSlotToggle
                   hasInvoice={hasInvoice}
                   invoiceWarning={invoiceWarningText}
+                  onBusyChange={onItemBusyChange}
                 />
+                </div>
               ) : null}
             </div>
 
@@ -1718,6 +1829,7 @@ export default function AdminOrderAllocation({
                       <button
                         key={row.key}
                         type="button"
+                        disabled={operationBusy}
                         onClick={() => setActiveItemKey(row.key)}
                         className={[
                           "w-full border-b border-slate-100 px-4 py-3 text-left transition",
@@ -1782,6 +1894,7 @@ export default function AdminOrderAllocation({
 
               <div className="space-y-3">
                 {activeRow ? (
+                  <div data-reservation-item-details tabIndex={-1} role="region" aria-label={`Stock slots for ${activeRow.item?.sku || "selected item"}`}>
                   <AllocationItemCard
                     key={activeRow.key}
                     orderId={orderId}
@@ -1800,7 +1913,9 @@ export default function AdminOrderAllocation({
                     hideSlotToggle
                     hasInvoice={hasInvoice}
                     invoiceWarning={invoiceWarningText}
+                    onBusyChange={onItemBusyChange}
                   />
+                  </div>
                 ) : null}
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { apiSlice } from "../../app/apiSlice";
 
 export const NOTICE_MESSAGE = "We’re carrying out temporary maintenance. Please contact us to confirm stock availability during this time.";
+export const NOTICE_MESSAGE_MAX_LENGTH = 500;
 export const noticeQueryOptions = {
   pollingInterval: 30000,
   skipPollingIfUnfocused: true,
@@ -22,8 +23,14 @@ const siteSettingsApi = apiSlice.injectEndpoints({
       providesTags: ["MaintenanceNotice"],
     }),
     setMaintenanceNotice: builder.mutation({
-      query: enabled => ({ url: "/site-settings/maintenance-notice", method: "PUT", body: { enabled }, timeout: 8000 }),
+      query: changes => ({ url: "/site-settings/maintenance-notice", method: "PUT", body: changes, timeout: 8000 }),
       transformResponse: response => response.data,
+      async onQueryStarted(_changes, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(apiSlice.util.updateQueryData("getAdminMaintenanceNotice", undefined, () => data));
+        } catch { /* Preserve the draft and refetch after an ambiguous failure. */ }
+      },
       // Refetch even after an ambiguous timeout: the server may have saved it.
       invalidatesTags: ["MaintenanceNotice"],
     }),

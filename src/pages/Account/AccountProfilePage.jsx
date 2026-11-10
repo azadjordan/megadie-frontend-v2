@@ -80,7 +80,7 @@ function AccountProfileForm({
 
     try {
       const res = await updateProfile({ name, phoneNumber, address }).unwrap();
-      dispatch(setCredentials(res.data));
+      dispatch(setCredentials(res.data, "profile"));
       setSaved(true);
       setIsEditing(false);
       refetch();

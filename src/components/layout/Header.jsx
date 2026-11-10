@@ -1,7 +1,7 @@
 // src/components/layout/Header.jsx
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import {
   FaStore,
   FaShoppingCart,
@@ -12,6 +12,7 @@ import {
   FaSignOutAlt,
 } from "react-icons/fa";
 
+import { toast } from "react-toastify";
 import { apiSlice } from "../../app/apiSlice";
 import {
   logout as logoutAction,
@@ -39,8 +40,14 @@ export default function Header() {
   const isShopSection = pathname === '/shop' || pathname.startsWith('/shop/');
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const store = useStore();
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (menuPath !== pathname) {
+    setMenuPath(pathname);
+    setMenuOpen(false);
+  }
   const drawerRef = useRef(null);
 
   // Focus management
@@ -100,16 +107,11 @@ export default function Header() {
   const [bounce, setBounce] = useState(false);
   useEffect(() => {
     if (count > 0) {
-      setBounce(true);
-      const t = setTimeout(() => setBounce(false), 400);
-      return () => clearTimeout(t);
+      const start = setTimeout(() => setBounce(true), 0);
+      const stop = setTimeout(() => setBounce(false), 400);
+      return () => { clearTimeout(start); clearTimeout(stop); };
     }
   }, [count]);
-
-  // Close drawer on route change
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
 
   // Outside click
   useEffect(() => {
@@ -154,16 +156,20 @@ export default function Header() {
 
   const handleLogout = async () => {
     setMenuOpen(false);
-
+    const generation = store.getState().auth.sessionGeneration;
     try {
-      await logoutApi().unwrap();
+      await logoutApi({ sessionId: userInfo?.sessionId }).unwrap();
     } catch {
-      // silent best-effort logout
-    } finally {
-      dispatch(logoutAction());
-      dispatch(apiSlice.util.resetApiState());
-      navigate("/", { replace: true });
+      if (store.getState().auth.sessionGeneration !== generation) return;
+      if (userInfo?.isAdmin) {
+        toast.error("Could not sign out. Check your connection and try again.");
+        return;
+      }
     }
+    if (store.getState().auth.sessionGeneration !== generation) return;
+    dispatch(logoutAction({ expectedSessionId: userInfo?.sessionId }));
+    dispatch(apiSlice.util.resetApiState());
+    navigate("/", { replace: true });
   };
 
   const handleRetrySession = () => {

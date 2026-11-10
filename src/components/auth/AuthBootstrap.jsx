@@ -44,7 +44,7 @@ export default function AuthBootstrap({ children }) {
   // Run the "me" request only until we initialize once
   const shouldFetch = !isInitialized && !userInfo
 
-  const { data, isSuccess, isError, isFetching, error } = useGetMyProfileQuery(
+  const { currentData: data, isSuccess, isError, isFetching, error } = useGetMyProfileQuery(
     sessionCheckNonce,
     {
       skip: !shouldFetch,
@@ -58,7 +58,7 @@ export default function AuthBootstrap({ children }) {
 
     // If profile fetched successfully, store it
     if (isSuccess && data?.data) {
-      dispatch(setCredentials(data.data))
+      dispatch(setCredentials(data.data, 'bootstrap'))
       return
     }
 

@@ -8,11 +8,15 @@ const rawBaseQuery = fetchBaseQuery({
 })
 
 const baseQueryWithAuth = async (args, api, extraOptions) => {
+  const generation = api.getState().auth.sessionGeneration
   const result = await rawBaseQuery(args, api, extraOptions)
+  if (api.getState().auth.sessionGeneration !== generation) {
+    return { error: { status: 'CUSTOM_ERROR', error: 'The signed-in session changed while this request was running.' } }
+  }
 
   // If session expired / cookie invalid, clear client auth + cached data.
   if (result?.error?.status === 401) {
-    api.dispatch(logoutAction())
+    api.dispatch(logoutAction({ reason: 'expired' }))
     api.dispatch(apiSlice.util.resetApiState())
   }
 

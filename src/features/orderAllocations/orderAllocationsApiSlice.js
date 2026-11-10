@@ -27,6 +27,8 @@ export const orderAllocationsApiSlice = apiSlice.injectEndpoints({
         { type: "OrderAllocation", id: "LIST" },
         { type: "OrderAllocation", id: `ORDER-${arg?.orderId}` },
         { type: "Order", id: arg?.orderId },
+        { type: "SlotItem", id: "LIST" },
+        { type: "InventoryMovement", id: "LIST" },
       ],
     }),
 
@@ -39,6 +41,24 @@ export const orderAllocationsApiSlice = apiSlice.injectEndpoints({
         { type: "OrderAllocation", id: "LIST" },
         { type: "OrderAllocation", id: `ORDER-${arg?.orderId}` },
         { type: "Order", id: arg?.orderId },
+        { type: "SlotItem", id: "LIST" },
+        { type: "InventoryMovement", id: "LIST" },
+      ],
+    }),
+
+    reserveAllOrderAllocations: builder.mutation({
+      query: (orderId) => ({
+        url: `/orders/${orderId}/allocations/reserve-all`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, orderId) => [
+        { type: "OrderAllocation", id: "LIST" },
+        { type: "OrderAllocation", id: `ORDER-${orderId}` },
+        { type: "Order", id: "LIST" },
+        { type: "Order", id: orderId },
+        { type: "SlotItem", id: "LIST" },
+        { type: "InventoryProduct", id: "LIST" },
+        { type: "InventoryMovement", id: "LIST" },
       ],
     }),
 
@@ -63,4 +83,5 @@ export const {
   useUpsertOrderAllocationMutation,
   useDeleteOrderAllocationMutation,
   useFinalizeOrderAllocationsMutation,
+  useReserveAllOrderAllocationsMutation,
 } = orderAllocationsApiSlice;

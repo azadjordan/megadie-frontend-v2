@@ -6,7 +6,7 @@ import { buildCourierShareText, getCourierMissingFields, hasCourierProfileChange
 const white = "RIB|GRO|1-IN|WHITE|029|A+|100YD-ROLL";
 const cream = "RIB|GRO|1-IN|CREAM|815|A+|100YD-ROLL";
 const details = { contactName: "Order Recipient", phoneNumber: "+123456", address: "Alain Sinaiyah", googleMapsUrl: "https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic", secondaryPhoneNumber: "PRIVATE-BACKUP-PHONE", notes: "PRIVATE-DELIVERY-NOTES" };
-const sheet = { preparationMode: "prepare_deliver", assignedTo: "Ahmed", label: "ASPP-9E7D51", orderNumber: "ORD-261101-9E7D51", status: "Shipping", delivery: { details }, problems: [], notices: [],
+const sheet = { preparationMode: "prepare_deliver", assignedTo: "Ahmed", customerName: "Ahmed Trading", label: "Ahmed Trading — 9E7D51", orderNumber: "ORD-261101-9E7D51", status: "Shipping", delivery: { details }, problems: [], notices: [],
   picks: [
     { slot: "L2-AE1", sku: white, name: "FORBIDDEN-WHITE-DESCRIPTION", qty: 3 },
     { slot: "E7-AE1", sku: cream, name: "FORBIDDEN-CREAM-DESCRIPTION", qty: 2 },
@@ -15,8 +15,9 @@ const sheet = { preparationMode: "prepare_deliver", assignedTo: "Ahmed", label: 
   items: [{ sku: white, name: "FORBIDDEN-WHITE-NAME", orderedQty: 8, allocatedQty: 8 }, { sku: cream, name: "FORBIDDEN-CREAM-NAME", orderedQty: 2, allocatedQty: 2 }] };
 
 const expected = `*PREPARE & DELIVER*
+_Client:_ *Ahmed Trading*
 _Order:_ ORD-261101-9E7D51
-_Carton Tag:_ *ASPP-9E7D51*
+_Carton Tag:_ *Ahmed Trading — 9E7D51*
 _Assigned To:_ *Ahmed*
 *2 items — 10 units*
 
@@ -38,6 +39,16 @@ _Map:_ https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic`;
 
 test("matches the exact compact WhatsApp template, markup, and line breaks", () => {
   assert.equal(buildWorkerOrderShareText(sheet), expected);
+});
+
+test("client identity comes from the account name, including drafts and missing names", () => {
+  const draft = buildWorkerOrderShareText({ ...sheet, assignedTo: "", customerName: "  أحمد\nعلي  " });
+  assert.match(draft, /_Client:_ \*أحمد علي\*/);
+  for (const customerName of [undefined, "", "   "]) {
+    const text = buildWorkerOrderShareText({ ...sheet, customerName });
+    assert.match(text, /_Client:_ \*Unknown client\*/);
+    assert.doesNotMatch(text, /Order Recipient/);
+  }
 });
 
 test("unassigned messages are draft previews and valid names are trimmed", () => {

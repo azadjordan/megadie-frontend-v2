@@ -3,6 +3,19 @@ import { setupListeners } from '@reduxjs/toolkit/query'
 import { apiSlice } from './apiSlice'
 import authReducer from '../features/auth/authSlice'
 import cartReducer from '../features/cart/cartSlice'
+import { publishSessionEvent } from '../utils/adminSessionSync'
+
+const sessionBroadcast = (api) => (next) => (action) => {
+  const before = api.getState().auth.userInfo
+  const result = next(action)
+  const after = api.getState().auth.userInfo
+  if (action.type === 'auth/setCredentials' && action.meta?.source === 'login' && after?.sessionId) {
+    publishSessionEvent({ type: 'login', sessionId: after.sessionId })
+  } else if (action.type === 'auth/logout' && before?.sessionId && !after && !action.payload?.remote) {
+    publishSessionEvent({ type: action.payload?.reason === 'expired' ? 'expired' : 'logout', sessionId: before.sessionId })
+  }
+  return result
+}
 
 const CART_STORAGE_KEY = 'megadie.cart.v1'
 const isBrowser = typeof window !== 'undefined'
@@ -50,7 +63,7 @@ export const store = configureStore({
   },
   preloadedState,
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(apiSlice.middleware),
+    getDefaultMiddleware().concat(sessionBroadcast, apiSlice.middleware),
 })
 
 if (isBrowser) {

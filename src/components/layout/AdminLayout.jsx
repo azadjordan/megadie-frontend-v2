@@ -1,8 +1,8 @@
 // src/components/layout/AdminLayout.jsx
-import { Suspense, createElement, useEffect, useMemo, useState } from "react";
+import { Suspense, createElement, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import {
   FiMenu,
   FiX,
@@ -23,6 +23,7 @@ import {
   FiUser,
 } from "react-icons/fi";
 
+import { toast } from "react-toastify";
 import { apiSlice } from "../../app/apiSlice";
 import { logout as logoutAction } from "../../features/auth/authSlice";
 import { useLogoutMutation } from "../../features/auth/usersApiSlice";
@@ -74,6 +75,7 @@ export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const store = useStore();
   const { userInfo } = useSelector((state) => state.auth);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -82,21 +84,28 @@ export default function AdminLayout() {
   const adminLabel = userInfo?.name || userInfo?.email || "Admin";
   const adminName = String(adminLabel).trim() || "Admin";
 
-  useEffect(() => {
+  const [mobilePath, setMobilePath] = useState(location.pathname);
+  if (mobilePath !== location.pathname) {
+    setMobilePath(location.pathname);
     setMobileOpen(false);
-  }, [location.pathname]);
+  }
 
 
   const handleLogout = async () => {
+    const generation = store.getState().auth.sessionGeneration;
     try {
-      await logoutApi().unwrap();
+      await logoutApi({ sessionId: userInfo?.sessionId }).unwrap();
     } catch {
-      // silent best-effort logout
-    } finally {
-      dispatch(logoutAction());
-      dispatch(apiSlice.util.resetApiState());
-      navigate("/", { replace: true });
+      if (store.getState().auth.sessionGeneration !== generation) return;
+      if (userInfo?.isAdmin) {
+        toast.error("Could not sign out. Check your connection and try again.");
+        return;
+      }
     }
+    if (store.getState().auth.sessionGeneration !== generation) return;
+    dispatch(logoutAction({ expectedSessionId: userInfo?.sessionId }));
+    dispatch(apiSlice.util.resetApiState());
+    navigate("/", { replace: true });
   };
 
   const items = useMemo(

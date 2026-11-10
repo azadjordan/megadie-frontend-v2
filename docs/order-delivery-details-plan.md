@@ -66,12 +66,13 @@ Keep the existing external Courier pickup block and configuration: its recipient
 
 The pure `orderWorkerShare.js` formatter groups by distinct SKU and then naturally sorts that SKU's slots. It sums duplicate SKU/slot rows and shows each slot quantity under a numbered SKU. PICK has no per-SKU subtotal; Pack & Check uses the same item numbers with the ordered totals. Product names and descriptions are never displayed, including when older API payloads still contain them.
 
-The compact header contains the title, italic Order label, italic Carton Tag label with the identifier in bold, and the item/unit summary. The identifier retains its initials-plus-order-suffix format. Count distinct SKUs as items and sum ordered quantities as units, with the same summary at the top and the bottom of Pack & Check. Use this sequence:
+The compact header contains the title, italic Client label with the full account name in bold, italic Order label, italic Carton Tag label with the identifier in bold, and the item/unit summary. The identifier uses the full client name followed by an em dash and the complete order suffix. Use `Unknown client` when the name is unavailable. Count distinct SKUs as items and sum ordered quantities as units, with the same summary at the top and the bottom of Pack & Check. Use this sequence:
 
 ```text
 *PREPARE & DELIVER*
+_Client:_ *Ahmed Trading*
 _Order:_ ORD-261101-9E7D51
-_Carton Tag:_ *ASPP-9E7D51*
+_Carton Tag:_ *Ahmed Trading — 9E7D51*
 _Assigned To:_ *Ahmed*
 *2 items — 10 units*
 
@@ -92,7 +93,7 @@ _Address:_ Alain Sinaiyah
 _Map:_ https://maps.app.goo.gl/8pHDhvf8hYfVStr77?g_st=ic
 ```
 
-DELIVER includes only the saved address and map link. Customer names, phones, contact details, notes, product descriptions, prices, and internal information are excluded. The required assigned staff name is deliberately included in the header. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
+DELIVER includes only the saved address and map link. Delivery recipient names, phones, contact details, notes, product descriptions, prices, and internal information are excluded. The client account name and required assigned staff name are deliberately included in the header. Courier retains its existing separate format. No store address block, new dependencies, or additional request is required.
 
 The backend returns `problems` (draft/HOLD) and `notices` (advisory). Display them plainly rather than implementing a second client readiness engine. Processing orders can produce a preparation draft; complete Shipping orders can produce the normal sheet. Cancelled/Delivered staff actions are disabled; there is no new historical-reference copy mode.
 
@@ -176,7 +177,7 @@ Mandatory-assignee verification: 25 backend/helper/API integration/regression te
 This refinement supersedes the earlier combined-only worker action and the requirement to edit defaults exclusively on the customer page.
 
 - The entry action and modal are named **Prepare Order**. First use requires an explicit choice of **Prepare Only** (`prepare_only`) or **Prepare & Deliver** (`prepare_deliver`). The choice is saved as `Order.preparationMode` using the existing delivery revision guard. Existing orders have no inferred task; no backfill or migration is needed. `assignedTo` remains mandatory for either task, including draft copying.
-- Prepare Only uses `*PREPARE ONLY*`, includes the order, carton tag, assignee, summary, PICK, and PACK & CHECK, and omits the entire delivery section. It requires no location and hides location controls. Switching tasks retains the destination in local form state and on the order. Prepare & Deliver uses `*PREPARE & DELIVER*` and requires an address or map for final copying. Drafts retain the HOLD heading and explicitly identify their task. All existing SKU grouping, numbering, allocation warnings, and WhatsApp formatting remain.
+- Prepare Only uses `*PREPARE ONLY*`, includes the client name, order, carton tag, assignee, summary, PICK, and PACK & CHECK, and omits the entire delivery section. It requires no location and hides location controls. Switching tasks retains the destination in local form state and on the order. Prepare & Deliver uses `*PREPARE & DELIVER*` and requires an address or map for final copying. Drafts retain the HOLD heading and explicitly identify their task. All existing SKU grouping, numbering, allocation warnings, and WhatsApp formatting remain.
 - The fulfillment DTO now includes the saved `preparationMode`, location-only `customerLocation` defaults, and `preparationProblems` for reservation/status issues independent of delivery completeness. `problems` remains the complete list for the saved task. The UI recomputes task/assignment/location warnings for the live preview, while keeping all reservation checks.
 - In worker delivery mode, **Use customer's default** fills the address and map only when a nonempty default differs from the current form. It makes no request or write until saving. The unchecked **Save as customer's default location** option explicitly updates the customer's address and map together with this order. Hidden contacts, notes, and account identity are preserved. Merely checking this option enables saving even if the order destination did not change. The option resets after a successful save and is never applied in preparation-only mode.
 - `PUT /orders/:id/delivery-details` accepts optional `preparationMode`, `saveCustomerLocation`, and `expectedCustomerLocation` alongside existing fields. Explicit modes require a valid assignee. Saving a default requires delivery mode, a nonempty address or map, and the original two-field customer location from the fresh sheet. Only this opt-in path uses a transaction, saving the guarded order and the customer's two location fields atomically. A changed order revision, closed order, missing customer, or changed customer default prevents both writes. Ordinary order/Courier edits remain one order write and omission preserves the task and assignment.

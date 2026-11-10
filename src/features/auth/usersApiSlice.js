@@ -38,11 +38,21 @@ export const usersApiSlice = apiSlice.injectEndpoints({
     }),
 
     logout: builder.mutation({
-      query: () => ({
+      query: ({ sessionId } = {}) => ({
         url: "/users/logout",
         method: "POST",
+        body: { sessionId },
       }),
       invalidatesTags: [{ type: "User", id: "LIST" }],
+    }),
+
+    reportAdminActivity: builder.mutation({
+      query: (sessionId) => ({
+        url: "/users/session/activity",
+        method: "POST",
+        body: { sessionId },
+        timeout: PROFILE_SESSION_TIMEOUT_MS,
+      }),
     }),
 
     // Profile (auto + lazy hooks are both generated from this single query)
@@ -101,6 +111,7 @@ export const {
   useLoginMutation,
   useRegisterMutation,
   useLogoutMutation,
+  useReportAdminActivityMutation,
 
   useGetMyProfileQuery,
   useLazyGetMyProfileQuery,

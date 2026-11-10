@@ -46,6 +46,7 @@ export function buildWorkerOrderShareText(sheet) {
   const lines = [
     `*${draft ? "PREPARATION DRAFT — HOLD" : task}*`,
     ...(draft ? [`_Task:_ ${task}`] : []),
+    `_Client:_ *${line(sheet.customerName) || "Unknown client"}*`,
     `_Order:_ ${line(sheet.orderNumber)}`,
     `_Carton Tag:_ *${line(sheet.label)}*`,
   ];
