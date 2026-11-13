@@ -43,6 +43,7 @@ export function canCreateOrderInvoice(orderOrStatus, explicitHasInvoice) {
   return (
     !hasInvoice &&
     !isCancelled &&
+    !(orderOrStatus?.packingSentAt && !orderOrStatus?.packedAt) &&
     ACTIVE_INVOICE_ORDER_STATUSES.includes(status)
   );
 }
@@ -53,6 +54,7 @@ export function getCreateInvoiceReason(orderOrStatus, explicitHasInvoice) {
 
   if (hasInvoice) return "Invoice attached.";
   if (isCancelled) return "Invoices cannot be created for cancelled orders.";
+  if (orderOrStatus?.packingSentAt && !orderOrStatus?.packedAt) return 'Finish worker packing before creating the invoice. Resolve shortages and mark the order Packed first.';
   if (!ACTIVE_INVOICE_ORDER_STATUSES.includes(status)) {
     return "Invoices can be created once the order is active.";
   }

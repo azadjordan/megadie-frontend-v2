@@ -1,10 +1,13 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 import Header from './Header'
 import Footer from './Footer'
 
 export default function PublicLayout() {
   const { pathname } = useLocation()
+  const user = useSelector(state => state.auth.userInfo)
   const isHome = pathname === '/'
+  if (user?.isWorker && !user.isAdmin) return <Navigate to="/packing" replace />
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f5f3ff]">

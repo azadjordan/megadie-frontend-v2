@@ -40,6 +40,9 @@ import AccountNotFoundPage from "../pages/Account/AccountNotFoundPage";
 import AccountInvoicesReceiptPage from "../pages/Account/AccountInvoicesReceiptPage";
 
 const CatalogPage = lazy(() => import("../pages/Public/CatalogPage"));
+const PackingLayout = lazy(() => import("../pages/Packing/PackingLayout"));
+const PackingOrdersPage = lazy(() => import("../pages/Packing/PackingOrdersPage"));
+const PackingOrderPage = lazy(() => import("../pages/Packing/PackingOrderPage"));
 
 const AdminLayout = lazy(() => import("../components/layout/AdminLayout"));
 const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
@@ -49,6 +52,7 @@ const AdminRequestDetailsPage = lazy(() =>
   import("../pages/Admin/AdminRequestDetailsPage")
 );
 const AdminOrdersPage = lazy(() => import("../pages/Admin/AdminOrdersPage"));
+const AdminPackingPage = lazy(() => import("../pages/Admin/AdminPackingPage"));
 const AdminOrderDetailsPage = lazy(() =>
   import("../pages/Admin/AdminOrderDetailsPage")
 );
@@ -203,6 +207,11 @@ export default function AppRoutes() {
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
       {/* Admin routes (protected) */}
+      <Route path="/packing" element={<Suspense fallback={<p role="status" className="p-6">Loading packing…</p>}><PackingLayout /></Suspense>}>
+        <Route index element={<PackingOrdersPage />} />
+        <Route path="orders/:id" element={<PackingOrderPage />} />
+        <Route path="*" element={<Navigate to="/packing" replace />} />
+      </Route>
       <Route element={<RequireAdmin />}>
         <Route
           path="/admin"
@@ -220,6 +229,7 @@ export default function AppRoutes() {
 
           <Route path="orders" element={<AdminOrdersPage />} />
           <Route path="orders/:id" element={<AdminOrderDetailsPage />} />
+          <Route path="orders/:id/packing" element={<AdminPackingPage />} />
           <Route path="invoices" element={<AdminInvoicesPage />} />
           <Route path="finance" element={<AdminFinancePage />} />
           <Route path="invoices/:id/edit" element={<AdminInvoiceEditPage />} />

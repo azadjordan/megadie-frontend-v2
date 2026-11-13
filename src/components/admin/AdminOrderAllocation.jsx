@@ -1338,6 +1338,7 @@ export default function AdminOrderAllocation({
   hasInvoice = false,
   invoiceWarning = "",
   mode,
+  headerAction,
 }) {
   const money =
     typeof formatMoney === "function" ? formatMoney : (value) => value;
@@ -1645,6 +1646,7 @@ export default function AdminOrderAllocation({
                 {rows.length} item{rows.length !== 1 ? "s" : ""}
               </div>
             </div>
+            {headerAction}
             {showSlotActions && <button
               type="button"
               onClick={handleReserveAll}
@@ -1927,13 +1929,14 @@ export default function AdminOrderAllocation({
 
   return (
     <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
-      <div className="border-b border-slate-200 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="text-sm font-semibold text-slate-900">{title}</div>
           <div className="text-xs text-slate-500">
             {rows.length} item{rows.length !== 1 ? "s" : ""}
           </div>
         </div>
+        {headerAction}
       </div>
 
       <div className="md:hidden">

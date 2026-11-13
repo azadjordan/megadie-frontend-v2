@@ -1,6 +1,6 @@
 // src/components/auth/RequireAccountApproval.jsx
 import { useSelector } from "react-redux";
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { FiAlertCircle, FiClock } from "react-icons/fi";
 
 import RouteStatePage from "../common/RouteStatePage";
@@ -11,6 +11,7 @@ export default function RequireAccountApproval() {
 
   const isApproved = userInfo?.isAdmin || !status || status === "Approved";
 
+  if (userInfo?.isWorker && !userInfo.isAdmin) return <Navigate to="/packing" replace />;
   if (isApproved) return <Outlet />;
 
   const isRejected = status === "Rejected";

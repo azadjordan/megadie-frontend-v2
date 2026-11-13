@@ -29,6 +29,7 @@ export default function RequireAdmin() {
 
   // Logged in but not admin.
   if (!userInfo.isAdmin) {
+    if (userInfo.isWorker) return <Navigate to="/packing" replace />
     return (
       <div className="min-h-screen bg-slate-50 px-4 py-10">
         <RouteStatePage

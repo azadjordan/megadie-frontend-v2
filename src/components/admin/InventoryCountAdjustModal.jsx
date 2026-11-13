@@ -63,7 +63,9 @@ function InventoryCountAdjustModalContent({
   const isDecrease = deltaQty < 0;
   const isIncrease = deltaQty > 0;
   const qtyError =
-    parsedQty == null
+    slotItem?.pendingPickedQty > 0
+      ? `${slotItem.pendingPickedQty} collected units are still included in recorded stock. Finalize their orders or confirm their return before correcting this shelf count.`
+      : parsedQty == null
       ? "Enter a whole number."
       : parsedQty < 0
       ? "Actual qty cannot be negative."

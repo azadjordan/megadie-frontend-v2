@@ -3,6 +3,7 @@ import { apiSlice } from "../../app/apiSlice";
 
 const ADMIN_ORDER_STATUSES = ["Processing", "Shipping", "Delivered", "Cancelled"];
 const ADMIN_ORDER_WORK_FILTERS = [
+  'needsStockCheck',
   "noInvoice",
   "paymentDue",
   "needsReservation",
@@ -136,36 +137,40 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
 
     // Admin: cancel order with cleanup (invoice + allocations)
     cancelOrderByAdmin: builder.mutation({
-      query: (id) => ({
-        url: `/orders/${id}/cancel`,
+      query: (arg) => ({
+        url: `/orders/${typeof arg === "object" ? arg.id : arg}/cancel`,
         method: "POST",
+        ...(typeof arg === "object" ? { body: { confirmedPhysicalReturn: arg.confirmedPhysicalReturn } } : {}),
       }),
-      invalidatesTags: (_result, _error, id) => [
+      invalidatesTags: (_result, _error, arg) => [
         { type: "Order", id: "LIST" },
-        { type: "Order", id },
+        { type: "Order", id: typeof arg === "object" ? arg.id : arg },
         { type: "Invoice", id: "LIST" },
         { type: "Invoice", id: "SUMMARY" },
       ],
     }),
 
     deleteOrderByAdmin: builder.mutation({
-      query: (id) => ({
-        url: `/orders/${id}`,
+      query: (arg) => ({
+        url: `/orders/${typeof arg === "object" ? arg.id : arg}`,
         method: "DELETE",
+        ...(typeof arg === "object" ? { body: { confirmedPhysicalReturn: arg.confirmedPhysicalReturn, expectedRevision: arg.expectedRevision } } : {}),
       }),
-      invalidatesTags: (_result, _error, id) => [
+      invalidatesTags: (_result, _error, arg) => [
         { type: "Order", id: "LIST" },
-        { type: "Order", id },
+        { type: "Order", id: typeof arg === "object" ? arg.id : arg },
         { type: "Quote", id: "LIST" },
         { type: "Invoice", id: "LIST" },
         { type: "Invoice", id: "SUMMARY" },
         { type: "Payment", id: "LIST" },
         { type: "OrderAllocation", id: "LIST" },
-        { type: "OrderAllocation", id: `ORDER-${id}` },
+        { type: "OrderAllocation", id: `ORDER-${typeof arg === "object" ? arg.id : arg}` },
         { type: "SlotItem", id: "LIST" },
         { type: "Slot", id: "LIST" },
         { type: "InventoryProduct", id: "LIST" },
         { type: "InventoryMovement", id: "LIST" },
+        { type: "Packing", id: "LIST" },
+        { type: "Packing", id: typeof arg === "object" ? arg.id : arg },
       ],
     }),
 

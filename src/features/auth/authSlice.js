@@ -40,7 +40,7 @@ const authSlice = createSlice({
           if (!previous || previous._id !== profile._id || previous.sessionId !== profile.sessionId) return
           const savedMetadata = Object.fromEntries(['sessionId', 'sessionExpiresAt', 'sessionServerTime', 'sessionAbsoluteExpiresAt'].map((key) => [key, previous[key]]))
           state.userInfo = { ...profile, ...savedMetadata }
-          if (profile.isAdmin) applyMetadata(state, profile)
+          if (profile.isAdmin || profile.isWorker) applyMetadata(state, profile)
         } else {
           const sameSession = previous?._id === profile._id && previous?.sessionId === profile.sessionId
           if (!sameSession) state.sessionGeneration += 1
@@ -53,7 +53,7 @@ const authSlice = createSlice({
       },
     },
     updateAdminSession: (state, { payload }) => {
-      if (state.userInfo?.isAdmin && state.userInfo.sessionId === payload.expectedSessionId) applyMetadata(state, payload.metadata)
+      if ((state.userInfo?.isAdmin || state.userInfo?.isWorker) && state.userInfo.sessionId === payload.expectedSessionId) applyMetadata(state, payload.metadata)
     },
     logout: (state, { payload }) => {
       if (payload?.expectedSessionId && state.userInfo?.sessionId !== payload.expectedSessionId) return

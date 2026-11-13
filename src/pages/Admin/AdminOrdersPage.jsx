@@ -20,6 +20,8 @@ import Pagination from "../../components/common/Pagination";
 import AddPaymentModal from "../../components/admin/AddPaymentModal";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
 import CourierDetailsModal from "../../components/admin/CourierDetailsModal";
+import SendToWorkerModal from "../../components/admin/SendToWorkerModal";
+import PackingProgressBadge from "../../components/admin/PackingProgressBadge";
 import DeleteOrderPreviewModal from "../../components/admin/DeleteOrderPreviewModal";
 import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
 import { courierPickupConfig } from "../../config/courierConfig";
@@ -305,6 +307,10 @@ function InvoicePdfButton({
 
 function PrepareOrderButton({ order, isLoading, disabled, compact = false, onClick }) {
   const isClosed = ["Cancelled", "Delivered"].includes(order?.status);
+  if (order?.packingSentAt) return <Link to={`/admin/orders/${order._id}/packing`} aria-label="View packing" title="View packing" className={[
+    "inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
+    compact ? "h-8 w-8" : "gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider",
+  ].join(" ")}><FiClipboard className="h-4 w-4" aria-hidden="true" />{!compact && "View packing"}</Link>;
   return (
     <button
       type="button"
@@ -314,12 +320,12 @@ function PrepareOrderButton({ order, isLoading, disabled, compact = false, onCli
       ].join(" ")}
       disabled={disabled || isClosed}
       onClick={() => onClick(order)}
-      aria-label="Prepare order"
+      aria-label="Send to worker"
       aria-busy={isLoading}
-      title={isClosed ? "Closed orders cannot be prepared" : "Prepare order"}
+      title={isClosed ? "Closed orders cannot be prepared" : "Send to worker"}
     >
       <FiClipboard className={`h-4 w-4 ${isLoading ? "animate-pulse" : ""}`} />
-      {!compact && (isLoading ? "Loading..." : "Prepare Order")}
+      {!compact && (isLoading ? "Loading..." : "Send to worker")}
     </button>
   );
 }
@@ -511,6 +517,7 @@ const ORDER_PAYMENT_FILTER_VALUES = new Set([
   "Paid",
 ]);
 const ORDER_WORK_QUEUE_ITEMS = [
+  { key: 'needsStockCheck', label: 'Stock checks', title: 'Orders with unchecked stock reports, including packed and closed orders.' },
   {
     key: "noInvoice",
     label: "No Invoice",
@@ -613,13 +620,17 @@ export default function AdminOrdersPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copyId, setCopyId] = useState(null);
   const [workerLoadingId, setWorkerLoadingId] = useState(null);
+  const [packingTarget, setPackingTarget] = useState(null);
   const [pdfId, setPdfId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [deletePreviewId, setDeletePreviewId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletePreview, setDeletePreview] = useState(null);
   const [deleteConfirmValue, setDeleteConfirmValue] = useState("");
+  const [deletePhysicalReturn, setDeletePhysicalReturn] = useState(false);
   const [deleteFormError, setDeleteFormError] = useState("");
+  const [deleteNeedsRefresh, setDeleteNeedsRefresh] = useState(false);
+  const deletingOrder = useRef(false);
   const [courierTarget, setCourierTarget] = useState(null);
   const [deliveryMode, setDeliveryMode] = useState("courier");
   const [workerSheet, setWorkerSheet] = useState(null);
@@ -725,7 +736,7 @@ export default function AdminOrdersPage() {
     paymentStatus,
     work,
     search: searchParam,
-  });
+  }, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true });
   const {
     data: workSummaryRes,
     isLoading: isWorkSummaryLoading,
@@ -803,7 +814,9 @@ export default function AdminOrdersPage() {
     }
   }
 
-  async function openPrepareOrder(order) {
+  function openPrepareOrder(order) { setPackingTarget(order); }
+
+  async function openLegacyPrepareOrder(order) {
     if (!order?._id || workerLoadingId || copyId || deliveryLock.current) return;
     deliveryLock.current = true;
     try {
@@ -979,34 +992,42 @@ export default function AdminOrdersPage() {
     setDeleteTarget(null);
     setDeletePreview(null);
     setDeleteConfirmValue("");
+    setDeletePhysicalReturn(false);
     setDeleteFormError("");
+    setDeleteNeedsRefresh(false);
   }
 
   function closeDeleteModal() {
-    if (isDeleting) return;
+    if (isDeleting || deletingOrder.current) return;
     resetDeleteModal();
   }
 
   async function onDelete(order) {
-    if (!order?._id || deleteId || deletePreviewId || isDeleting) return;
+    if (!order?._id || deleteId || deletePreviewId || isDeleting || deletingOrder.current) return;
     setDeleteTarget(order);
     setDeletePreview(null);
     setDeleteConfirmValue("");
+    setDeletePhysicalReturn(false);
     setDeleteFormError("");
+    setDeleteNeedsRefresh(false);
     setDeletePreviewId(order._id);
     try {
       const res = await getOrderDeletePreview(order._id).unwrap();
       setDeletePreview(res?.data || res);
     } catch (err) {
-      resetDeleteModal();
-      toast.error(friendlyApiError(err, "Failed to prepare delete preview."));
+      setDeleteNeedsRefresh(true);
+      setDeleteFormError(friendlyApiError(err, "Failed to prepare delete preview."));
     } finally {
       setDeletePreviewId(null);
     }
   }
 
   async function submitDeleteOrder() {
-    if (!deleteTarget?._id || deleteId || isDeleting) return;
+    if (!deleteTarget?._id || deleteId || isDeleting || deletingOrder.current || deleteNeedsRefresh || !deletePreview?.allowed) return;
+    if (deletePreview.stock?.requiresPhysicalReturn && !deletePhysicalReturn) {
+      setDeleteFormError("Confirm the worker has stopped and the goods are back in their original slots.");
+      return;
+    }
     const confirmText =
       deletePreview?.confirmText ||
       deletePreview?.order?.orderNumber ||
@@ -1019,9 +1040,10 @@ export default function AdminOrdersPage() {
     }
 
     setDeleteFormError("");
+    deletingOrder.current = true;
     try {
       setDeleteId(deleteTarget._id);
-      const res = await deleteOrderByAdmin(deleteTarget._id).unwrap();
+      const res = await deleteOrderByAdmin({ id: deleteTarget._id, confirmedPhysicalReturn: deletePhysicalReturn, expectedRevision: deletePreview.order?.version }).unwrap();
       const restored = Boolean(res?.data?.stockRestored);
       toast.success(
         restored
@@ -1032,8 +1054,12 @@ export default function AdminOrdersPage() {
     } catch (err) {
       const friendly = friendlyApiError(err, "Delete failed.");
       setDeleteFormError(friendly);
+      setDeletePhysicalReturn(false);
+      setDeleteConfirmValue("");
+      setDeleteNeedsRefresh(true);
       toast.error(friendly);
     } finally {
+      deletingOrder.current = false;
       setDeleteId(null);
     }
   }
@@ -1560,6 +1586,7 @@ export default function AdminOrdersPage() {
               <AllocationBadge status={fulfillment.allocationStatus} size="compact" />
               <StockBadge finalized={fulfillment.stockFinalized} size="compact" />
             </div>
+            <PackingProgressBadge order={o} />
           </div>
 
           <div className="border-t border-slate-100 pt-3">
@@ -1757,6 +1784,7 @@ export default function AdminOrdersPage() {
                           <div className="mt-1 text-xs text-slate-500">
                             {fulfillment.stockLabel}
                           </div>
+                          <PackingProgressBadge order={o} />
                         </td>
 
                         <td className="px-4 py-3">
@@ -1924,6 +1952,8 @@ export default function AdminOrdersPage() {
         preview={deletePreview}
         isLoading={Boolean(deletePreviewId)}
         isDeleting={Boolean(deleteId && deleteId === deleteTarget?._id)}
+        confirmedPhysicalReturn={deletePhysicalReturn}
+        onPhysicalReturnChange={setDeletePhysicalReturn}
         confirmValue={deleteConfirmValue}
         onConfirmValueChange={(value) => {
           setDeleteConfirmValue(value);
@@ -1932,7 +1962,11 @@ export default function AdminOrdersPage() {
         onClose={closeDeleteModal}
         onSubmit={submitDeleteOrder}
         error={deleteFormError}
+        needsRefresh={deleteNeedsRefresh}
+        onRefresh={() => onDelete(deleteTarget)}
       />
+
+      {packingTarget && <SendToWorkerModal orderId={packingTarget._id} onClose={() => setPackingTarget(null)} onLegacy={() => { const target = packingTarget; setPackingTarget(null); openLegacyPrepareOrder(target); }} />}
 
       <CourierDetailsModal
         open={Boolean(courierTarget)}

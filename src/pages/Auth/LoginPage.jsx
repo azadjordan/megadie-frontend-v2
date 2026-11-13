@@ -58,6 +58,10 @@ export default function LoginPage() {
       return intendedPath.startsWith('/admin') ? intendedPath : '/admin'
     }
 
+    if (user?.isWorker) {
+      return intendedPath.startsWith('/packing/') ? intendedPath : '/packing'
+    }
+
     const status = user?.approvalStatus
     if (status && status !== 'Approved') return '/'
 
@@ -123,8 +127,9 @@ export default function LoginPage() {
     >
       <form onSubmit={submitHandler} className="space-y-4">
         <div>
-          <label className="text-sm font-semibold text-slate-700">Email</label>
+          <label htmlFor="login-email" className="text-sm font-semibold text-slate-700">Email</label>
           <input
+            id="login-email"
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="email"
             autoComplete="email"
@@ -146,8 +151,9 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-slate-700">Password</label>
+          <label htmlFor="login-password" className="text-sm font-semibold text-slate-700">Password</label>
           <input
+            id="login-password"
             className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
             type="password"
             autoComplete="current-password"

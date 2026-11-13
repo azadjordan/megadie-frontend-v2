@@ -5,6 +5,8 @@ import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
+import AdminPackingPanel from "../../components/admin/AdminPackingPanel";
+import EditOrderItemsModal from "../../components/admin/EditOrderItemsModal";
 import AdminOrderAllocation from "../../components/admin/AdminOrderAllocation";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
 import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
@@ -126,6 +128,18 @@ export default function AdminOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [itemsEditorOpen, setItemsEditorOpen] = useState(false);
+  const editorParams = new URLSearchParams(location.search);
+  const requestedItemsEditor = editorParams.get("editItems") === "1";
+  const focusProduct = editorParams.get("focusProduct") || "";
+  function closeItemsEditor() {
+    setItemsEditorOpen(false);
+    if (editorParams.get("returnTo") === "packing") { navigate('/admin/orders/' + id + '/packing'); return; }
+    if (requestedItemsEditor) {
+      editorParams.delete("editItems"); editorParams.delete("focusProduct"); editorParams.delete("returnTo");
+      navigate({ pathname: location.pathname, search: editorParams.toString() }, { replace: true });
+    }
+  }
   const backToOrdersHref = useMemo(
     () => buildOrdersListHref(location.search),
     [location.search]
@@ -294,12 +308,17 @@ export default function AdminOrderDetailsPage() {
   }, [allocations, items]);
 
   const isStockFinalized = isOrderStockFinalized(order, allocationMetrics);
+  const itemsEditLockReason = isStockFinalized ? "Stock finalized." : orderStatus !== "Shipping" ? "Items can be edited while Shipping." : hasInvoice ? "Invoice exists. Items are locked." : order?.packedAt ? "Reopen packing before editing items." : "";
+  const editItemsAction = <div className="text-right"><button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={Boolean(itemsEditLockReason)} onClick={() => setItemsEditorOpen(true)}>Edit items</button>{itemsEditLockReason && <p className="mt-1 max-w-44 text-xs text-slate-500">{itemsEditLockReason}</p>}</div>;
   const releaseAllowed =
     orderStatus === "Shipping" &&
+    !order?.packedAt &&
     !isStockFinalized &&
     !hasDeductedAllocations;
-  const canAllocate = orderStatus === "Shipping" && !isStockFinalized;
-  const allocationLockReason = isStockFinalized
+  const canAllocate = orderStatus === "Shipping" && !isStockFinalized && !order?.packedAt;
+  const allocationLockReason = order?.packedAt
+    ? "Order is Packed. Reopen packing before changing reservations."
+    : isStockFinalized
     ? "Stock finalized."
     : orderStatus === "Cancelled"
     ? "Order is cancelled."
@@ -369,6 +388,7 @@ export default function AdminOrderDetailsPage() {
   } else if (!isFullyReserved && !allocationMetrics.isFullyDeducted) {
     deliverLockReason = "Reserve all items before delivery.";
   }
+  if (order?.packingSentAt && !order?.packedAt) deliverLockReason = "Worker must mark this order Packed before delivery.";
   const canDeliver = deliverLockReason === "";
   const needsAllocationCheck =
     orderStatus === "Shipping" || orderStatus === "Delivered" || isCancelled;
@@ -590,12 +610,12 @@ export default function AdminOrderDetailsPage() {
   const handleCancel = async () => {
     if (!order || isUpdatingStatus || isCancelling) return;
     const confirmed = window.confirm(
-      "Cancel this order? This will delete the invoice and payments (if any), unreserve all items, and mark the order as Cancelled."
+      `${order.packingSentAt ? "Confirm the worker has stopped picking and any collected goods are physically in their original slots. " : ""}Cancel this order? This will delete the invoice and payments (if any), unreserve all items, and mark the order as Cancelled.`
     );
     if (!confirmed) return;
     setOverviewError("");
     try {
-      const res = await cancelOrderByAdmin(orderId).unwrap();
+      const res = await cancelOrderByAdmin({ id: orderId, confirmedPhysicalReturn: Boolean(order.packingSentAt) }).unwrap();
       toast.success(res?.message || "Order cancelled.");
     } catch (err) {
       setOverviewError(
@@ -923,6 +943,7 @@ export default function AdminOrderDetailsPage() {
                 formatMoney={moneyPlain}
                 showSlots={false}
                 title="Order items"
+                headerAction={editItemsAction}
               />
             </div>
           </div>
@@ -966,9 +987,10 @@ export default function AdminOrderDetailsPage() {
               </button>
             </div>
 
+            {!hasInvoice && createInvoiceReason && <p className="mt-3 text-xs text-amber-900">{createInvoiceReason}</p>}
             {canCreateInvoice && orderStatus !== "Delivered" ? (
               <div className="mt-3 text-[11px] text-slate-500">
-                Invoice can be created before or after delivery.
+                {order?.packingSentAt ? 'Packing is complete. The invoice can now be created.' : 'Using live worker packing? Send the order to a worker before invoicing.'}
               </div>
             ) : null}
           </StepCard>
@@ -982,6 +1004,7 @@ export default function AdminOrderDetailsPage() {
             formatMoney={money}
             showPricing={false}
             title="Reserve Stock"
+            headerAction={editItemsAction}
             allocationEnabled={canAllocate}
             allocationLockReason={allocationLockReason}
             allowRelease={releaseAllowed}
@@ -1124,6 +1147,7 @@ export default function AdminOrderDetailsPage() {
 
   return (
     <div className="space-y-4 pb-24 md:pb-0">
+      {(itemsEditorOpen || requestedItemsEditor) && <EditOrderItemsModal orderId={id} focusProduct={focusProduct} onClose={closeItemsEditor} onSaved={result => { toast.success(result.message); closeItemsEditor(); }} />}
       <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <button
           type="button"
@@ -1165,6 +1189,7 @@ export default function AdminOrderDetailsPage() {
         <div className="space-y-4">
           {tabsNode}
           {renderActiveTab()}
+          <AdminPackingPanel order={order} />
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">

@@ -130,6 +130,12 @@ export function getAdminOrderPrimaryAction(order) {
       });
     }
 
+    if (order?.packingSentAt && !order.packedAt) {
+      return buildAction(ADMIN_ORDER_ACTION_IDS.OPEN_ORDER, {
+        kind: "link", tab: "stock", label: "Packing", reason: "Review worker packing progress before delivery.",
+      });
+    }
+    if (order?.packingSentAt && !getOrderInvoiceId(order)) return buildAction(ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE);
     return buildAction(ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED);
   }
 

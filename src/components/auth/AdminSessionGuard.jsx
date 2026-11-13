@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import { toast } from "react-toastify";
 import { apiSlice } from "../../app/apiSlice";
@@ -12,9 +13,16 @@ export default function AdminSessionGuard() {
   const store = useStore();
   const user = useSelector((state) => state.auth.userInfo);
   const sessionId = user?.sessionId;
-  const isAdmin = Boolean(user?.isAdmin);
+  const isAdmin = Boolean(user?.isAdmin || user?.isWorker);
   const [notice, setNotice] = useState(null);
+  const [dialogHost, setDialogHost] = useState(null);
   const actions = useRef({});
+
+  useEffect(() => {
+    const changed = event => setDialogHost(event.detail);
+    document.addEventListener("packing-dialog-host", changed);
+    return () => document.removeEventListener("packing-dialog-host", changed);
+  }, []);
 
   useEffect(() => subscribeSessionEvents((event) => {
     const current = store.getState().auth.userInfo;
@@ -50,7 +58,7 @@ export default function AdminSessionGuard() {
       if (!valid()) return;
       dispatch(logout({ expectedSessionId: sessionId, reason: "expired" }));
       dispatch(apiSlice.util.resetApiState());
-      toast.info("Your admin session expired. Please sign in again.", { toastId: "admin-session-expired" });
+      toast.info("Your work session expired. Please sign in again.", { toastId: "admin-session-expired" });
     };
     const changeSession = () => {
       if (!valid()) return;
@@ -65,7 +73,7 @@ export default function AdminSessionGuard() {
         try {
           const response = await dispatch(usersApiSlice.endpoints.getMyProfile.initiate(`session-${sessionId}`, { forceRefetch: true, subscribe: false })).unwrap();
           if (!valid()) return;
-          if (!response.data.isAdmin || response.data.sessionId !== sessionId) return changeSession();
+          if (!(response.data.isAdmin || response.data.isWorker) || response.data.sessionId !== sessionId) return changeSession();
           dispatch(updateAdminSession({ expectedSessionId: sessionId, metadata: response.data }));
           connectionError = "";
           if (read().adminSessionDeadline <= Date.now()) expire();
@@ -131,7 +139,7 @@ export default function AdminSessionGuard() {
 
     const activity = (event) => {
       if (!event.isTrusted || document.visibilityState !== "visible") return;
-      if (event.target instanceof Element && event.target.closest('[aria-label="Admin session warning"]')) return;
+      if (event.target instanceof Element && event.target.closest('[aria-label="Admin session warning"], [aria-label="Work session warning"]')) return;
       void renew();
     };
     const returned = () => { if (document.visibilityState === "visible") void refresh(); };
@@ -155,8 +163,8 @@ export default function AdminSessionGuard() {
 
   if (!isAdmin || !notice || notice.sessionId !== sessionId) return null;
   const clock = `${Math.floor(notice.seconds / 60)}:${String(notice.seconds % 60).padStart(2, "0")}`;
-  return (
-    <section aria-label="Admin session warning" className="fixed inset-x-3 bottom-24 z-[110] mx-auto max-w-xl rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-lg sm:inset-x-auto sm:bottom-5 sm:right-5">
+  const warning = (
+    <section aria-label={user.isAdmin ? "Admin session warning" : "Work session warning"} className={"rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 " + (dialogHost ? "mb-5" : "fixed inset-x-3 top-3 z-[110] mx-auto max-w-xl shadow-lg sm:inset-x-auto sm:top-5 sm:right-5")}>
       <div role="status" className="text-sm font-semibold">{notice.kind === "checking" ? "Checking your session…" : notice.kind === "absolute" ? "Your work session is ending soon" : notice.error ? "Session connection problem" : "Are you still working?"}</div>
       <p className="mt-1 text-xs">{notice.kind === "absolute" ? "The eight-hour limit is approaching. Save your work before signing in again." : notice.kind === "checking" ? "Confirming the current session with the server." : notice.error || "Your session will end due to inactivity. Stay signed in to continue without leaving this page."}</p>
       {notice.kind !== "checking" && <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -165,4 +173,5 @@ export default function AdminSessionGuard() {
       </div>}
     </section>
   );
+  return dialogHost ? createPortal(warning, dialogHost) : warning;
 }

@@ -1,6 +1,9 @@
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { FiAlertTriangle, FiCheck, FiTrash2, FiX } from "react-icons/fi";
 
 import ErrorMessage from "../common/ErrorMessage";
+import { packingQuantity } from "../../utils/packing";
 
 function formatCount(value) {
   const n = Number(value);
@@ -40,11 +43,43 @@ export default function DeleteOrderPreviewModal({
   isLoading = false,
   isDeleting = false,
   confirmValue = "",
+  confirmedPhysicalReturn = false,
+  onPhysicalReturnChange,
   onConfirmValueChange,
   onClose,
   onSubmit,
+  needsRefresh = false,
+  onRefresh,
   error,
 }) {
+  const dialog = useRef(null);
+  const latest = useRef({ onClose, isDeleting });
+  useEffect(() => { latest.current = { onClose, isDeleting }; }, [onClose, isDeleting]);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.dispatchEvent(new CustomEvent("packing-dialog-host", { detail: dialog.current?.querySelector('[data-session-warning-slot]') }));
+    dialog.current?.querySelector("button:not(:disabled)")?.focus();
+    const keydown = event => {
+      if (event.key === "Escape" && !latest.current.isDeleting) { event.stopPropagation(); latest.current.onClose(); }
+      if (event.key !== "Tab") return;
+      const nodes = [...dialog.current.querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]')].filter(node => node.getClientRects().length);
+      const first = nodes[0], last = nodes.at(-1);
+      if (!first) return;
+      if (!dialog.current.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+      else if (event.shiftKey && event.target === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && event.target === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.dispatchEvent(new CustomEvent("packing-dialog-host", { detail: null }));
+      document.body.style.overflow = overflow;
+      document.removeEventListener("keydown", keydown);
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [open]);
   if (!open) return null;
 
   const orderNumber =
@@ -58,22 +93,26 @@ export default function DeleteOrderPreviewModal({
   const blockers = Array.isArray(preview?.blockers) ? preview.blockers : [];
   const actions = Array.isArray(preview?.actions) ? preview.actions : [];
   const restoreRows = Array.isArray(stock.restoreRows) ? stock.restoreRows : [];
+  const returnRows = Array.isArray(stock.returnRows) ? stock.returnRows : [];
   const isRestore = Number(stock.deductedQty || 0) > 0;
   const canSubmit =
     preview?.allowed &&
     !isLoading &&
     !isDeleting &&
+    !needsRefresh &&
+    (!stock.requiresPhysicalReturn || confirmedPhysicalReturn) &&
     String(confirmValue).trim() === String(confirmText).trim();
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-3 py-6">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 px-3 py-6">
       <div
+        ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-order-title"
-        className="max-h-full w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl ring-1 ring-slate-200"
+        className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200"
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-700 ring-1 ring-rose-100">
@@ -103,7 +142,8 @@ export default function DeleteOrderPreviewModal({
           </button>
         </div>
 
-        <div className="space-y-4 p-4">
+        <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-4">
+          <div data-session-warning-slot />
           {isLoading ? (
             <div className="rounded-2xl bg-slate-50 px-4 py-6 text-center ring-1 ring-slate-200">
               <div className="text-sm font-semibold text-slate-900">
@@ -205,6 +245,12 @@ export default function DeleteOrderPreviewModal({
                 </section>
               ) : null}
 
+              {returnRows.length > 0 && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <h3 className="text-sm font-semibold text-amber-950">Picked goods to return</h3>
+                <p className="mt-1 text-xs leading-5 text-amber-900">Return these goods to their original slots before confirming. Deleting records the return and releases the reservations; these quantities will not be added to stock again.</p>
+                <ul className="mt-3 divide-y divide-amber-200">{returnRows.map(row => <li key={row.allocationId} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm"><div className="min-w-0"><p className="break-words font-semibold text-slate-900">{row.sku || row.productName}</p><p className="mt-1 text-xs text-slate-600">Original slot: {row.slotLabel}</p></div><span className="font-semibold text-amber-950">{packingQuantity(row.qty, row.unit)}</span></li>)}</ul>
+              </section>}
+
               <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
                 <div className="text-sm font-semibold text-slate-900">
                   What will happen
@@ -246,6 +292,7 @@ export default function DeleteOrderPreviewModal({
                 </div>
               </section>
 
+              {preview.allowed && stock.requiresPhysicalReturn && <label className="flex min-h-11 items-start gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" checked={confirmedPhysicalReturn} onChange={event => onPhysicalReturnChange?.(event.target.checked)} disabled={isDeleting || needsRefresh} className="mt-1 h-5 w-5 shrink-0" /><span>The worker has stopped picking, and all collected goods are physically in their original slots.</span></label>}
               {preview.allowed ? (
                 <section>
                   <label
@@ -259,7 +306,7 @@ export default function DeleteOrderPreviewModal({
                     type="text"
                     value={confirmValue}
                     onChange={(event) => onConfirmValueChange(event.target.value)}
-                    disabled={isDeleting}
+                    disabled={isDeleting || needsRefresh}
                     className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-300 disabled:cursor-not-allowed disabled:bg-slate-50"
                     placeholder={confirmText}
                   />
@@ -277,7 +324,9 @@ export default function DeleteOrderPreviewModal({
           {error ? <ErrorMessage message={error} /> : null}
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
+        <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-4 py-3">
+          {needsRefresh ? <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900"><p>Check the latest order before trying again.</p><button type="button" onClick={onRefresh} disabled={isLoading || isDeleting} className="min-h-11 font-semibold underline">{isLoading ? "Checking…" : "Refresh delete preview"}</button></div> : preview && !preview.allowed ? <p className="text-xs text-rose-700">Resolve the issues above before deleting.</p> : preview && !canSubmit && !isDeleting && <p className="text-xs text-slate-500">{stock.requiresPhysicalReturn && !confirmedPhysicalReturn ? "Confirm the goods are back, then type the order number above." : "Type the order number above to enable deletion."}</p>}
+          <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -286,7 +335,7 @@ export default function DeleteOrderPreviewModal({
           >
             {preview?.allowed ? "Cancel" : "Close"}
           </button>
-          {preview?.allowed ? (
+          {(
             <button
               type="button"
               onClick={onSubmit}
@@ -304,9 +353,10 @@ export default function DeleteOrderPreviewModal({
                 ? "Restore Stock & Delete"
                 : "Delete Order"}
             </button>
-          ) : null}
+          )}
+          </div>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 }

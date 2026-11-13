@@ -28,6 +28,7 @@ export const apiSlice = createApi({
   baseQuery: baseQueryWithAuth,
   tagTypes: [
     'MaintenanceNotice',
+    'Packing',
     'Product',
     'Order',
     'Invoice',

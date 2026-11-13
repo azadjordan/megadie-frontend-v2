@@ -16,6 +16,16 @@ test("customers have no admin timer and incomplete metadata fails closed", () =>
   for (const profile of [{ isAdmin: true }, { ...admin, sessionId: null }, { ...admin, sessionExpiresAt: null }, { ...admin, sessionServerTime: NaN }, { ...admin, sessionAbsoluteExpiresAt: undefined }]) assert.equal(getAdminSessionDeadline(profile, 123), 123);
 });
 
+test("worker sessions use the bounded staff timer and accept activity renewal", () => {
+  const worker = { ...admin, _id: "worker", isAdmin: false, isWorker: true };
+  assert.equal(getAdminSessionDeadline(worker, 9000000), 10800000);
+  assert.equal(getAdminAbsoluteDeadline(worker, 9000000), 37800000);
+  assert.equal(getAdminSessionDeadline({ isWorker: true }, 123), 123);
+  let state = authReducer(undefined, setCredentials(worker));
+  state = authReducer(state, updateAdminSession({ expectedSessionId: worker.sessionId, metadata: { ...worker, sessionExpiresAt: worker.sessionExpiresAt + 60000, sessionServerTime: worker.sessionServerTime + 1000 } }));
+  assert.equal(state.userInfo.sessionExpiresAt, worker.sessionExpiresAt + 60000);
+});
+
 test("renewal moves only the idle deadline and stale responses cannot reverse it", (t) => {
   let now = 5000000;
   t.mock.method(Date, "now", () => now);

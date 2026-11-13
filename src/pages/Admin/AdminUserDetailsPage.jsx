@@ -288,6 +288,7 @@ export default function AdminUserDetailsPage() {
   const [deliveryGoogleMapsUrl, setDeliveryGoogleMapsUrl] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isWorker, setIsWorker] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState("Approved");
   const [adminNote, setAdminNote] = useState("");
   const [adminNoteBase, setAdminNoteBase] = useState("");
@@ -318,6 +319,7 @@ export default function AdminUserDetailsPage() {
     setDeliveryGoogleMapsUrl(user.deliveryGoogleMapsUrl || "");
     setDeliveryNotes(user.deliveryNotes || "");
     setIsAdmin(Boolean(user.isAdmin));
+    setIsWorker(Boolean(user.isWorker));
     setApprovalStatus(user.approvalStatus || "Approved");
     setAdminNote(user.adminNote || "");
     setAdminNoteBase(String(user.adminNote || "").trim());
@@ -383,6 +385,7 @@ export default function AdminUserDetailsPage() {
       deliveryGoogleMapsUrl: String(user.deliveryGoogleMapsUrl || "").trim(),
       deliveryNotes: String(user.deliveryNotes || "").trim(),
       isAdmin: Boolean(user.isAdmin),
+      isWorker: Boolean(user.isWorker),
     };
     const current = {
       name: String(name || "").trim(),
@@ -395,6 +398,7 @@ export default function AdminUserDetailsPage() {
       deliveryGoogleMapsUrl: String(deliveryGoogleMapsUrl || "").trim(),
       deliveryNotes: String(deliveryNotes || "").trim(),
       isAdmin: Boolean(isAdmin),
+      isWorker: Boolean(isWorker),
     };
     return Object.keys(base).some((key) => base[key] !== current[key]);
   }, [
@@ -409,6 +413,7 @@ export default function AdminUserDetailsPage() {
     deliveryGoogleMapsUrl,
     deliveryNotes,
     isAdmin,
+    isWorker,
   ]);
 
   const canUpdateInfo = hasInfoChanges && !isSaving;
@@ -449,6 +454,7 @@ export default function AdminUserDetailsPage() {
       deliveryGoogleMapsUrl: deliveryGoogleMapsUrl.trim(),
       deliveryNotes: deliveryNotes.trim(),
       isAdmin,
+      isWorker,
     };
 
     try {
@@ -699,6 +705,36 @@ export default function AdminUserDetailsPage() {
               Update contact information and role.
             </div>
 
+            <fieldset className="mt-4 rounded-xl border border-slate-200 px-4 pb-4">
+              <legend className="px-1 text-xs font-semibold text-slate-500">Account access</legend>
+              <label className="mt-4 flex min-h-11 items-center gap-3 text-sm text-slate-700">
+                <input type="checkbox" checked={isWorker} onChange={(event) => setIsWorker(event.target.checked)} className="h-4 w-4" />
+                <span><span className="font-semibold">Worker access</span><span className="ml-2 text-xs text-slate-500">Can pack assigned orders. Changing access signs this account out.</span></span>
+              </label>
+              <div className="mt-4 flex items-center gap-3">
+                <input
+                  id="user-admin-toggle"
+                  type="checkbox"
+                  checked={isAdmin}
+                  onChange={(e) => {
+                    const nextIsAdmin = e.target.checked;
+                    setIsAdmin(nextIsAdmin);
+                    if (nextIsAdmin) {
+                      setApprovalStatus("Approved");
+                      setApprovalSaved(false);
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20"
+                />
+                <label
+                  htmlFor="user-admin-toggle"
+                  className="text-sm font-semibold text-slate-700"
+                >
+                  Admin user
+                </label>
+              </div>
+            </fieldset>
+
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-600">
@@ -796,29 +832,6 @@ export default function AdminUserDetailsPage() {
                   className="w-full resize-none rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 />
               </div>
-            </div>
-
-            <div className="mt-4 flex items-center gap-3">
-              <input
-                id="user-admin-toggle"
-                type="checkbox"
-                checked={isAdmin}
-                onChange={(e) => {
-                  const nextIsAdmin = e.target.checked;
-                  setIsAdmin(nextIsAdmin);
-                  if (nextIsAdmin) {
-                    setApprovalStatus("Approved");
-                    setApprovalSaved(false);
-                  }
-                }}
-                className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20"
-              />
-              <label
-                htmlFor="user-admin-toggle"
-                className="text-sm font-semibold text-slate-700"
-              >
-                Admin user
-              </label>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
