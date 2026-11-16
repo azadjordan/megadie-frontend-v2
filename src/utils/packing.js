@@ -16,3 +16,11 @@ export const packingDate = value => value ? new Date(value).toLocaleString(undef
 export const packingButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50";
 export const packingPrimary = packingButton + " bg-slate-900 text-white hover:bg-slate-800";
 export const packingSecondary = packingButton + " border border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+
+export const packingUnitProgressLabel = summary => Number.isFinite(summary?.pickedUnits) && Number.isFinite(summary?.totalUnits)
+  ? `${summary.pickedUnits} / ${summary.totalUnits} units picked` : 'Unit progress unavailable';
+export const packingCartonReference = order => order?.label?.includes(' — ') ? order.label.split(' — ').at(-1) : order?.orderNumber || '';
+export const subscribePackingNetwork = callback => {
+  window.addEventListener('online', callback); window.addEventListener('offline', callback);
+  return () => { window.removeEventListener('online', callback); window.removeEventListener('offline', callback); };
+};

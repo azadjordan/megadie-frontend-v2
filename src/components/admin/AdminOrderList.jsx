@@ -73,7 +73,6 @@ function Billing({ order, state, onAction, isBusy, labeled = false }) {
     {b.detail && <p className="break-words text-xs leading-5 text-slate-600">{b.detail}</p>}
     {dueDate && Number.isFinite(dueDate.getTime()) && <p className="text-xs text-slate-600">Due {dueDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: dueDate.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' })}</p>}
     {b.invoiceId && <button type="button" className={textAction} aria-label={'Open PDF for invoice ' + b.invoiceLabel} disabled={isBusy(order, 'pdf')} onClick={() => onAction(order, { id: 'pdf' })}><AdminOrderActionIcon id="pdf" busy={isBusy(order, 'pdf')} /><span className="min-w-0 break-all">{b.invoiceLabel}</span><FiExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /></button>}
-    {state.billingAction && <button type="button" className={textAction} disabled={isBusy(order, 'add-payment')} onClick={() => onAction(order, state.billingAction)}><AdminOrderActionIcon id="add-payment" busy={isBusy(order, 'add-payment')} />Record payment</button>}
   </div>;
 }
 

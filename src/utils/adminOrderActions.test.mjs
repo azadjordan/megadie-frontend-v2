@@ -18,8 +18,10 @@ test('packing and delivery are independent, retaining invoice and delivery actio
   assert.equal(beforeInvoice.primaryAction.id, 'create-invoice');
   for (const invoice of [paid, unpaid]) {
     const next = state({ ...packed, invoice });
-    assert.equal(next.primaryAction.id, 'mark-delivered');
+    assert.equal(next.primaryAction.id, 'mark-out-for-delivery');
     assert.equal(next.secondaryActions.filter(a => a.id === 'create-invoice').length, 0);
+    assert.ok(next.secondaryActions.some(a => a.id === 'mark-delivered'));
+    assert.ok(!next.secondaryActions.some(a => a.id === 'return-to-store'));
   }
 });
 
@@ -29,7 +31,7 @@ test('an unpaid finished order keeps finished parts green and one payment action
   assert.equal(result.billing.label, 'Unpaid');
   assert.equal(result.billing.tone, 'followUp');
   assert.equal(result.primaryAction.id, 'add-payment');
-  assert.equal(result.billingAction, null);
+  assert.ok(!result.secondaryActions.some(action => action.id === 'add-payment'));
   assert.ok(!Object.hasOwn(result, 'progress'));
 });
 
@@ -37,8 +39,8 @@ test('overdue needs a known positive balance and valid past due date, without bl
   for (const [dueDate, label] of [['2026-11-15T08:00:00Z', 'Overdue'], ['2026-11-18T08:00:00Z', 'Unpaid'], [undefined, 'Unpaid'], ['invalid', 'Unpaid']]) {
     const result = state({ ...packed, invoice: { ...unpaid, dueDate } });
     assert.equal(result.billing.label, label);
-    assert.equal(result.primaryAction.id, 'mark-delivered');
-    assert.equal(result.billingAction.id, 'add-payment');
+    assert.equal(result.primaryAction.id, 'mark-out-for-delivery');
+    assert.equal(result.secondaryActions.filter(action => action.id === 'add-payment').length, 1);
   }
   const partial = state({ ...delivered, invoice: { ...unpaid, paymentStatus: 'PartiallyPaid', paidTotalMinor: 300, balanceDueMinor: 700 } });
   assert.equal(partial.billing.label, 'Partly paid');
@@ -51,7 +53,7 @@ test('deduction and stock reports stay independent; report review precedes payme
   assert.equal(result.stock.tone, 'complete');
   assert.equal(result.stock.checksPending, 2);
   assert.equal(result.primaryAction.id, 'review-reports');
-  assert.equal(result.billingAction.id, 'add-payment');
+  assert.equal(result.secondaryActions.filter(action => action.id === 'add-payment').length, 1);
   const pending = state({ ...delivered, stockFinalizedAt: null, listAction: 'finalize-stock', stockChecksPending: 1, invoice: unpaid });
   assert.equal(pending.stock.label, 'Pending');
   assert.equal(pending.stock.tone, 'followUp');
@@ -64,7 +66,7 @@ test('settled and zero-value orders keep actual billing facts and quiet access',
   assert.equal(result.billing.label, 'Paid');
   assert.equal(result.primaryAction.id, 'open-order');
   assert.equal(result.primaryAction.quiet, true);
-  assert.equal(result.billingAction, null);
+  assert.ok(!result.secondaryActions.some(action => action.id === 'add-payment'));
   const zero = state({ ...delivered, invoice: { ...unpaid, amountMinor: 0, balanceDueMinor: 0 } });
   assert.equal(zero.billing.label, 'No balance due');
   assert.equal(zero.billing.tone, 'complete');
@@ -88,7 +90,7 @@ test('missing or inconsistent facts stay local and require review after deductio
     assert.equal(result[part].tone, tone);
     assert.equal(result.primaryAction.id, 'open-order');
     assert.equal(result.primaryAction.quiet, undefined);
-    assert.equal(result.billingAction, null);
+    assert.ok(!result.secondaryActions.some(action => action.id === 'add-payment'));
   });
   const unknownChecks = state({ ...delivered, stockChecksPending: undefined });
   assert.equal(unknownChecks.stock.checksKnown, false);
@@ -129,4 +131,22 @@ test('worker help is explicit, and primary actions and aliases are absent from M
     const result = state(order);
     assert.ok(!result.secondaryActions.some(a => a.id === result.primaryAction.id));
   }
+});
+
+test('courier, company and returned cartons keep delivery separate from completed preparation', () => {
+  const movement = { method: 'courier', handler: 'Courier A', departedAt: '2026-11-16T08:00:00Z' };
+  const manual = { status: 'Shipping', allocationStatus: 'Allocated', stockChecksPending: 0, deliveryMovement: movement };
+  const courier = state(manual);
+  assert.equal(courier.preparation.label, 'Prepared'); assert.equal(courier.delivery.label, 'Out for delivery');
+  assert.equal(courier.delivery.tone, 'active'); assert.equal(courier.primaryAction.label, 'Mark delivered');
+  assert.ok(courier.secondaryActions.some(a => a.id === 'return-to-store'));
+  assert.ok(!courier.secondaryActions.some(a => a.id === 'mark-out-for-delivery'));
+  assert.ok(!courier.secondaryActions.some(a => ['assignment', 'legacy-packing'].includes(a.id)));
+  const company = state({ ...manual, deliveryMovement: { ...movement, method: 'company', handler: 'Owner' } });
+  assert.equal(company.delivery.label, 'Out for delivery'); assert.equal(company.delivery.detail, 'Owner');
+  const returned = state({ ...manual, deliveryMovement: { ...movement, returnedAt: '2026-11-16T09:00:00Z' } });
+  assert.equal(returned.delivery.label, 'Awaiting delivery'); assert.equal(returned.delivery.tone, 'followUp');
+  assert.equal(returned.primaryAction.label, 'Mark out for delivery'); assert.equal(returned.preparation.tone, 'complete');
+  const collection = state({ ...delivered, deliveryMovement: { method: 'collection' } });
+  assert.equal(collection.delivery.label, 'Collected'); assert.equal(collection.delivery.tone, 'complete');
 });

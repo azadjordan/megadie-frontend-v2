@@ -53,7 +53,7 @@ accessible styling; a one-page result has disabled previous/next controls.
 | --- | --- |
 | **Order / client** | Linked client name; full order reference and date/time in secondary text; X items · Y units |
 | **Preparation & delivery** | Preparation label + badge + relevant short worker/progress explanation; Delivery label + badge below it |
-| **Billing** | Payment/invoice-state badge; one primary amount (Due when outstanding, Total otherwise); original total only when informative; invoice/PDF link; contextual payment link when useful |
+| **Billing** | Payment/invoice-state badge; one primary amount (Due when outstanding, Total otherwise); original total only when informative; invoice/PDF link; payment action in More unless it is the main action |
 | **Stock** | Deduction-state badge; a separate report/check line with a review link when needed |
 | **Next action** | One recommended button and a visible More ⋯ control |
 
@@ -101,8 +101,9 @@ whole-order Complete/Needs attention presentation.
 - Show a due date for overdue billing and when helpful for an outstanding balance.
   Use existing invoice due-date semantics; do not introduce a different deadline,
   grace period or timezone rule through this redesign.
-- Keep Record payment here when another primary action is recommended. Remove
-  that contextual copy when Record payment is already the row's main button.
+- Keep Record payment in More when another primary action is recommended. When
+  payment is the only remaining work, show it as the main action and omit it from
+  More. The Billing cell shows its status, amounts and invoice/PDF access.
 
 ### Stock
 

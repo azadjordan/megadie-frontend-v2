@@ -14,6 +14,9 @@ export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
   MARK_SHIPPING: "mark-shipping",
   RESERVE_STOCK: "reserve-stock",
   MARK_DELIVERED: "mark-delivered",
+  MARK_OUT_FOR_DELIVERY: "mark-out-for-delivery",
+  RETURN_TO_STORE: "return-to-store",
+  DELIVERY_HISTORY: "delivery-history",
   CREATE_INVOICE: "create-invoice",
   ADD_PAYMENT: "add-payment",
   FINALIZE_STOCK: "finalize-stock",
@@ -25,6 +28,7 @@ export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
 
 export const ADMIN_ORDER_ACTION_LABELS = Object.freeze({
   'mark-shipping': 'Start preparation', 'reserve-stock': 'Reserve stock',
+  'mark-out-for-delivery': 'Mark out for delivery', 'return-to-store': 'Returned to store', 'delivery-history': 'Delivery history',
   'mark-delivered': 'Mark delivered', 'create-invoice': 'Create invoice',
   'add-payment': 'Record payment', 'finalize-stock': 'Finalize stock', 'open-order': 'Open order',
   'send-worker': 'Send to worker', 'view-packing': 'View packing', 'review-help': 'Review issue',
@@ -32,6 +36,24 @@ export const ADMIN_ORDER_ACTION_LABELS = Object.freeze({
   'copy-summary': 'Copy order summary', 'legacy-packing': 'Manual packing message',
   'review-reports': 'Review stock reports', 'delete-order': 'Delete order', pdf: 'View invoice PDF',
 });
+
+export const ORDER_DELIVERY_EVENTS = Object.freeze({
+  'mark-out-for-delivery': 'departed', 'mark-delivered': 'delivered',
+  'return-to-store': 'returned', 'delivery-history': 'history',
+});
+
+export function getOrderDeliveryActions(order) {
+  const f = getAdminOrderFulfillmentState(order);
+  const held = f.isShipping && Boolean(order.deliveryMovement?.departedAt && !order.deliveryMovement?.slotsReturnedAt);
+  const out = held && !order.deliveryMovement.returnedAt;
+  const ready = f.isShipping && !f.stockFinalized && f.isAllocated && (!order.packingSentAt || order.packedAt);
+  const primary = ready || out ? buildAction(out ? 'mark-delivered' : 'mark-out-for-delivery') : null;
+  const secondary = [];
+  if (ready && !out) secondary.push(buildAction('mark-delivered'));
+  if (out) secondary.push(buildAction('return-to-store'));
+  if (order.deliveryMovement || f.isDelivered || f.isCancelled) secondary.push(buildAction('delivery-history'));
+  return { primary, secondary };
+}
 
 const ALLOCATION_LABELS = {
   Unallocated: "Not reserved",
@@ -130,11 +152,12 @@ function primaryId(order) {
   if ((f.stockFinalized && !f.isDelivered) || (f.isShipping && order.packedAt && !f.isAllocated) || order.invoiceLinkMissing || b.invoice?.status === 'Cancelled' || (f.isDelivered && order.packingSentAt && !order.packedAt)) return 'open-order';
   if (f.isProcessing) return 'mark-shipping';
   if (f.isShipping) {
+    if (order.deliveryMovement?.departedAt && !order.deliveryMovement?.slotsReturnedAt) return order.deliveryMovement.returnedAt ? 'mark-out-for-delivery' : 'mark-delivered';
     if (order.helpRequestedItems > 0) return 'review-help';
     if (!f.isAllocated) return 'reserve-stock';
     if (!order.packingSentAt && !b.hasInvoice) return 'send-worker';
     if (order.packingSentAt && !order.packedAt) return 'view-packing';
-    return b.hasInvoice ? 'mark-delivered' : 'create-invoice';
+    return b.hasInvoice ? 'mark-out-for-delivery' : 'create-invoice';
   }
   if (f.isDelivered) return !b.hasInvoice ? 'create-invoice' : f.isAllocated ? 'finalize-stock' : 'open-order';
   return 'open-order';
@@ -163,6 +186,7 @@ function preparationFor(order, f, billing) {
   if (f.isShipping && order.packedAt && !f.isAllocated) return display('Needs review', 'Packed with incomplete reservations.', 'problem', 'problem');
   if (f.isShipping && order.helpRequestedItems > 0) return display('Needs help', [order.helpRequestedItems + (order.helpRequestedItems === 1 ? ' product needs review' : ' products need review'), worker].filter(Boolean).join(' · '), 'problem', 'problem');
   if (order.packedAt) return display('Packed', worker, 'complete', 'complete');
+  if (order.deliveryMovement?.departedAt && !order.deliveryMovement?.slotsReturnedAt) return display('Prepared', 'Manual preparation', 'complete', 'complete');
   if (f.isDelivered && !published) return display('Done', 'Manual preparation', 'complete', 'complete');
   if (f.isProcessing) return display('Not started');
   if (!f.isAllocated) return display('Needs reservation', [f.allocationStatus === 'PartiallyAllocated' ? 'Partly reserved' : '', published ? worker : ''].filter(Boolean).join(' · '), 'followUp', 'reservation');
@@ -178,7 +202,10 @@ function preparationFor(order, f, billing) {
 
 function deliveryFor(order, f) {
   if (f.isCancelled) return display('Cancelled', '', 'neutral', 'cancelled');
-  if (f.isDelivered) return display('Delivered', '', 'complete', 'delivery');
+  if (f.isDelivered) return display(order.deliveryMovement?.method === 'collection' ? 'Collected' : 'Delivered', order.deliveredBy || '', 'complete', 'delivery');
+  if (order.deliveryMovement?.departedAt && !order.deliveryMovement?.slotsReturnedAt) return order.deliveryMovement.returnedAt
+    ? display('Awaiting delivery', 'Returned to store · still packed', 'followUp', 'delivery')
+    : display('Out for delivery', order.deliveryMovement.handler || '', 'active', 'delivery');
   if (f.isShipping && f.isAllocated && (order.packedAt || (!order.packingSentAt && order.invoice))) return display('Awaiting delivery', '', 'active', 'delivery');
   return display('Pending', 'After preparation', 'neutral', 'delivery');
 }
@@ -205,6 +232,7 @@ export function getAdminOrderActionState(order, now = Date.now()) {
   const delivery = deliveryFor(order, fulfillment);
   const stock = stockFor(order, fulfillment, operational);
   const published = Boolean(order.packingSentAt);
+  const inDelivery = Boolean(order.deliveryMovement?.departedAt && !order.deliveryMovement?.slotsReturnedAt);
   const active = !fulfillment.isCancelled && !fulfillment.isDelivered && !fulfillment.stockFinalized;
   let primaryAction = operational;
 
@@ -223,17 +251,20 @@ export function getAdminOrderActionState(order, now = Date.now()) {
   }
 
   const secondary = [buildAction('open-order')];
-  if (active && fulfillment.isShipping && (published || !billing.hasInvoice)) secondary.push(buildAction('assignment', { label: published ? 'Worker assignment' : 'Send to worker' }));
+  const paymentAction = getAdminOrderBillingAction(order);
+  if (paymentAction) secondary.push(paymentAction);
+  if (active && !inDelivery && fulfillment.isShipping && (published || !billing.hasInvoice)) secondary.push(buildAction('assignment', { label: published ? 'Worker assignment' : 'Send to worker' }));
   if (published || stock.checksPending > 0) secondary.push(buildAction('view-packing', { label: active ? 'View packing' : 'Packing history' }));
   secondary.push(buildAction('delivery-details'), buildAction('copy-summary'));
-  if (active && !published) secondary.push(buildAction('legacy-packing'));
+  if (active && !inDelivery && !published) secondary.push(buildAction('legacy-packing'));
   if (!billing.hasInvoice && canCreateOrderInvoice(order, false)) secondary.push(buildAction('create-invoice'));
-  if (fulfillment.isShipping && fulfillment.isAllocated && !fulfillment.stockFinalized && (!published || order.packedAt)) secondary.push(buildAction('mark-delivered'));
+  const deliveryActions = getOrderDeliveryActions(order);
+  if (deliveryActions.primary) secondary.push(deliveryActions.primary);
+  secondary.push(...deliveryActions.secondary);
   secondary.push(buildAction('delete-order', { danger: true }));
   const seen = new Set(primaryAction ? [primaryAction.id, ...(primaryAction.id === 'send-worker' ? ['assignment'] : [])] : []);
   return {
     fulfillment, preparation, delivery, billing, stock, primaryAction,
-    billingAction: primaryAction?.id === 'add-payment' ? null : getAdminOrderBillingAction(order),
     secondaryActions: secondary.filter(action => { if (seen.has(action.id)) return false; seen.add(action.id); return true; }),
   };
 }

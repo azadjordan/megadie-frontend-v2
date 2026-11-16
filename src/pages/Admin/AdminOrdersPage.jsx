@@ -13,7 +13,7 @@ import CourierDetailsModal from "../../components/admin/CourierDetailsModal";
 import SendToWorkerModal from "../../components/admin/SendToWorkerModal";
 import AdminOrderList from "../../components/admin/AdminOrderList";
 import DeleteOrderPreviewModal from "../../components/admin/DeleteOrderPreviewModal";
-import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
+import DeliveryMovementModal from "../../components/admin/DeliveryMovementModal";
 import { courierPickupConfig } from "../../config/courierConfig";
 import { copyTextToClipboard } from "../../utils/clipboard";
 import {
@@ -25,7 +25,7 @@ import {
 import { buildAdminOrderShareText } from "../../utils/orderShare";
 import { buildWorkerOrderShareText, getWorkerProblems } from "../../utils/orderWorkerShare";
 import {
-  ADMIN_ORDER_ACTION_IDS,
+  ADMIN_ORDER_ACTION_IDS, ORDER_DELIVERY_EVENTS,
 } from "../../utils/adminOrderActions";
 import { buildPaymentDefaults } from "../../utils/paymentFormDefaults";
 import {
@@ -36,7 +36,6 @@ import {
   useLazyGetOrderFulfillmentSheetQuery,
   useUpdateOrderDeliveryMutation,
   useLazyGetOrderDeletePreviewQuery,
-  useMarkOrderDeliveredMutation,
   useUpdateOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
 import {
@@ -211,8 +210,7 @@ export default function AdminOrdersPage() {
   );
   const [busyOrderId, setBusyOrderId] = useState("");
   const [deliverTarget, setDeliverTarget] = useState(null);
-  const [deliveredBy, setDeliveredBy] = useState("");
-  const [deliverFormError, setDeliverFormError] = useState("");
+  const [deliverAction, setDeliverAction] = useState('departed');
   const [createTarget, setCreateTarget] = useState(null);
   const [createForm, setCreateForm] = useState({
     dueDate: getDefaultDueDate(),
@@ -259,10 +257,7 @@ export default function AdminOrdersPage() {
   const [getWorkerSheet] = useLazyGetOrderFulfillmentSheetQuery();
   const [updateOrderStatus, { isLoading: isUpdatingStatus }] =
     useUpdateOrderByAdminMutation();
-  const [
-    markOrderDelivered,
-    { isLoading: isDelivering, error: deliverError },
-  ] = useMarkOrderDeliveredMutation();
+
   const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
     useCreateInvoiceFromOrderMutation();
   const [getInvoicePdf, { isFetching: isPdfLoading }] =
@@ -649,40 +644,8 @@ export default function AdminOrdersPage() {
     }
   }
 
-  function openDeliverModal(order) {
-    if (!order?._id || isDelivering) return;
-    setDeliverTarget(order);
-    setDeliveredBy(order.deliveredBy || "");
-    setDeliverFormError("");
-  }
-
-  function closeDeliverModal() {
-    if (isDelivering) return;
-    setDeliverTarget(null);
-    setDeliveredBy("");
-    setDeliverFormError("");
-  }
-
-  async function submitDeliver() {
-    if (!deliverTarget?._id || isDelivering) return;
-    const name = deliveredBy.trim();
-    if (!name) {
-      setDeliverFormError("Delivered by is required.");
-      return;
-    }
-
-    setDeliverFormError("");
-    try {
-      await markOrderDelivered({
-        id: deliverTarget._id,
-        deliveredBy: name,
-      }).unwrap();
-      toast.success("Order marked delivered.");
-      closeDeliverModal();
-    } catch {
-      // ErrorMessage in the modal displays the API error.
-    }
-  }
+  function openDeliverModal(order, action) { if (order?._id) { setDeliverTarget(order); setDeliverAction(ORDER_DELIVERY_EVENTS[action.id]); } }
+  function closeDeliverModal() { setDeliverTarget(null); }
 
   function openCreateModal(order) {
     if (!order?._id || isCreating) return;
@@ -871,8 +834,11 @@ export default function AdminOrdersPage() {
       case ADMIN_ORDER_ACTION_IDS.MARK_SHIPPING:
         onMarkShipping(order);
         break;
+      case ADMIN_ORDER_ACTION_IDS.MARK_OUT_FOR_DELIVERY:
+      case ADMIN_ORDER_ACTION_IDS.RETURN_TO_STORE:
+      case ADMIN_ORDER_ACTION_IDS.DELIVERY_HISTORY:
       case ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED:
-        openDeliverModal(order);
+        openDeliverModal(order, action);
         break;
       case ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK:
         onFinalizeStock(order);
@@ -889,7 +855,6 @@ export default function AdminOrdersPage() {
     return busyOrderId === order._id ||
       (isCreating && createTarget?._id === order._id) ||
       (isAddingPayment && paymentTarget?.order?._id === order._id) ||
-      (isDelivering && deliverTarget?._id === order._id) ||
       (isSavingCourier && courierTarget?._id === order._id) ||
       workerLoadingId === order._id || copyId === order._id ||
       deleteId === order._id || deletePreviewId === order._id ||
@@ -932,17 +897,7 @@ export default function AdminOrdersPage() {
         formError={createFormError}
       />
 
-      <MarkDeliveredModal
-        open={Boolean(deliverTarget)}
-        order={deliverTarget}
-        deliveredBy={deliveredBy}
-        onDeliveredByChange={setDeliveredBy}
-        onClose={closeDeliverModal}
-        onSubmit={submitDeliver}
-        isSaving={isDelivering}
-        error={deliverError}
-        formError={deliverFormError}
-      />
+      <DeliveryMovementModal open={Boolean(deliverTarget)} order={deliverTarget} action={deliverAction} onClose={closeDeliverModal} />
 
       <AddPaymentModal
         open={Boolean(paymentTarget)}

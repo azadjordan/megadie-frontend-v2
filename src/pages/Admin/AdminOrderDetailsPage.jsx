@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { FiChevronLeft } from "react-icons/fi";
+import { FiChevronLeft, FiTruck, FiArchive } from "react-icons/fi";
 import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
@@ -9,7 +9,9 @@ import AdminPackingPanel from "../../components/admin/AdminPackingPanel";
 import EditOrderItemsModal from "../../components/admin/EditOrderItemsModal";
 import AdminOrderAllocation from "../../components/admin/AdminOrderAllocation";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
-import MarkDeliveredModal from "../../components/admin/MarkDeliveredModal";
+import OrderDeliveryActions from "../../components/admin/OrderDeliveryActions";
+import { ORDER_DELIVERY_EVENTS } from "../../utils/adminOrderActions";
+import DeliveryMovementModal from "../../components/admin/DeliveryMovementModal";
 import StepCard from "./request-details/StepCard";
 import OrderSummaryPanel from "./order-details/SummaryPanel";
 import { StatusBadge, StockBadge } from "./order-details/Badges";
@@ -23,7 +25,6 @@ import {
 import {
   useGetOrderByIdQuery,
   useUpdateOrderByAdminMutation,
-  useMarkOrderDeliveredMutation,
   useCancelOrderByAdminMutation,
 } from "../../features/orders/ordersApiSlice";
 import { useCreateInvoiceFromOrderMutation } from "../../features/invoices/invoicesApiSlice";
@@ -129,6 +130,8 @@ export default function AdminOrderDetailsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [itemsEditorOpen, setItemsEditorOpen] = useState(false);
+  const [stockReturnTarget, setStockReturnTarget] = useState(null);
+  const [deliverAction, setDeliverAction] = useState('departed');
   const editorParams = new URLSearchParams(location.search);
   const requestedItemsEditor = editorParams.get("editItems") === "1";
   const focusProduct = editorParams.get("focusProduct") || "";
@@ -150,7 +153,7 @@ export default function AdminOrderDetailsPage() {
     isLoading,
     isError,
     error,
-    isFetching,
+    isFetching, refetch: refetchOrder,
   } = useGetOrderByIdQuery(id, { skip: !id });
 
   const order = orderResult?.data ?? orderResult;
@@ -183,11 +186,16 @@ export default function AdminOrderDetailsPage() {
 
   const orderId = order?._id || order?.id || "";
   const orderStatus = order?.status || "Processing";
+  const goodsHeld = orderStatus === 'Shipping' && Boolean(order?.deliveryMovement?.departedAt && !order?.deliveryMovement?.slotsReturnedAt);
+  const goodsReturned = goodsHeld && Boolean(order.deliveryMovement.returnedAt);
+  const movementStockLock = goodsHeld ? goodsReturned
+    ? 'Goods are still packed. Confirm their return to the original slots before changing stock.'
+    : 'Goods are out for delivery. Record their return before changing stock.' : '';
   const isCancelled = orderStatus === "Cancelled";
   const hasInvoice = Boolean(invoiceId);
   const isProcessing = orderStatus === "Processing";
   const canEditNotes = isProcessing;
-  const canEditFees = !hasInvoice && !isCancelled;
+  const canEditFees = !movementStockLock && !hasInvoice && !isCancelled;
   const editNotice = !canEditNotes
     ? "Notes are editable only while the order is Processing."
     : !canEditFees
@@ -308,15 +316,16 @@ export default function AdminOrderDetailsPage() {
   }, [allocations, items]);
 
   const isStockFinalized = isOrderStockFinalized(order, allocationMetrics);
-  const itemsEditLockReason = isStockFinalized ? "Stock finalized." : orderStatus !== "Shipping" ? "Items can be edited while Shipping." : hasInvoice ? "Invoice exists. Items are locked." : order?.packedAt ? "Reopen packing before editing items." : "";
-  const editItemsAction = <div className="text-right"><button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={Boolean(itemsEditLockReason)} onClick={() => setItemsEditorOpen(true)}>Edit items</button>{itemsEditLockReason && <p className="mt-1 max-w-44 text-xs text-slate-500">{itemsEditLockReason}</p>}</div>;
+  const itemsEditLockReason = (!goodsReturned && movementStockLock) || (isStockFinalized ? "Stock finalized." : orderStatus !== "Shipping" ? "Items can be edited while Shipping." : hasInvoice ? "Invoice exists. Items are locked." : order?.packedAt && !goodsReturned ? "Reopen packing before editing items." : "");
+  const editItemsAction = <div className="text-right"><button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={Boolean(itemsEditLockReason)} onClick={() => goodsReturned ? setStockReturnTarget('items') : setItemsEditorOpen(true)}>Edit items</button>{itemsEditLockReason && <p className="mt-1 max-w-44 text-xs text-slate-500">{itemsEditLockReason}</p>}</div>;
   const releaseAllowed =
     orderStatus === "Shipping" &&
+    !movementStockLock &&
     !order?.packedAt &&
     !isStockFinalized &&
     !hasDeductedAllocations;
-  const canAllocate = orderStatus === "Shipping" && !isStockFinalized && !order?.packedAt;
-  const allocationLockReason = order?.packedAt
+  const canAllocate = !movementStockLock && orderStatus === "Shipping" && !isStockFinalized && !order?.packedAt;
+  const allocationLockReason = movementStockLock || (order?.packedAt
     ? "Order is Packed. Reopen packing before changing reservations."
     : isStockFinalized
     ? "Stock finalized."
@@ -326,10 +335,10 @@ export default function AdminOrderDetailsPage() {
     ? "Reservations are locked once delivered."
     : orderStatus !== "Shipping"
     ? "Order must be Shipping before managing allocations."
-    : "";
-  const allocationInvoiceWarning = hasInvoice
+    : "");
+  const allocationInvoiceWarning = movementStockLock || (hasInvoice
     ? "Invoice exists for this order. Reservation changes are allowed while Shipping. Verify shipment documents after updates."
-    : "";
+    : "");
   const hasPartialDeduction = hasDeductedAllocations && !isFullyDeducted;
 
   let finalizeHint = "";
@@ -396,6 +405,7 @@ export default function AdminOrderDetailsPage() {
   const allocationCheckError = needsAllocationCheck && isAllocationsError;
   const canCancelOrder =
     !isCancelled &&
+    !movementStockLock &&
     !isStockFinalized &&
     !allocationCheckLoading &&
     !allocationCheckError &&
@@ -407,7 +417,7 @@ export default function AdminOrderDetailsPage() {
     !allocationCheckLoading &&
     !allocationCheckError &&
     !hasBlockingAllocations;
-  const cancelReason = isStockFinalized
+  const cancelReason = movementStockLock || (isStockFinalized
     ? "Stock finalized orders cannot be cancelled."
     : hasDeductedAllocations
     ? "Stock already deducted. Reverse before cancelling."
@@ -415,7 +425,7 @@ export default function AdminOrderDetailsPage() {
     ? "Checking allocations..."
     : allocationCheckError
     ? "Unable to load allocations."
-    : "";
+    : "");
   const reopenReason = isStockFinalized
     ? "Stock finalized orders cannot be reopened."
     : hasInvoice
@@ -430,12 +440,10 @@ export default function AdminOrderDetailsPage() {
   const canToggleCancel = isCancelled ? canReopenOrder : canCancelOrder;
   const [deliveryCharge, setDeliveryCharge] = useState("0");
   const [extraFee, setExtraFee] = useState("0");
-  const [deliveredBy, setDeliveredBy] = useState("");
   const [adminToAdminNote, setAdminToAdminNote] = useState("");
   const [adminToClientNote, setAdminToClientNote] = useState("");
   const [overviewError, setOverviewError] = useState("");
   const [shippingError, setShippingError] = useState("");
-  const [deliverFormError, setDeliverFormError] = useState("");
   const [saved, setSaved] = useState(false);
   const resolveTab = (value) =>
     ["general", "invoice", "stock", "finalize"].includes(value)
@@ -481,10 +489,7 @@ export default function AdminOrderDetailsPage() {
     useUpdateOrderByAdminMutation();
   const [cancelOrderByAdmin, { isLoading: isCancelling }] =
     useCancelOrderByAdminMutation();
-  const [
-    markOrderDelivered,
-    { isLoading: isDelivering, error: deliverError },
-  ] = useMarkOrderDeliveredMutation();
+
   const [createInvoiceFromOrder, { isLoading: isCreating, error: createError }] =
     useCreateInvoiceFromOrderMutation();
 
@@ -495,12 +500,10 @@ export default function AdminOrderDetailsPage() {
   if (order && loadedOrderFormKey !== orderFormKey) {
     setDeliveryCharge(String(Number(order.deliveryCharge ?? 0)));
     setExtraFee(String(Number(order.extraFee ?? 0)));
-    setDeliveredBy(order.deliveredBy || "");
     setAdminToAdminNote(order.adminToAdminNote || "");
     setAdminToClientNote(order.adminToClientNote || "");
     setOverviewError("");
     setShippingError("");
-    setDeliverFormError("");
     setSaved(false);
     setLoadedOrderFormKey(orderFormKey);
   }
@@ -644,37 +647,13 @@ export default function AdminOrderDetailsPage() {
     }
   };
 
-  const openDeliverModal = () => {
-    if (!order || !canDeliver || isDelivering) return;
-    setDeliverFormError("");
-    setIsDeliverModalOpen(true);
+  const openDeliverModal = action => { if (order) { setDeliverAction(ORDER_DELIVERY_EVENTS[action.id]); setIsDeliverModalOpen(true); } };
+  const resumeStockChanges = async () => {
+    await refetchOrder();
+    const target = stockReturnTarget; setStockReturnTarget(null);
+    if (target === 'items') setItemsEditorOpen(true);
   };
-
-  const closeDeliverModal = () => {
-    if (isDelivering) return;
-    setIsDeliverModalOpen(false);
-    setDeliverFormError("");
-  };
-
-  const handleDeliver = async () => {
-    if (!order || !canDeliver || isDelivering) return;
-    setDeliverFormError("");
-    const name = deliveredBy.trim();
-    if (!name) {
-      setDeliverFormError("Delivered by is required.");
-      return;
-    }
-
-    try {
-      await markOrderDelivered({
-        id: orderId,
-        deliveredBy: name,
-      }).unwrap();
-      setIsDeliverModalOpen(false);
-    } catch {
-      // ErrorMessage handles it
-    }
-  };
+  const closeDeliverModal = () => { setIsDeliverModalOpen(false); };
 
   const onSave = async () => {
     if (!order || isSaving) return;
@@ -956,20 +935,7 @@ export default function AdminOrderDetailsPage() {
             subtitle={order?.packingSentAt ? 'After packing, create the invoice and record delivery when it is complete.' : 'Create the invoice and record the completed delivery.'}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={openDeliverModal}
-                disabled={!canDeliver || isDelivering}
-                title={deliverLockReason || undefined}
-                className={[
-                  "rounded-xl px-4 py-2 text-xs font-semibold text-white",
-                  !canDeliver || isDelivering
-                    ? "cursor-not-allowed bg-emerald-300"
-                    : "bg-emerald-600 hover:bg-emerald-700",
-                ].join(" ")}
-              >
-                {isDelivering ? "Delivering..." : "Mark Delivered"}
-              </button>
+              <OrderDeliveryActions order={order} onAction={openDeliverModal} />
 
               <button
                 type="button"
@@ -997,6 +963,8 @@ export default function AdminOrderDetailsPage() {
         );
       case "stock":
         return (
+          <div className="space-y-4">
+          {goodsReturned && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p>The returned order is still packed. Keep its reservations for the next delivery, or confirm the goods are back in their slots before changing stock.</p><button type="button" onClick={() => setStockReturnTarget('reservations')} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-3 font-semibold ring-1 ring-amber-200"><FiArchive aria-hidden="true" />Change reservations</button></div>}
           <AdminOrderAllocation
             orderId={orderId}
             orderStatus={orderStatus}
@@ -1012,6 +980,7 @@ export default function AdminOrderDetailsPage() {
             invoiceWarning={allocationInvoiceWarning}
             mode="stock"
           />
+          </div>
         );
       case "finalize":
         return (
@@ -1174,7 +1143,7 @@ export default function AdminOrderDetailsPage() {
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2" />
+          {activeTab !== 'invoice' && <OrderDeliveryActions order={order} onAction={openDeliverModal} />}
         </div>
 
         <div className="mt-1 text-sm text-slate-500">
@@ -1183,6 +1152,10 @@ export default function AdminOrderDetailsPage() {
             ? ` - Delivered ${formatDateTime(order.deliveredAt)}`
             : ""}
         </div>
+        {order.deliveryMovement && order.status !== 'Cancelled' && <div aria-label="Delivery movement" className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className={'inline-flex items-center gap-2 rounded-md px-2 py-1 font-semibold ring-1 ring-inset ' + (order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-800 ring-emerald-200' : movementStockLock && order.deliveryMovement.returnedAt ? 'bg-amber-50 text-amber-900 ring-amber-200' : 'bg-blue-50 text-blue-800 ring-blue-200')}><FiTruck aria-hidden="true" />{order.status === 'Delivered' ? order.deliveryMovement.method === 'collection' ? 'Collected by customer' : 'Delivered' : movementStockLock ? order.deliveryMovement.returnedAt ? 'Back in store · awaiting delivery' : 'Out for delivery' : 'Awaiting delivery'}</span>
+          {movementStockLock && <span className="text-slate-600">{order.deliveryMovement.handler}</span>}
+        </div>}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
@@ -1286,17 +1259,8 @@ export default function AdminOrderDetailsPage() {
         formError={createFormError}
       />
 
-      <MarkDeliveredModal
-        open={isDeliverModalOpen}
-        order={order}
-        deliveredBy={deliveredBy}
-        onDeliveredByChange={setDeliveredBy}
-        onClose={closeDeliverModal}
-        onSubmit={handleDeliver}
-        isSaving={isDelivering}
-        error={deliverError}
-        formError={deliverFormError}
-      />
+      <DeliveryMovementModal open={isDeliverModalOpen} order={order} action={deliverAction} onClose={closeDeliverModal} />
+      <DeliveryMovementModal open={Boolean(stockReturnTarget)} order={order} action="reshelved" onClose={() => setStockReturnTarget(null)} onSaved={resumeStockChanges} />
     </div>
   );
 }

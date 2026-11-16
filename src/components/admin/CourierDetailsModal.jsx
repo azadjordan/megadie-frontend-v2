@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { FiClipboard, FiRefreshCw, FiTruck, FiX } from "react-icons/fi";
+import { FiClipboard, FiExternalLink, FiRefreshCw, FiTruck, FiX } from "react-icons/fi";
 
 import ErrorMessage from "../common/ErrorMessage";
 import { courierPickupConfig } from "../../config/courierConfig";
@@ -147,6 +147,8 @@ export default function CourierDetailsModal({
   }, [open]);
   if (!open) return null;
   const worker = mode === "worker";
+  const customerId = typeof order?.user === "string" ? order.user : order?.user?._id || order?.user?.id;
+  const goodsOut = order?.status === "Shipping" && order?.deliveryMovement?.departedAt && !order?.deliveryMovement?.returnedAt && !order?.deliveryMovement?.slotsReturnedAt;
   const assignmentMissing = worker && !assignedTo.trim();
   const taskMissing = worker && !["prepare_only", "prepare_deliver"].includes(preparationMode);
   const showDelivery = !worker || preparationMode === "prepare_deliver";
@@ -274,8 +276,10 @@ export default function CourierDetailsModal({
                 {canUseCustomerLocation && <button type="button" onClick={onUseCustomerLocation} disabled={readOnly || isSaving} className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200 disabled:opacity-50">Use customer&apos;s default</button>}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {readOnly ? "This order is closed. Delivery details are read-only." : worker ? "An address or map is sufficient. Save as the customer’s default below to reuse it on future orders." : "Changes apply to this order only. An address or map is sufficient."}
+                {readOnly ? `This order is ${String(order?.status || "closed").toLowerCase()}. Its recorded delivery details are read-only.` : worker ? "An address or map is sufficient. Save as the customer’s default below to reuse it on future orders." : "Changes apply to this order only. An address or map is sufficient."}
               </div>
+              {customerId && <Link to={`/admin/users/${encodeURIComponent(customerId)}/edit`} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-indigo-700 underline underline-offset-4">Edit client defaults<FiExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></Link>}
+              {!readOnly && goodsOut && <p role="status" className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Pass the updated details to whoever is delivering.</p>}
               {requiresSave && !readOnly && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Suggested from customer profile — review and save for this order.</p>}
               {readOnly && !order?.resolvedDelivery?.details && <p className="mt-3 text-sm text-amber-800">Historical delivery details are unavailable.</p>}
               {missingFields.length ? (

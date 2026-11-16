@@ -1,41 +1,63 @@
-import { useState } from "react";
+import { toast } from "react-toastify";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
-import { FiArrowRight, FiBox, FiCheck, FiRefreshCw, FiTruck } from "react-icons/fi";
-import { useGetPackingOrdersQuery } from "../../features/packing/packingApiSlice";
-import { packingTaskLabel, packingProgressLabel, packingDate, packingSecondary } from "../../utils/packing";
+import { FiArrowRight, FiBox, FiCheck, FiCheckCircle, FiRefreshCw, FiTruck } from "react-icons/fi";
+import { useGetPackingOrdersQuery, useSavePackingMutation } from "../../features/packing/packingApiSlice";
+import { packingTaskLabel, packingProgressLabel, packingUnitProgressLabel, packingCartonReference, packingError, subscribePackingNetwork, packingPrimary, packingSecondary } from "../../utils/packing";
 
 const queues = [
   { key: "to_pack", title: "To pack", description: "Collect the items, then check and pack the carton.", empty: "No orders waiting to pack.", Icon: FiBox },
   { key: "ready_delivery", title: "Ready to deliver", description: "Packed orders with delivery assigned to you.", empty: "No deliveries waiting.", Icon: FiTruck },
   { key: "ready_handoff", title: "Ready for handoff", description: "Packing is complete. Keep these cartons ready for collection.", empty: "No packed orders waiting for handoff.", Icon: FiCheck },
+  { key: "in_delivery", title: "Out for delivery", description: "Orders that have left the store. Delivery is confirmed by the admin.", empty: "No orders out for delivery.", Icon: FiTruck },
 ];
 
-function OrderCard({ order }) {
+function OrderCard({ order, refresh }) {
+  const [save, { isLoading }] = useSavePackingMutation();
+  const [error, setError] = useState('');
+  const [needsRefresh, setNeedsRefresh] = useState(false);
+  const writing = useRef(false);
+  const online = useSyncExternalStore(subscribePackingNetwork, () => navigator.onLine, () => true);
   const summary = order.summary || {};
-  const started = summary.collectedItems > 0 || summary.inProgressItems > 0;
-  const action = order.packedAt ? (order.preparationMode === "prepare_deliver" ? "View delivery" : "View packed order") : started ? "Continue packing" : "Open order";
-  const progress = summary.totalItems ? Math.round(100 * (summary.collectedItems || 0) / summary.totalItems) : 0;
-  return <article className="h-full">
-    <Link to={'/packing/orders/' + order.orderId} aria-label={action + ' for ' + order.customerName + ', ' + order.orderNumber}
-      className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600">
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-medium">
-        <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-600">{packingTaskLabel(order.preparationMode)}</span>
-        {(summary.needsHelp || order.helpRequestedItems > 0) && <span className="rounded-md bg-amber-100 px-2 py-1 text-amber-900">{order.helpRequestedItems > 0 ? 'Admin help requested' : 'Needs attention'}</span>}
-        {order.packedAt && <span className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-800">Packed</span>}
-      </div>
-      <h3 className="break-words text-xl font-semibold leading-snug text-slate-900">{order.customerName}</h3>
-      <p className="mt-1 break-all text-xs text-slate-500">{order.orderNumber}</p>
-      <div className="mt-4"><p className="text-xs text-slate-500">Carton tag</p><p className="mt-1 break-words text-sm font-medium text-slate-900">{order.label}</p></div>
-      <div className="mt-5 grow">
-        <p className="text-sm font-medium text-slate-700">{packingProgressLabel(summary)}</p>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true"><div className={'h-full rounded-full ' + (order.packedAt ? 'bg-emerald-500' : 'bg-indigo-500')} style={{ width: progress + '%' }} /></div>
-        {summary.inProgressItems > 0 && <p className="mt-2 text-xs text-slate-500">{summary.inProgressItems} {summary.inProgressItems === 1 ? "product partially picked" : "products partially picked"}</p>}
-      </div>
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
-        <span className="text-xs text-slate-500">{order.packedAt ? 'Packed ' : 'Assigned '}{packingDate(order.packedAt || order.sentAt)}</span>
-        <span className="inline-flex min-h-8 items-center gap-2 text-sm font-semibold text-indigo-700">{action}<FiArrowRight aria-hidden="true" className="transition group-hover:translate-x-1" /></span>
-      </div>
-    </Link>
+  const started = summary.pickedUnits > 0 || summary.collectedItems > 0 || summary.inProgressItems > 0;
+  const action = order.packedAt ? (order.preparationMode === 'prepare_deliver' ? 'View delivery' : 'View packed order') : started ? 'Continue packing' : 'Start packing';
+  const progress = summary.totalUnits > 0 ? Math.min(100, Math.round(100 * summary.pickedUnits / summary.totalUnits)) : 0;
+  const href = '/packing/orders/' + order.orderId;
+  const label = action + ' for ' + order.customerName + ', ' + order.orderNumber;
+  async function markPacked() {
+    if (writing.current || !online || needsRefresh || !order.canPack) return;
+    writing.current = true; setError('');
+    try { await save({ orderId: order.orderId, action: 'packed', expectedRevision: order.version }).unwrap(); toast.success('Order marked packed.'); }
+    catch (err) { setError(packingError(err)); setNeedsRefresh(true); }
+    finally { writing.current = false; }
+  }
+  async function checkLatest() {
+    if (writing.current) return;
+    const result = await refresh();
+    if (result.error) setError('Could not refresh. Check your connection and try again.');
+    else { setNeedsRefresh(false); setError(''); }
+  }
+  return <article className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-medium">
+      <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-600">{packingTaskLabel(order.preparationMode)}</span>
+      {order.packedAt ? <span className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-800">Packed</span> : order.canPack && <span className="rounded-md bg-blue-50 px-2 py-1 text-blue-800">Ready to pack</span>}
+      {order.deliveryState && <span className="rounded-md bg-blue-50 px-2 py-1 text-blue-800">{order.deliveryState === 'returned' ? 'Back in store' : 'Out for delivery'}</span>}
+    </div>
+    <h3 className="break-words text-xl font-semibold leading-snug text-slate-900">{order.customerName}</h3>
+    <p title={order.orderNumber} className="mt-1 break-words text-xs text-slate-500">Carton {packingCartonReference(order)}</p>
+    <div className="mt-5 grow">
+      <p className="text-lg font-semibold tabular-nums text-slate-900">{packingUnitProgressLabel(summary)}</p>
+      <div role="progressbar" aria-label="Units picked" aria-valuemin={0} aria-valuemax={summary.totalUnits || 0} aria-valuenow={summary.pickedUnits || 0} className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={'h-full rounded-full ' + (order.packedAt ? 'bg-emerald-500' : 'bg-blue-500')} style={{ width: progress + '%' }} /></div>
+      <p className="mt-2 text-xs text-slate-500">{packingProgressLabel(summary)}</p>
+      {(summary.needsHelp || order.helpRequestedItems > 0) && <p className="mt-3 text-sm font-medium text-amber-800">{order.helpRequestedItems > 0 ? 'Admin help requested' : 'Shortage needs attention'}{summary.remainingUnits > 0 ? ' · ' + summary.remainingUnits + ' units remaining' : ''}</p>}
+    </div>
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+      {order.canPack ? <><p className="w-full text-xs text-slate-500">Pack and label the carton before finishing.</p><button type="button" className={packingPrimary} disabled={isLoading || !online || needsRefresh} onClick={markPacked}><FiCheckCircle aria-hidden="true" />{isLoading ? 'Saving…' : 'Mark packed'}</button><Link to={href} aria-label={'Review items for ' + order.customerName + ', ' + order.orderNumber} className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-indigo-700">Review items<FiArrowRight aria-hidden="true" /></Link></>
+        : <Link to={href} aria-label={label} className={packingSecondary + ' w-full text-indigo-700'}>{action}<FiArrowRight aria-hidden="true" /></Link>}
+    </div>
+    {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
+    {!online && <p role="status" className="mt-3 text-sm text-amber-800">Offline. Reconnect before marking packed.</p>}
+    {needsRefresh && <button type="button" onClick={checkLatest} disabled={isLoading || !online} className={packingSecondary + ' mt-3'}><FiRefreshCw aria-hidden="true" />Check latest progress</button>}
   </article>;
 }
 
@@ -55,10 +77,10 @@ export default function PackingOrdersPage() {
       const group = groups?.[key];
       const pagination = group?.pagination;
       return <section key={key} aria-labelledby={'queue-' + key} className="space-y-4">
-        <div className="flex items-start gap-3"><span className="mt-0.5 rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500"><queue.Icon className="h-5 w-5" aria-hidden="true" /></span><div><h2 id={'queue-' + key} className="flex items-center gap-2 text-lg font-semibold">{title}{pagination && <span className="rounded-md bg-slate-200/70 px-2 py-0.5 text-xs tabular-nums text-slate-600">{pagination.total}</span>}</h2><p className="mt-1 text-sm text-slate-500">{description}</p></div></div>
+        <div className="flex items-start gap-3"><span className="mt-0.5 rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500"><queue.Icon className="h-5 w-5" aria-hidden="true" /></span><div><h2 id={'queue-' + key} className="flex items-center gap-2 text-lg font-semibold">{title}{pagination && <span className="rounded-md bg-slate-200/70 px-2 py-0.5 text-xs tabular-nums text-slate-600">{pagination.total}</span>}</h2>{(!pagination || pagination.total > 0) && <p className="mt-1 text-sm text-slate-500">{description}</p>}</div></div>
         {!groups ? <div role="status" className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">{query.isError ? "Orders unavailable." : "Loading orders…"}</div>
-          : !pagination?.total ? <p className="rounded-xl border border-dashed border-slate-300 px-5 py-4 text-sm text-slate-500">{empty}</p>
-          : <><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{group.data.map(order => <OrderCard key={order.orderId} order={order} />)}</div>
+          : !pagination?.total ? <p className="pl-14 text-sm text-slate-500">{empty}</p>
+          : <><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{group.data.map(order => <OrderCard key={order.orderId} order={order} refresh={query.refetch} />)}</div>
             {!group.data.length && <p className="text-sm text-slate-500">Assignments changed. Refresh to see the latest orders.</p>}
             {(pagination.page > 1 || pagination.hasNext) && <nav aria-label={title + ' pages'} className="flex items-center justify-between gap-3"><button type="button" disabled={query.isFetching || pagination.page === 1} onClick={() => setPages({ ...pages, [key + 'Page']: pagination.page - 1 })} className={packingSecondary}>Previous</button><span className="text-sm text-slate-500">Page {pagination.page}</span><button type="button" disabled={query.isFetching || !pagination.hasNext} onClick={() => setPages({ ...pages, [key + 'Page']: pagination.page + 1 })} className={packingSecondary}>Next</button></nav>}
           </>}

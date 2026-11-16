@@ -3,13 +3,16 @@ import {
   FiAlertCircle, FiArchive, FiArrowRight, FiCheckSquare, FiClipboard,
   FiCopy, FiCreditCard, FiEye, FiFilePlus, FiFileText, FiLoader,
   FiMapPin, FiMessageSquare, FiPackage, FiPlayCircle, FiSend,
-  FiTrash2, FiTruck, FiUserCheck,
+  FiTrash2, FiTruck, FiUserCheck, FiRotateCcw, FiCheckCircle,
 } from 'react-icons/fi';
 
 const icons = {
   'mark-shipping': FiPlayCircle,
   'reserve-stock': FiArchive,
-  'mark-delivered': FiTruck,
+  'mark-out-for-delivery': FiTruck,
+  'mark-delivered': FiCheckCircle,
+  'return-to-store': FiRotateCcw,
+  'delivery-history': FiClipboard,
   'create-invoice': FiFilePlus,
   'add-payment': FiCreditCard,
   'finalize-stock': FiCheckSquare,

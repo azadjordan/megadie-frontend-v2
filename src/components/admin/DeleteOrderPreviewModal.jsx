@@ -292,7 +292,7 @@ export default function DeleteOrderPreviewModal({
                 </div>
               </section>
 
-              {preview.allowed && stock.requiresPhysicalReturn && <label className="flex min-h-11 items-start gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" checked={confirmedPhysicalReturn} onChange={event => onPhysicalReturnChange?.(event.target.checked)} disabled={isDeleting || needsRefresh} className="mt-1 h-5 w-5 shrink-0" /><span>The worker has stopped picking, and all collected goods are physically in their original slots.</span></label>}
+              {preview.allowed && stock.requiresPhysicalReturn && <label className="flex min-h-11 items-start gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" checked={confirmedPhysicalReturn} onChange={event => onPhysicalReturnChange?.(event.target.checked)} disabled={isDeleting || needsRefresh} className="mt-1 h-5 w-5 shrink-0" /><span>{stock.workerAssigned === false ? "All goods are physically back in their original slots." : "The worker has stopped picking, and all collected goods are physically in their original slots."}</span></label>}
               {preview.allowed ? (
                 <section>
                   <label

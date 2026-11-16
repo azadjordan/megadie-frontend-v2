@@ -21,6 +21,18 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: "Order", id }],
     }),
 
+    getOrderMovement: builder.query({
+      query: id => ({ url: `/orders/${id}/movement`, timeout: 20000 }),
+      keepUnusedDataFor: 0,
+      providesTags: (_result, _error, id) => [{ type: 'Order', id }],
+    }),
+    updateOrderMovement: builder.mutation({
+      query: ({ id, ...body }) => ({ url: `/orders/${id}/movement`, method: 'POST', body, timeout: 20000 }),
+      invalidatesTags: (_result, _error, arg) => [
+        { type: 'Order', id: arg.id }, { type: 'Order', id: 'LIST' },
+        'Packing', 'OrderAllocation', 'SlotItem', 'InventoryProduct', 'Quote',
+      ],
+    }),
     getOrderFulfillmentSheet: builder.query({
       query: (id) => `/orders/${id}/fulfillment-sheet`,
       keepUnusedDataFor: 0,
@@ -29,6 +41,7 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/orders/${id}/delivery-details`, method: "PUT", body }),
       invalidatesTags: (result, _error, arg) => [
         { type: "Order", id: arg.id }, { type: "Order", id: "LIST" },
+        ...(result ? [{ type: "Packing", id: arg.id }, { type: "Packing", id: "LIST" }] : []),
         ...(arg.saveCustomerLocation && result?.data?.customerId ? [{ type: "User", id: result.data.customerId }, { type: "User", id: "LIST" }] : []),
       ],
     }),
@@ -179,6 +192,8 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
 });
 
 export const {
+  useGetOrderMovementQuery,
+  useUpdateOrderMovementMutation,
   useGetOrderByIdQuery,
   useLazyGetOrderByIdQuery,
   useLazyGetOrderFulfillmentSheetQuery,
