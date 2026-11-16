@@ -5,7 +5,7 @@ import { toast } from "react-toastify";
 
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
-import Pagination from "../../components/common/Pagination";
+import AdminPagination from "../../components/admin/AdminPagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 
 import {
@@ -478,7 +478,7 @@ export default function AdminPaymentsPage() {
           </div>
 
           {pagination ? (
-            <Pagination
+            <AdminPagination
               pagination={pagination}
               onPageChange={(nextPage) =>
                 updateListState({ page: nextPage }, { replace: false })

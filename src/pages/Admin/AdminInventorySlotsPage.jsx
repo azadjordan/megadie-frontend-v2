@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { FiChevronDown, FiChevronUp, FiRefreshCw } from "react-icons/fi";
-import Pagination from "../../components/common/Pagination";
+import AdminPagination from "../../components/admin/AdminPagination";
 import AdminInventoryTabs from "../../components/admin/AdminInventoryTabs";
 import {
   useGetSlotsQuery,
@@ -471,7 +471,7 @@ export default function AdminInventorySlotsPage() {
             {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
           </div>
           {slotPagination ? (
-            <Pagination
+            <AdminPagination
               pagination={slotPagination}
               onPageChange={setSlotPage}
               variant="compact"

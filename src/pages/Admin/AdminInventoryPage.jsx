@@ -8,7 +8,7 @@ import {
   FiTrash2,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
-import Pagination from "../../components/common/Pagination";
+import AdminPagination from "../../components/admin/AdminPagination";
 import AdminInventoryTabs from "../../components/admin/AdminInventoryTabs";
 import InventoryLocateModal from "../../components/admin/InventoryLocateModal";
 import InventoryCountAdjustModal from "../../components/admin/InventoryCountAdjustModal";
@@ -789,7 +789,7 @@ export default function AdminInventoryPage() {
             {isDebouncing ? <span className="ml-2">(Searching...)</span> : null}
           </div>
           {productPagination ? (
-            <Pagination
+            <AdminPagination
               pagination={productPagination}
               onPageChange={setProductPage}
               variant="compact"

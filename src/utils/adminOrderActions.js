@@ -2,12 +2,13 @@ import {
   getInvoiceBalanceDueMinor,
   hasInvoiceBalanceFields,
   isInvoicePayable,
-} from "./invoiceMoney";
+  isInvoiceOverdue,
+} from "./invoiceMoney.js";
 import {
   canCreateOrderInvoice,
   getOrderStatusFlags,
   isOrderStockFinalized,
-} from "./adminOrderWorkflow";
+} from "./adminOrderWorkflow.js";
 
 export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
   MARK_SHIPPING: "mark-shipping",
@@ -17,16 +18,19 @@ export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
   ADD_PAYMENT: "add-payment",
   FINALIZE_STOCK: "finalize-stock",
   OPEN_ORDER: "open-order",
+  SEND_WORKER: 'send-worker', VIEW_PACKING: 'view-packing', REVIEW_HELP: 'review-help',
+  ASSIGNMENT: 'assignment', DELIVERY_DETAILS: 'delivery-details', COPY_SUMMARY: 'copy-summary',
+  LEGACY_PACKING: 'legacy-packing', REVIEW_REPORTS: 'review-reports', DELETE_ORDER: 'delete-order', PDF: 'pdf',
 });
 
 export const ADMIN_ORDER_ACTION_LABELS = Object.freeze({
-  [ADMIN_ORDER_ACTION_IDS.MARK_SHIPPING]: "Ship",
-  [ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK]: "Reserve",
-  [ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED]: "Deliver",
-  [ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE]: "Invoice",
-  [ADMIN_ORDER_ACTION_IDS.ADD_PAYMENT]: "Pay",
-  [ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK]: "Deduct",
-  [ADMIN_ORDER_ACTION_IDS.OPEN_ORDER]: "Open",
+  'mark-shipping': 'Start preparation', 'reserve-stock': 'Reserve stock',
+  'mark-delivered': 'Mark delivered', 'create-invoice': 'Create invoice',
+  'add-payment': 'Record payment', 'finalize-stock': 'Finalize stock', 'open-order': 'Open order',
+  'send-worker': 'Send to worker', 'view-packing': 'View packing', 'review-help': 'Review issue',
+  assignment: 'Worker assignment', 'delivery-details': 'Delivery / courier details',
+  'copy-summary': 'Copy order summary', 'legacy-packing': 'Manual packing message',
+  'review-reports': 'Review stock reports', 'delete-order': 'Delete order', pdf: 'View invoice PDF',
 });
 
 const ALLOCATION_LABELS = {
@@ -82,15 +86,27 @@ export function getAdminOrderFulfillmentState(order) {
   };
 }
 
-export function getAdminOrderBillingState(order) {
+export function getAdminOrderBillingState(order, now = Date.now()) {
   const invoice = getOrderInvoice(order);
   const invoiceId = getOrderInvoiceId(order);
-  const hasInvoice = Boolean(invoiceId);
+  const hasInvoice = Boolean(invoiceId || order?.invoiceLinkMissing);
   const invoiceNumber = invoice?.invoiceNumber || invoiceId;
   const paymentStatus = invoice?.paymentStatus || "";
   const balanceDueMinor = invoice ? getInvoiceBalanceDueMinor(invoice) : 0;
-  const hasBalanceData = hasInvoiceBalanceFields(invoice);
-  const payable = isInvoicePayable(invoice);
+  const hasBalanceData = hasInvoiceBalanceFields(invoice) && Number.isFinite(balanceDueMinor);
+  const payable = !order?.invoiceLinkMissing && invoice?.status === 'Issued' && hasBalanceData && balanceDueMinor > 0 && isInvoicePayable(invoice);
+  let presentation;
+  if (order?.invoiceLinkMissing) presentation = display('Needs review', 'The linked invoice is unavailable.', 'problem', 'problem');
+  else if (!hasInvoice) presentation = order?.stockFinalizedAt && order.status !== 'Cancelled'
+    ? display('Needs review', 'Stock was deducted without a linked invoice.', 'problem', 'problem')
+    : display(order?.status === 'Cancelled' ? 'Not required' : 'Not invoiced', '', order?.status !== 'Cancelled' && (order?.packedAt || order?.status === 'Delivered' || order?.listAction === 'create-invoice') ? 'followUp' : 'neutral', 'invoice');
+  else if (invoice?.status === 'Cancelled') presentation = display('Invoice cancelled', '', order?.status === 'Cancelled' ? 'neutral' : 'problem', 'cancelled');
+  else if (!invoice || invoice.status !== 'Issued') presentation = display('Needs review', 'Invoice details unavailable.', 'followUp', 'problem');
+  else if (!hasBalanceData) presentation = display('Balance unavailable', 'Review the invoice balance.', 'followUp', 'problem');
+  else if (paymentStatus === 'Paid' && balanceDueMinor > 0) presentation = display('Needs review', 'Marked Paid with an outstanding balance.', 'problem', 'problem');
+  else if (balanceDueMinor === 0) presentation = display(paymentStatus === 'Paid' ? 'Paid' : 'No balance due', '', 'complete', 'complete');
+  else if (isInvoiceOverdue(invoice, now)) presentation = display('Overdue', paymentStatus === 'PartiallyPaid' ? 'Partly paid' : '', 'problem', 'problem');
+  else presentation = display(paymentStatus === 'PartiallyPaid' ? 'Partly paid' : 'Unpaid', '', 'followUp', 'payment');
 
   return {
     invoice,
@@ -101,106 +117,123 @@ export function getAdminOrderBillingState(order) {
     balanceDueMinor,
     hasBalanceData,
     payable,
+    ...presentation,
     paymentLabel: paymentStatus === "PartiallyPaid" ? "Partially paid" : paymentStatus || "",
     invoiceLabel: invoiceNumber || "No invoice",
   };
 }
 
+function primaryId(order) {
+  if (Object.hasOwn(order || {}, 'listAction')) return order.listAction;
+  const f = getAdminOrderFulfillmentState(order), b = getAdminOrderBillingState(order);
+  if (f.isCancelled || (f.isDelivered && f.stockFinalized)) return null;
+  if ((f.stockFinalized && !f.isDelivered) || (f.isShipping && order.packedAt && !f.isAllocated) || order.invoiceLinkMissing || b.invoice?.status === 'Cancelled' || (f.isDelivered && order.packingSentAt && !order.packedAt)) return 'open-order';
+  if (f.isProcessing) return 'mark-shipping';
+  if (f.isShipping) {
+    if (order.helpRequestedItems > 0) return 'review-help';
+    if (!f.isAllocated) return 'reserve-stock';
+    if (!order.packingSentAt && !b.hasInvoice) return 'send-worker';
+    if (order.packingSentAt && !order.packedAt) return 'view-packing';
+    return b.hasInvoice ? 'mark-delivered' : 'create-invoice';
+  }
+  if (f.isDelivered) return !b.hasInvoice ? 'create-invoice' : f.isAllocated ? 'finalize-stock' : 'open-order';
+  return 'open-order';
+}
+
 export function getAdminOrderPrimaryAction(order) {
-  const fulfillment = getAdminOrderFulfillmentState(order);
-
-  if (fulfillment.isCancelled) return null;
-
-  if (fulfillment.isProcessing) {
-    return buildAction(ADMIN_ORDER_ACTION_IDS.MARK_SHIPPING);
-  }
-
-  if (fulfillment.isShipping) {
-    if (fulfillment.stockFinalized) {
-      return buildAction(ADMIN_ORDER_ACTION_IDS.OPEN_ORDER, {
-        tone: "neutral",
-        reason: "Review finalized shipping order.",
-      });
-    }
-
-    if (!fulfillment.isAllocated) {
-      return buildAction(ADMIN_ORDER_ACTION_IDS.RESERVE_STOCK, {
-        kind: "link",
-        tab: "stock",
-      });
-    }
-
-    if (order?.packingSentAt && !order.packedAt) {
-      return buildAction(ADMIN_ORDER_ACTION_IDS.OPEN_ORDER, {
-        kind: "link", tab: "stock", label: "Packing", reason: "Review worker packing progress before delivery.",
-      });
-    }
-    if (order?.packingSentAt && !getOrderInvoiceId(order)) return buildAction(ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE);
-    return buildAction(ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED);
-  }
-
-  if (fulfillment.isDelivered) {
-    if (!fulfillment.stockFinalized) {
-      if (!fulfillment.isAllocated) {
-        return buildAction(ADMIN_ORDER_ACTION_IDS.OPEN_ORDER, {
-          tone: "neutral",
-          reason: "Review stock allocations before finalizing.",
-        });
-      }
-
-      return buildAction(ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK);
-    }
-  }
-
-  return null;
+  const id = primaryId(order);
+  return id ? buildAction(id, id === 'open-order' ? { label: 'Review order', tab: order.invoiceLinkMissing || order.invoice?.status === 'Cancelled' ? 'invoice' : '', reason: order.listReviewReason || 'Review order details and prerequisites.' } : {}) : null;
 }
 
 export function getAdminOrderBillingAction(order) {
-  const fulfillment = getAdminOrderFulfillmentState(order);
   const billing = getAdminOrderBillingState(order);
-
-  if (fulfillment.isCancelled) return null;
-
-  if (!billing.hasInvoice && canCreateOrderInvoice(order, billing.hasInvoice)) {
-    return buildAction(ADMIN_ORDER_ACTION_IDS.CREATE_INVOICE, {
-      visible: true,
-      reason: "Create and send an invoice for this order.",
-    });
-  }
-
-  const visible =
-    billing.hasInvoice &&
-    billing.paymentStatus !== "Paid" &&
-    billing.invoice?.status !== "Cancelled";
-
-  if (!visible) return null;
-
-  return {
-    id: ADMIN_ORDER_ACTION_IDS.ADD_PAYMENT,
-    label: ADMIN_ORDER_ACTION_LABELS[ADMIN_ORDER_ACTION_IDS.ADD_PAYMENT],
-    visible,
-    enabled: visible && billing.payable,
-    reason: !billing.hasInvoice
-      ? "Create an invoice before recording payment."
-      : billing.paymentStatus === "Paid"
-      ? "Invoice is already paid."
-      : billing.invoice?.status === "Cancelled"
-      ? "Cancelled invoices cannot receive payments."
-      : billing.payable
-      ? ""
-      : "No balance due.",
-    needsInvoiceDetails: visible && !billing.hasBalanceData,
-  };
+  if (order.status === 'Cancelled' || !billing.payable) return null;
+  return buildAction('add-payment', { visible: true });
 }
 
-export function getAdminOrderActionState(order) {
-  const fulfillment = getAdminOrderFulfillmentState(order);
-  const billing = getAdminOrderBillingState(order);
+function display(label, detail = '', tone = 'neutral', icon = 'waiting') {
+  return { label, detail, tone, icon };
+}
 
+function preparationFor(order, f, billing) {
+  const worker = order.assignedTo || '';
+  const published = Boolean(order.packingSentAt);
+  if (f.isCancelled) return display('Not required', '', 'neutral', 'cancelled');
+  if (f.isDelivered && published && !order.packedAt) return display('Needs review', 'Delivered without Packed confirmation.', 'problem', 'problem');
+  if (f.isShipping && order.packedAt && !f.isAllocated) return display('Needs review', 'Packed with incomplete reservations.', 'problem', 'problem');
+  if (f.isShipping && order.helpRequestedItems > 0) return display('Needs help', [order.helpRequestedItems + (order.helpRequestedItems === 1 ? ' product needs review' : ' products need review'), worker].filter(Boolean).join(' · '), 'problem', 'problem');
+  if (order.packedAt) return display('Packed', worker, 'complete', 'complete');
+  if (f.isDelivered && !published) return display('Done', 'Manual preparation', 'complete', 'complete');
+  if (f.isProcessing) return display('Not started');
+  if (!f.isAllocated) return display('Needs reservation', [f.allocationStatus === 'PartiallyAllocated' ? 'Partly reserved' : '', published ? worker : ''].filter(Boolean).join(' · '), 'followUp', 'reservation');
+  if (published) {
+    const total = order.packingSummary?.totalItems, collected = order.packingSummary?.collectedItems;
+    const known = Number.isFinite(total) && total > 0 && Number.isFinite(collected) && collected >= 0 && collected <= total;
+    const result = display('Packing', [worker, known ? `${collected} of ${total} products fully picked` : 'View picking progress', order.packingSummary?.needsHelp ? 'Picking shortage' : ''].filter(Boolean).join(' · '), 'active', 'packing');
+    if (known) result.picking = { total, collected };
+    return result;
+  }
+  return display('Reserved', billing.hasInvoice ? 'Manual preparation' : worker || 'Ready to assign a worker', 'active', 'reservation');
+}
+
+function deliveryFor(order, f) {
+  if (f.isCancelled) return display('Cancelled', '', 'neutral', 'cancelled');
+  if (f.isDelivered) return display('Delivered', '', 'complete', 'delivery');
+  if (f.isShipping && f.isAllocated && (order.packedAt || (!order.packingSentAt && order.invoice))) return display('Awaiting delivery', '', 'active', 'delivery');
+  return display('Pending', 'After preparation', 'neutral', 'delivery');
+}
+
+function stockFor(order, f, operationalAction) {
+  const checksKnown = Number.isInteger(order.stockChecksPending) && order.stockChecksPending >= 0;
+  let result;
+  if (f.stockFinalized && !f.isDelivered && !f.isCancelled) result = display('Needs review', 'Stock deducted before delivery.', 'problem', 'problem');
+  else if (f.stockFinalized) result = display('Deducted', '', 'complete', 'complete');
+  else if (f.isCancelled) result = display('Not required', '', 'neutral', 'cancelled');
+  else result = display('Pending', operationalAction?.id === 'finalize-stock' ? '' : !f.isDelivered ? 'After delivery' : !order.invoice ? 'After invoice' : !f.isAllocated ? 'Reservations need review' : 'After packing confirmation', operationalAction?.id === 'finalize-stock' ? 'followUp' : 'neutral', 'reservation');
+  return { ...result, checksKnown, checksPending: checksKnown ? order.stockChecksPending : null };
+}
+
+function reviewAction(reason, tab = '') {
+  return buildAction('open-order', { label: 'Review order', reason, tab });
+}
+
+export function getAdminOrderActionState(order, now = Date.now()) {
+  const fulfillment = getAdminOrderFulfillmentState(order);
+  const billing = getAdminOrderBillingState(order, now);
+  const operational = getAdminOrderPrimaryAction(order);
+  const preparation = preparationFor(order, fulfillment, billing);
+  const delivery = deliveryFor(order, fulfillment);
+  const stock = stockFor(order, fulfillment, operational);
+  const published = Boolean(order.packingSentAt);
+  const active = !fulfillment.isCancelled && !fulfillment.isDelivered && !fulfillment.stockFinalized;
+  let primaryAction = operational;
+
+  // Overdue payment is a billing warning, not a fulfillment gate. Structural
+  // inconsistencies still need review, even if the server has no routine action.
+  if (billing.tone === 'problem' && billing.label !== 'Overdue') primaryAction = reviewAction(billing.detail || billing.label, 'invoice');
+  else if (preparation.tone === 'problem') primaryAction = preparation.label === 'Needs help' ? buildAction('review-help') : reviewAction(preparation.detail, 'stock');
+  else if (stock.tone === 'problem') primaryAction = reviewAction(stock.detail, 'stock');
+  else if (!fulfillment.isCancelled && order.listReviewReason) primaryAction = reviewAction(order.listReviewReason, operational?.tab);
+  else if (!operational) {
+    if (stock.checksPending > 0) primaryAction = buildAction('review-reports');
+    else if (!fulfillment.isCancelled && billing.hasInvoice && (!billing.hasBalanceData || billing.invoice?.status !== 'Issued')) primaryAction = reviewAction(billing.detail || 'Review billing.', 'invoice');
+    else if (!stock.checksKnown) primaryAction = reviewAction('Stock check status unavailable.', 'stock');
+    else if (!fulfillment.isCancelled && billing.payable) primaryAction = buildAction('add-payment');
+    else primaryAction = buildAction('open-order', { quiet: true });
+  }
+
+  const secondary = [buildAction('open-order')];
+  if (active && fulfillment.isShipping && (published || !billing.hasInvoice)) secondary.push(buildAction('assignment', { label: published ? 'Worker assignment' : 'Send to worker' }));
+  if (published || stock.checksPending > 0) secondary.push(buildAction('view-packing', { label: active ? 'View packing' : 'Packing history' }));
+  secondary.push(buildAction('delivery-details'), buildAction('copy-summary'));
+  if (active && !published) secondary.push(buildAction('legacy-packing'));
+  if (!billing.hasInvoice && canCreateOrderInvoice(order, false)) secondary.push(buildAction('create-invoice'));
+  if (fulfillment.isShipping && fulfillment.isAllocated && !fulfillment.stockFinalized && (!published || order.packedAt)) secondary.push(buildAction('mark-delivered'));
+  secondary.push(buildAction('delete-order', { danger: true }));
+  const seen = new Set(primaryAction ? [primaryAction.id, ...(primaryAction.id === 'send-worker' ? ['assignment'] : [])] : []);
   return {
-    fulfillment,
-    billing,
-    primaryAction: getAdminOrderPrimaryAction(order),
-    billingAction: getAdminOrderBillingAction(order),
+    fulfillment, preparation, delivery, billing, stock, primaryAction,
+    billingAction: primaryAction?.id === 'add-payment' ? null : getAdminOrderBillingAction(order),
+    secondaryActions: secondary.filter(action => { if (seen.has(action.id)) return false; seen.add(action.id); return true; }),
   };
 }

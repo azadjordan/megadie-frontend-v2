@@ -10,20 +10,22 @@ export default function Pagination({
   compactLabelPosition = "start", // "start" | "middle"
   density = "compact", // "compact" | "comfortable"
   tone = "neutral",
+  showSinglePage = false,
 }) {
   if (!pagination) return null;
 
   const { page, totalPages, hasPrev, hasNext } = pagination;
-  if (!totalPages || totalPages <= 1) return null;
+  if (!totalPages || (totalPages <= 1 && !showSinglePage)) return null;
 
   const isCompact = variant === "compact";
+  const isAdmin = tone === "admin";
   const _showNumbers =
     typeof showNumbers === "boolean" ? showNumbers : !isCompact;
   const _showSummary =
     typeof showSummary === "boolean" ? showSummary : !isCompact;
   const _showPageLabel =
     typeof showPageLabel === "boolean" ? showPageLabel : isCompact;
-  const isComfortable = density === "comfortable";
+  const isComfortable = isAdmin || density === "comfortable";
 
   const clamp = (n) => Math.min(Math.max(n, 1), totalPages);
 
@@ -34,26 +36,33 @@ export default function Pagination({
   };
 
   const isViolet = tone === "violet";
-  const focusRingClass = isViolet
+  const focusRingClass = isAdmin
+    ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
+    : isViolet
     ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2"
     : "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2";
-  const buttonSizeClass = isComfortable
+  const buttonSizeClass = isAdmin
+    ? "min-h-11 shrink-0 px-3 text-[13px]"
+    : isComfortable
     ? "min-h-10 px-3.5 text-sm sm:px-4"
     : "h-8 px-3 text-sm";
-  const numberSizeClass = isComfortable
+  const numberSizeClass = isAdmin
+    ? "min-h-11 min-w-11 px-2 text-[13px]"
+    : isComfortable
     ? "h-10 min-w-10 px-2 text-sm"
     : "h-8 w-8 text-sm";
   const gapClass = isComfortable ? "gap-2.5" : "gap-2";
 
   const btnClass = (disabled) =>
     [
-      "inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition",
+      "relative inline-flex items-center justify-center gap-1.5 font-semibold transition focus-visible:z-10",
+      isAdmin && isCompact && !_showNumbers ? "self-stretch" : "rounded-lg border border-slate-200",
       buttonSizeClass,
-      "border border-slate-200 bg-white text-slate-700",
+      "bg-white text-slate-700",
       focusRingClass,
       disabled
         ? "cursor-not-allowed opacity-50"
-        : "hover:bg-slate-50 hover:border-slate-300",
+        : isAdmin ? "hover:bg-blue-50 hover:text-blue-800" : "hover:bg-slate-50 hover:border-slate-300",
     ].join(" ");
 
   const numClass = (active) =>
@@ -62,7 +71,9 @@ export default function Pagination({
       numberSizeClass,
       "border",
       active
-        ? isViolet
+        ? isAdmin
+          ? "border-blue-200 bg-blue-50 text-blue-800"
+          : isViolet
           ? "border-violet-200 bg-violet-100 text-slate-900"
           : "border-slate-900 bg-slate-900 text-white"
         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300",
@@ -112,15 +123,25 @@ export default function Pagination({
   );
 
   const pageLabel = (
-    <div className="px-1 text-xs font-semibold text-slate-600">
+    <div className={isAdmin ? "flex min-h-11 min-w-0 flex-1 items-center justify-center border-x border-slate-200 bg-slate-50 px-3 text-center text-[13px] leading-5 text-slate-600" : "px-1 text-xs font-semibold text-slate-600"}>
+      <span>
       Page <span className="text-slate-900">{page}</span> of{" "}
       <span className="text-slate-900">{totalPages}</span>
+      </span>
     </div>
   );
 
   const separator = <span className="text-xs text-slate-400">|</span>;
 
   const showCompactLabelFirst = isCompact && !_showNumbers;
+
+  if (isAdmin && showCompactLabelFirst) return (
+    <nav aria-label="Pagination" className="inline-flex max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white">
+      {prevButton}
+      {_showPageLabel && pageLabel}
+      {nextButton}
+    </nav>
+  );
 
   return (
     <div

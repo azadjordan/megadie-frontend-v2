@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { FiChevronDown, FiChevronUp, FiRefreshCw } from "react-icons/fi";
 import AdminInventoryTabs from "../../components/admin/AdminInventoryTabs";
-import Pagination from "../../components/common/Pagination";
+import AdminPagination from "../../components/admin/AdminPagination";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { useGetInventoryMovementsQuery } from "../../features/inventory/inventoryApiSlice";
@@ -433,7 +433,7 @@ export default function AdminInventoryMovementsPage() {
             ) : null}
           </div>
           {pagination ? (
-            <Pagination
+            <AdminPagination
               pagination={pagination}
               onPageChange={setPage}
               variant="compact"

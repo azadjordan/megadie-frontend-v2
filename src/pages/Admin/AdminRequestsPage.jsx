@@ -13,7 +13,7 @@ import {
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 
-import Pagination from "../../components/common/Pagination";
+import AdminPagination from "../../components/admin/AdminPagination";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import { copyTextToClipboard } from "../../utils/clipboard";
@@ -922,7 +922,7 @@ export default function AdminRequestsPage() {
             {isFetching ? <span className="ml-2">(Updating...)</span> : null}
           </div>
 
-          <Pagination
+          <AdminPagination
             pagination={pagination}
             onPageChange={onPageChange}
             variant="compact"

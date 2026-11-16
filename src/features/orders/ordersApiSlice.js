@@ -3,6 +3,7 @@ import { apiSlice } from "../../app/apiSlice";
 
 const ADMIN_ORDER_STATUSES = ["Processing", "Shipping", "Delivered", "Cancelled"];
 const ADMIN_ORDER_WORK_FILTERS = [
+  'needsAdmin', 'preparation', 'toInvoice', 'toDeliver', 'toFinalize',
   'needsStockCheck',
   "noInvoice",
   "paymentDue",

@@ -134,7 +134,7 @@ export default function AdminOrderDetailsPage() {
   const focusProduct = editorParams.get("focusProduct") || "";
   function closeItemsEditor() {
     setItemsEditorOpen(false);
-    if (editorParams.get("returnTo") === "packing") { navigate('/admin/orders/' + id + '/packing'); return; }
+    if (editorParams.get("returnTo") === "packing") { navigate('/admin/orders/' + id + '/packing' + (buildOrdersListHref(location.search).split('?')[1] ? '?' + buildOrdersListHref(location.search).split('?')[1] : '')); return; }
     if (requestedItemsEditor) {
       editorParams.delete("editItems"); editorParams.delete("focusProduct"); editorParams.delete("returnTo");
       navigate({ pathname: location.pathname, search: editorParams.toString() }, { replace: true });
@@ -953,7 +953,7 @@ export default function AdminOrderDetailsPage() {
           <StepCard
             n={3}
             title="Deliver & Invoice"
-            subtitle="Mark the order delivered, then create the invoice."
+            subtitle={order?.packingSentAt ? 'After packing, create the invoice and record delivery when it is complete.' : 'Create the invoice and record the completed delivery.'}
           >
             <div className="flex flex-wrap items-center gap-2">
               <button

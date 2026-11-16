@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiChevronDown, FiChevronUp, FiPlus, FiTrash2 } from "react-icons/fi";
 import { toast } from "react-toastify";
-import Pagination from "../../components/common/Pagination";
+import AdminPagination from "../../components/admin/AdminPagination";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { useGetProductMetaQuery } from "../../features/products/productsApiSlice";
@@ -420,10 +420,9 @@ export default function AdminInventoryCategoriesPage() {
             {isFetching ? <span className="ml-2">(Updating...)</span> : null}
           </div>
           {pagination ? (
-            <Pagination
+            <AdminPagination
               pagination={pagination}
               onPageChange={(next) => setPage(next)}
-              tone="violet"
             />
           ) : null}
         </div>

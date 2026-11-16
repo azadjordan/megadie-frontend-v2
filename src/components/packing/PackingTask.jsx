@@ -1,5 +1,6 @@
+import { orderListParams, orderDestination } from '../../utils/adminOrderListState';
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { FiArrowLeft, FiCheck, FiCheckCircle, FiMapPin, FiPhone, FiRefreshCw, FiTruck } from "react-icons/fi";
 import { useGetPackingOrderQuery, useSavePackingMutation } from "../../features/packing/packingApiSlice";
 import { packingQuantity, packingError, needsPackingRefresh, packingTaskLabel, packingProgressLabel, packingDate, packingPrimary, packingSecondary, packingPhoneLink } from "../../utils/packing";
@@ -43,6 +44,7 @@ function OrderUpdateNotice({ task }) {
 }
 
 export default function PackingTask({ orderId, admin = false, onAssignment }) {
+  const listSearch = orderListParams(useLocation().search).toString();
   const [panel, setPanel] = useState(null);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState(null);
@@ -159,7 +161,7 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
   const candidates = item?.alternatives.filter(candidate => candidate.slotId !== allocation?.slotId && candidate.availableQty > 0) || [];
   const left = task.summary.totalItems - task.summary.collectedItems;
   const readyDelivery = task.status === "Shipping" && task.packedAt && task.preparationMode === "prepare_deliver";
-  const editItemsHref = '/admin/orders/' + orderId + '?editItems=1&returnTo=packing';
+  const editItemsHref = '/admin/orders/' + orderId + '?editItems=1&returnTo=packing' + (listSearch ? '&' + listSearch : '');
   const hasReadyLocation = task.items.some(product => product.allocations.some(isReadyToPick));
   return <div className="space-y-5">
     <header className="space-y-4">
@@ -195,7 +197,7 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
       return <article key={product.productId} aria-label={product.sku} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5"><div className="min-w-0"><h2 className="break-all text-base font-bold text-slate-900">{product.sku}</h2><p className="mt-1 break-words text-sm text-slate-600">{product.name}</p><p className="mt-2 text-sm text-slate-500">Order quantity: {packingQuantity(product.qty, product.unit)}</p></div>{complete && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800"><FiCheck aria-hidden="true" />Complete</span>}</div>
         {product.helpRequestedAt && <p className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><strong>Admin help requested</strong><span className="mt-1 block">{admin ? 'The worker needs help with this shortage.' : hasReadyLocation ? 'You can pick from the other available slots while this shortage is reviewed.' : 'You can work on another order while this shortage is reviewed.'}</span></p>}
-        {task.status === "Shipping" && product.reservedQty !== product.qty && <p className="mx-4 mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Reservations cover {product.reservedQty} of {product.qty}. {admin ? <Link to={'/admin/orders/' + orderId + '?tab=stock'} className="font-semibold underline">Review reservations</Link> : 'Ask an admin to review.'}</p>}
+        {task.status === "Shipping" && product.reservedQty !== product.qty && <p className="mx-4 mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Reservations cover {product.reservedQty} of {product.qty}. {admin ? <Link to={orderDestination(orderId, listSearch, { tab: 'stock' })} className="font-semibold underline">Review reservations</Link> : 'Ask an admin to review.'}</p>}
         {product.allocations.map(row => {
           const done = row.pickedQty === row.qty;
           const local = feedback?.allocationId === row.allocationId;
