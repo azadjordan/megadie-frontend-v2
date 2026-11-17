@@ -1,3 +1,4 @@
+import { productVariantOptions } from "../../utils/productVariants";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft } from "react-icons/fi";
@@ -175,7 +176,7 @@ export default function AdminProductEditPage() {
   const productTypes = metaData?.productTypes ?? [];
   const sizes = metaData?.sizes ?? [];
   const grades = metaData?.grades ?? [];
-  const variants = metaData?.variants ?? [];
+  const variants = productVariantOptions(metaData, form.productType);
   const finishes = metaData?.finishes ?? [];
   const packingUnits = metaData?.packingUnits ?? [];
   const tags = useMemo(() => metaData?.tags ?? [], [metaData?.tags]);
@@ -365,6 +366,7 @@ export default function AdminProductEditPage() {
       ...prev,
       productType: value,
       categoryId: "",
+      variant: value === 'Double Face Tape' ? 'Plastic Core' : prev.variant,
     }));
     setFieldErrors((prev) => ({
       ...prev,
@@ -395,6 +397,7 @@ export default function AdminProductEditPage() {
     const errors = {};
     if (!form.size) errors.size = "Size is required.";
     if (!form.packingUnit) errors.packingUnit = "Packing unit is required.";
+    if (form.productType === 'Double Face Tape' && form.variant && !variants.includes(form.variant)) errors.variant = 'Choose Plastic Core for double-face tape.';
     if (form.catalogCode && !catalogCodes.includes(form.catalogCode)) {
       errors.catalogCode = "Select a valid catalog code.";
     }
@@ -790,12 +793,13 @@ export default function AdminProductEditPage() {
                   Variant
                 </label>
                 <select
+                  aria-label="Variant"
                   value={form.variant}
                   onChange={(e) => updateField("variant", e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
                 >
                   <option value="">None</option>
-                  {form.variant && !variants.includes(form.variant) ? (
+                  {form.variant && !variants.includes(form.variant) && form.productType !== "Double Face Tape" ? (
                     <option value={form.variant}>
                       {form.variant}
                     </option>
@@ -806,6 +810,7 @@ export default function AdminProductEditPage() {
                     </option>
                   ))}
                 </select>
+                {fieldErrors.variant && <p className="mt-1 text-xs text-rose-600">{fieldErrors.variant}</p>}
               </div>
 
               <div>
