@@ -17,6 +17,7 @@ export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
   MARK_OUT_FOR_DELIVERY: "mark-out-for-delivery",
   RETURN_TO_STORE: "return-to-store",
   DELIVERY_HISTORY: "delivery-history",
+  DELIVERY_ASSIGNMENT: 'delivery-assignment',
   CREATE_INVOICE: "create-invoice",
   ADD_PAYMENT: "add-payment",
   FINALIZE_STOCK: "finalize-stock",
@@ -29,10 +30,11 @@ export const ADMIN_ORDER_ACTION_IDS = Object.freeze({
 export const ADMIN_ORDER_ACTION_LABELS = Object.freeze({
   'mark-shipping': 'Start preparation', 'reserve-stock': 'Reserve stock',
   'mark-out-for-delivery': 'Mark out for delivery', 'return-to-store': 'Returned to store', 'delivery-history': 'Delivery history',
+  'delivery-assignment': 'Delivery worker',
   'mark-delivered': 'Mark delivered', 'create-invoice': 'Create invoice',
   'add-payment': 'Record payment', 'finalize-stock': 'Finalize stock', 'open-order': 'Open order',
   'send-worker': 'Send to worker', 'view-packing': 'View packing', 'review-help': 'Review issue',
-  assignment: 'Worker assignment', 'delivery-details': 'Delivery / courier details',
+  assignment: 'Packing worker', 'delivery-details': 'Delivery / courier details',
   'copy-summary': 'Copy order summary', 'legacy-packing': 'Manual packing message',
   'review-reports': 'Review stock reports', 'delete-order': 'Delete order', pdf: 'View invoice PDF',
 });
@@ -251,9 +253,10 @@ export function getAdminOrderActionState(order, now = Date.now()) {
   }
 
   const secondary = [buildAction('open-order')];
+  if (active && fulfillment.isShipping) secondary.push(buildAction('delivery-assignment'));
   const paymentAction = getAdminOrderBillingAction(order);
   if (paymentAction) secondary.push(paymentAction);
-  if (active && !inDelivery && fulfillment.isShipping && (published || !billing.hasInvoice)) secondary.push(buildAction('assignment', { label: published ? 'Worker assignment' : 'Send to worker' }));
+  if (active && !inDelivery && fulfillment.isShipping && (published || !billing.hasInvoice)) secondary.push(buildAction('assignment', { label: published ? 'Packing worker' : 'Send to worker' }));
   if (published || stock.checksPending > 0) secondary.push(buildAction('view-packing', { label: active ? 'View packing' : 'Packing history' }));
   secondary.push(buildAction('delivery-details'), buildAction('copy-summary'));
   if (active && !inDelivery && !published) secondary.push(buildAction('legacy-packing'));

@@ -13,6 +13,7 @@ const icons = {
   'mark-delivered': FiCheckCircle,
   'return-to-store': FiRotateCcw,
   'delivery-history': FiClipboard,
+  'delivery-assignment': FiUserCheck,
   'create-invoice': FiFilePlus,
   'add-payment': FiCreditCard,
   'finalize-stock': FiCheckSquare,

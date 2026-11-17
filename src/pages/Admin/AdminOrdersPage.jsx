@@ -11,6 +11,7 @@ import AddPaymentModal from "../../components/admin/AddPaymentModal";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
 import CourierDetailsModal from "../../components/admin/CourierDetailsModal";
 import SendToWorkerModal from "../../components/admin/SendToWorkerModal";
+import DeliveryAssignmentDialog from '../../components/packing/DeliveryAssignmentDialog';
 import AdminOrderList from "../../components/admin/AdminOrderList";
 import DeleteOrderPreviewModal from "../../components/admin/DeleteOrderPreviewModal";
 import DeliveryMovementModal from "../../components/admin/DeliveryMovementModal";
@@ -210,6 +211,7 @@ export default function AdminOrdersPage() {
   );
   const [busyOrderId, setBusyOrderId] = useState("");
   const [deliverTarget, setDeliverTarget] = useState(null);
+  const [deliveryAssignmentTarget, setDeliveryAssignmentTarget] = useState(null);
   const [deliverAction, setDeliverAction] = useState('departed');
   const [createTarget, setCreateTarget] = useState(null);
   const [createForm, setCreateForm] = useState({
@@ -840,6 +842,9 @@ export default function AdminOrdersPage() {
       case ADMIN_ORDER_ACTION_IDS.MARK_DELIVERED:
         openDeliverModal(order, action);
         break;
+      case ADMIN_ORDER_ACTION_IDS.DELIVERY_ASSIGNMENT:
+        setDeliveryAssignmentTarget(order._id);
+        break;
       case ADMIN_ORDER_ACTION_IDS.FINALIZE_STOCK:
         onFinalizeStock(order);
         break;
@@ -898,6 +903,7 @@ export default function AdminOrdersPage() {
       />
 
       <DeliveryMovementModal open={Boolean(deliverTarget)} order={deliverTarget} action={deliverAction} onClose={closeDeliverModal} />
+      {deliveryAssignmentTarget && <DeliveryAssignmentDialog orderId={deliveryAssignmentTarget} onClose={() => setDeliveryAssignmentTarget(null)} />}
 
       <AddPaymentModal
         open={Boolean(paymentTarget)}

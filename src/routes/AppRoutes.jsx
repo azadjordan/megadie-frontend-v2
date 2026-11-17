@@ -43,6 +43,7 @@ const CatalogPage = lazy(() => import("../pages/Public/CatalogPage"));
 const PackingLayout = lazy(() => import("../pages/Packing/PackingLayout"));
 const PackingOrdersPage = lazy(() => import("../pages/Packing/PackingOrdersPage"));
 const PackingOrderPage = lazy(() => import("../pages/Packing/PackingOrderPage"));
+const DeliveryOrderPage = lazy(() => import('../pages/Packing/DeliveryOrderPage'));
 
 const AdminLayout = lazy(() => import("../components/layout/AdminLayout"));
 const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
@@ -210,6 +211,7 @@ export default function AppRoutes() {
       <Route path="/packing" element={<Suspense fallback={<p role="status" className="p-6">Loading packing…</p>}><PackingLayout /></Suspense>}>
         <Route index element={<PackingOrdersPage />} />
         <Route path="orders/:id" element={<PackingOrderPage />} />
+        <Route path="deliveries/:id" element={<DeliveryOrderPage />} />
         <Route path="*" element={<Navigate to="/packing" replace />} />
       </Route>
       <Route element={<RequireAdmin />}>

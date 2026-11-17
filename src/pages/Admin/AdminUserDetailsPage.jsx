@@ -709,7 +709,7 @@ export default function AdminUserDetailsPage() {
               <legend className="px-1 text-xs font-semibold text-slate-500">Account access</legend>
               <label className="mt-4 flex min-h-11 items-center gap-3 text-sm text-slate-700">
                 <input type="checkbox" checked={isWorker} onChange={(event) => setIsWorker(event.target.checked)} className="h-4 w-4" />
-                <span><span className="font-semibold">Worker access</span><span className="ml-2 text-xs text-slate-500">Can pack assigned orders. Changing access signs this account out.</span></span>
+                <span><span className="font-semibold">Worker access</span><span className="ml-2 text-xs text-slate-500">Can pack or deliver assigned orders. Changing access signs this account out.</span></span>
               </label>
               <div className="mt-4 flex items-center gap-3">
                 <input

@@ -6,6 +6,7 @@ import { toast } from "react-toastify";
 import Loader from "../../components/common/Loader";
 import ErrorMessage from "../../components/common/ErrorMessage";
 import AdminPackingPanel from "../../components/admin/AdminPackingPanel";
+import DeliveryAssignmentPanel from "../../components/packing/DeliveryAssignmentPanel";
 import EditOrderItemsModal from "../../components/admin/EditOrderItemsModal";
 import AdminOrderAllocation from "../../components/admin/AdminOrderAllocation";
 import CreateInvoiceModal from "../../components/admin/CreateInvoiceModal";
@@ -1163,6 +1164,7 @@ export default function AdminOrderDetailsPage() {
           {tabsNode}
           {renderActiveTab()}
           <AdminPackingPanel order={order} />
+          {["Shipping", "Delivered"].includes(order.status) && <DeliveryAssignmentPanel orderId={orderId} />}
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">

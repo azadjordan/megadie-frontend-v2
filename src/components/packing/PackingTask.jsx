@@ -1,10 +1,11 @@
 import { orderListParams, orderDestination } from '../../utils/adminOrderListState';
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { FiAlertCircle, FiArrowLeft, FiArrowRight, FiCheck, FiEdit3, FiCheckCircle, FiMapPin, FiPhone, FiRefreshCw, FiTruck } from "react-icons/fi";
+import { FiAlertCircle, FiArrowLeft, FiArrowRight, FiCheck, FiEdit3, FiCheckCircle, FiRefreshCw } from "react-icons/fi";
 import { useGetPackingOrderQuery, useSavePackingMutation } from "../../features/packing/packingApiSlice";
-import { packingQuantity, packingError, needsPackingRefresh, packingTaskLabel, packingProgressLabel, packingUnitProgressLabel, packingCartonReference, packingDate, packingPrimary, packingSecondary, packingPhoneLink } from "../../utils/packing";
+import { packingQuantity, packingError, needsPackingRefresh, packingTaskLabel, packingProgressLabel, packingUnitProgressLabel, packingCartonReference, packingDate, packingPrimary, packingSecondary } from "../../utils/packing";
 import PackingDialog from "./PackingDialog";
+import DeliveryAssignmentPanel from './DeliveryAssignmentPanel';
 import AdminPackingStockReports from '../admin/AdminPackingStockReports';
 
 const textButton = "inline-flex min-h-11 items-center text-sm font-medium text-slate-600 underline underline-offset-4 disabled:opacity-50";
@@ -14,21 +15,6 @@ const subscribeNetwork = callback => {
   window.addEventListener("offline", callback);
   return () => { window.removeEventListener("online", callback); window.removeEventListener("offline", callback); };
 };
-
-function DeliveryContact({ delivery }) {
-  const phones = [
-    { number: delivery.phoneNumber, backup: false },
-    { number: delivery.secondaryPhoneNumber, backup: true },
-  ].filter(({ number }, index, all) => number && all.findIndex(phone => phone.number === number) === index);
-  return <div className="space-y-2">
-    <p className="text-xs font-medium text-slate-500">Delivery contact</p>
-    {delivery.contactName && <p className="break-words font-semibold text-slate-900">{delivery.contactName}</p>}
-    {phones.length > 0 ? <div className="flex flex-wrap gap-2">{phones.map(({ number, backup }) => packingPhoneLink(number)
-      ? <a key={number} href={packingPhoneLink(number)} className={packingSecondary}><FiPhone className="shrink-0" aria-hidden="true" /><span className="break-all">{backup ? 'Call backup: ' : 'Call '}{number}</span></a>
-      : <p key={number} className="break-all text-slate-700">{backup ? 'Backup: ' : ''}{number}</p>)}</div>
-      : <p className="text-xs text-slate-500">No contact number saved. Ask an admin if you need help reaching the recipient.</p>}
-  </div>;
-}
 
 function PackingNote({ value, onChange, disabled }) {
   return <details><summary className="min-h-11 cursor-pointer content-center text-sm text-slate-500">Add a note</summary><label className="block text-sm text-slate-600">Note (optional)<textarea value={value} maxLength={500} rows={2} disabled={disabled} onChange={event => onChange(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-base" /></label></details>;
@@ -215,7 +201,6 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
     pickedUnits: task.items.reduce((sum, p) => sum + p.pickedQty, 0),
   };
   const unitsLeft = Math.max(0, unitSummary.totalUnits - unitSummary.pickedUnits);
-  const readyDelivery = task.status === "Shipping" && task.packedAt && task.preparationMode === "prepare_deliver";
   const editItemsHref = '/admin/orders/' + orderId + '?editItems=1&returnTo=packing' + (listSearch ? '&' + listSearch : '');
   const hasReadyLocation = task.items.some(product => product.allocations.some(isReadyToPick));
   return <div className="space-y-5">
@@ -228,7 +213,7 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
             {admin && (task.editItemsLockReason || blocked
               ? <button type="button" className={packingSecondary} disabled aria-describedby={task.editItemsLockReason ? 'packing-items-lock' : undefined}>Edit order items</button>
               : <Link to={editItemsHref} className={packingSecondary}>Edit order items</Link>)}
-            {admin && task.status === "Shipping" && onAssignment && <button type="button" className={packingSecondary} disabled={saving || needsRefresh} onClick={onAssignment}>{task.sentAt ? "Worker assignment" : "Send to worker"}</button>}
+            {admin && task.status === "Shipping" && onAssignment && <button type="button" className={packingSecondary} disabled={saving || needsRefresh} onClick={onAssignment}>{task.sentAt ? "Packing worker" : "Send to worker"}</button>}
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-slate-500 hover:bg-slate-100 disabled:opacity-50" onClick={refresh} disabled={saving || query.isFetching} aria-label="Refresh"><FiRefreshCw aria-hidden="true" className={query.isFetching ? 'animate-spin' : ''} /><span className="hidden sm:inline">Refresh</span></button>
           </div>
           {admin && task.editItemsLockReason && <p id="packing-items-lock" className="max-w-sm text-xs text-slate-500">{task.editItemsLockReason}</p>}
@@ -244,8 +229,8 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
     {query.isError && !accessError && <p role="status" className="text-sm text-amber-900">Could not refresh. The last saved progress is shown.</p>}
     {offline && <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">You are offline. Saved progress is shown; reconnect to continue.</p>}
     {!panel && <>{!feedback?.allocationId && errorBlock}{refreshBlock}</>}
-    {task.packedAt && <section aria-label="Packing complete" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><div className="flex items-start gap-3"><FiCheckCircle className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden="true" /><div><h2 className="text-lg font-semibold text-emerald-950">{task.deliveryState === 'courier' || task.deliveryState === 'company' ? 'Out for delivery' : task.deliveryState === 'returned' ? 'Back in store · ready for delivery' : task.status !== "Shipping" ? 'Packing complete' : readyDelivery ? 'Ready to deliver' : 'Ready for handoff'}</h2><p className="mt-1 text-sm text-emerald-900">{task.deliveryState === 'courier' || task.deliveryState === 'company' ? 'This order has left the store. Do not pick it again. Delivery is confirmed by the admin.' : task.deliveryState === 'returned' ? 'Keep the packed carton ready. An admin will arrange its next delivery or confirm a return to the original slots.' : task.status === "Shipping" ? readyDelivery ? 'Use the delivery details below. This order stays here until delivery is confirmed by the admin.' : 'Keep the labelled carton ready for collection.' : 'Saved picking quantities are shown below.'}</p><p className="mt-3 text-xs text-emerald-800">Packed by {task.packedBy} · {packingDate(task.packedAt)}</p>{admin && task.status === "Shipping" && <button type="button" className={packingSecondary + ' mt-3'} disabled={blocked || Boolean(task.reopenLockReason)} title={task.reopenLockReason || undefined} onClick={() => write("reopen")}>{pending?.action === "reopen" ? "Reopening…" : "Reopen packing"}</button>}{admin && task.status === "Shipping" && task.reopenLockReason && <p className="mt-2 text-xs text-emerald-900">{task.reopenLockReason}</p>}</div></div></section>}
-    {task.delivery && <details open={Boolean(task.packedAt)} className="rounded-xl border border-slate-200 bg-white px-4 py-2"><summary className="min-h-11 cursor-pointer content-center text-sm font-semibold"><span className="inline-flex items-center gap-2"><FiTruck aria-hidden="true" />Delivery details</span></summary><div className="space-y-4 border-t border-slate-100 py-4 text-sm"><DeliveryContact delivery={task.delivery} /><p className="whitespace-pre-wrap">{task.delivery.address}</p>{task.delivery.googleMapsUrl && <a href={task.delivery.googleMapsUrl} target="_blank" rel="noreferrer" className={packingSecondary}><FiMapPin aria-hidden="true" />Open map</a>}{task.delivery.notes && <p className="whitespace-pre-wrap text-slate-600">{task.delivery.notes}</p>}</div></details>}
+    {task.packedAt && <section aria-label="Packing complete" className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start gap-3"><FiCheckCircle className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden="true" /><div><h2 className="text-lg font-semibold">Packed</h2><p className="mt-2 text-sm text-slate-600">Packed by {task.packedBy} · {packingDate(task.packedAt)}</p>{admin && task.status === 'Shipping' && <button type="button" className={packingSecondary + ' mt-3'} disabled={blocked || Boolean(task.reopenLockReason)} title={task.reopenLockReason || undefined} onClick={() => write('reopen')}>{pending?.action === 'reopen' ? 'Reopening…' : 'Reopen packing'}</button>}{admin && task.reopenLockReason && <p className="mt-2 text-xs text-slate-500">{task.reopenLockReason}</p>}</div></div></section>}
+    {(task.packedAt || admin) && <DeliveryAssignmentPanel orderId={orderId} />}
     {admin && openTask && <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-slate-500">{assist ? 'Record only quantities physically picked or returned.' : 'Monitor progress and resolve reported shortages.'}</p><button type="button" disabled={saving} className={textButton} onClick={() => setAssist(!assist)}>{assist ? 'Done editing' : 'Edit picking progress'}</button></div>}
     {!panel && nextLocation && !nextLocation.finish && (nextLocation.allocationId || (!task.canPack && !hasReadyLocation)) && <p ref={nextStepElement} tabIndex={-1} role="status" className={nextLocation.allocationId ? 'sr-only' : 'rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 focus:outline-none'}>{nextLocation.allocationId ? nextLocation.message : 'No other slots are ready to pick. ' + (task.helpRequestedItems > 0 ? 'Admin help has been requested.' : 'Review the unresolved shortages below.')}{!nextLocation.allocationId && !admin && <> <Link to="/packing" className="font-semibold underline">Choose another order</Link></>}</p>}
     <div className="space-y-4">{task.items.map(product => {

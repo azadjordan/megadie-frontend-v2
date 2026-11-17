@@ -5,7 +5,7 @@ import PackingDialog from '../packing/PackingDialog';
 import { useGetOrderMovementQuery, useUpdateOrderMovementMutation } from '../../features/orders/ordersApiSlice';
 
 const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed';
-const events = { departed: 'Out for delivery', delivered: 'Delivered', collected: 'Collected by customer', returned: 'Returned to store', reshelved: 'Returned to original slots' };
+const events = { assigned: 'Delivery worker changed', corrected: 'Recorded status corrected', departed: 'Out for delivery', delivered: 'Delivered', collected: 'Collected by customer', returned: 'Returned to store', reshelved: 'Returned to original slots' };
 const actions = {
   departed: { title: 'Mark out for delivery', text: 'The complete order has left the store with a courier or someone from your team.', Icon: FiTruck },
   delivered: { title: 'Mark delivered', text: 'The customer has received the complete order. This also covers customer collection.', Icon: FiCheckCircle },

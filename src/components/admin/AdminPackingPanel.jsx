@@ -17,7 +17,7 @@ export default function AdminPackingPanel({ order }) {
     {order.stockChecksPending > 0 && <Link to={orderDestination(order._id, search, { packing: true, reports: true })} className="min-h-11 content-center text-xs font-semibold text-amber-900 underline">Stock check needed ({order.stockChecksPending})</Link>}
     <div className="flex flex-wrap items-center gap-2">
       {hasHistory && <Link to={orderDestination(order._id, search, { packing: true })} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-indigo-700">{live || order.status !== 'Shipping' ? 'View packing' : 'Packing history'}<FiArrowRight aria-hidden="true" /></Link>}
-      {order.status === 'Shipping' && !heldForDelivery && <button type="button" className={packingSecondary} onClick={() => setOpen(true)}><FiUserCheck aria-hidden="true" />{live ? 'Worker assignment' : 'Send to worker'}</button>}
+      {order.status === 'Shipping' && !heldForDelivery && <button type="button" className={packingSecondary} onClick={() => setOpen(true)}><FiUserCheck aria-hidden="true" />{live ? 'Packing worker' : 'Send to worker'}</button>}
     </div>
     {open && <SendToWorkerModal orderId={order._id} onClose={() => setOpen(false)} />}
   </section>;
