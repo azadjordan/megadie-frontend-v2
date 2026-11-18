@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { FiClipboard, FiExternalLink, FiRefreshCw, FiTruck, FiX } from "react-icons/fi";
 
+import LocationFields from "../common/LocationFields";
+import { needsMapReview } from "../../utils/customerLocation";
 import ErrorMessage from "../common/ErrorMessage";
 import { courierPickupConfig } from "../../config/courierConfig";
 
@@ -123,6 +125,9 @@ export default function CourierDetailsModal({
   saveCustomerLocation = false,
   onSaveCustomerLocationChange,
   onUseCustomerLocation,
+  locationBases = [],
+  confirmedMapLocation = false,
+  onConfirmMap,
   assignedTo = "",
   onAssignedToChange,
   courierNotes = [],
@@ -152,9 +157,8 @@ export default function CourierDetailsModal({
   const assignmentMissing = worker && !assignedTo.trim();
   const taskMissing = worker && !["prepare_only", "prepare_deliver"].includes(preparationMode);
   const showDelivery = !worker || preparationMode === "prepare_deliver";
-  const customerLocation = sheet?.customerLocation;
-  const canUseCustomerLocation = worker && Boolean(customerLocation?.address || customerLocation?.googleMapsUrl)
-    && (clean(customerLocation.address) !== clean(form.address) || clean(customerLocation.googleMapsUrl) !== clean(form.googleMapsUrl));
+  const customerLocation = sheet?.customerLocation ?? order?.customerLocation;
+  const mapReviewPending = showDelivery && needsMapReview(locationBases, form) && !confirmedMapLocation;
   const needsSave = hasChanges || requiresSave;
   function onKeyDown(event) {
     if (event.key === "Escape" && !isSaving) { event.stopPropagation(); onClose(); }
@@ -176,8 +180,8 @@ export default function CourierDetailsModal({
     !clean(courierPickupConfig.googleMapsUrl) ? "pickup map" : "",
     !pickupPhones ? "pickup phone" : "",
   ].filter(Boolean);
-  const defaultLocationMissing = worker && saveCustomerLocation && showDelivery && addressOrLocationMissing;
-  const primaryDisabled = isSaving || assignmentMissing || taskMissing || missingFields.length > 0 || (readOnly && requiresSave) || (worker && sheet?.problems?.length > 0 && !needsSave);
+  const defaultLocationMissing = saveCustomerLocation && showDelivery && addressOrLocationMissing;
+  const primaryDisabled = mapReviewPending || isSaving || assignmentMissing || taskMissing || missingFields.length > 0 || (readOnly && requiresSave) || (worker && sheet?.problems?.length > 0 && !needsSave);
 
   return createPortal(
     <div onKeyDown={onKeyDown} className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 px-3 py-6">
@@ -273,10 +277,9 @@ export default function CourierDetailsModal({
             {showDelivery && <section className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-slate-900">Delivery for this order</div>
-                {canUseCustomerLocation && <button type="button" onClick={onUseCustomerLocation} disabled={readOnly || isSaving} className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200 disabled:opacity-50">Use customer&apos;s default</button>}
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {readOnly ? `This order is ${String(order?.status || "closed").toLowerCase()}. Its recorded delivery details are read-only.` : worker ? "An address or map is sufficient. Save as the customer’s default below to reuse it on future orders." : "Changes apply to this order only. An address or map is sufficient."}
+                {readOnly ? `This order is ${String(order?.status || "closed").toLowerCase()}. Its recorded delivery details are read-only.` : "An address or map is sufficient. Changes apply to this order unless you also save the client default below."}
               </div>
               {customerId && <Link to={`/admin/users/${encodeURIComponent(customerId)}/edit`} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-indigo-700 underline underline-offset-4">Edit client defaults<FiExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></Link>}
               {!readOnly && goodsOut && <p role="status" className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Pass the updated details to whoever is delivering.</p>}
@@ -308,28 +311,10 @@ export default function CourierDetailsModal({
                   placeholder="Optional backup phone"
                 />
                 </>}
-                <div className={worker ? "sm:col-span-2" : ""}>
-                <DeliveryField
-                  id="courier-map"
-                  label="Google Maps location"
-                  value={form.googleMapsUrl}
-                  onChange={(value) => onFieldChange("googleMapsUrl", value)}
-                  placeholder="https://maps..."
-                  missing={addressOrLocationMissing}
-                  missingHint="Address or map required"
-                />
-                </div>
                 <div className="sm:col-span-2">
-                  <DeliveryField
-                    id="courier-address"
-                    label="Address"
-                    value={form.address}
-                    onChange={(value) => onFieldChange("address", value)}
-                    placeholder="Receiver address"
-                    missing={addressOrLocationMissing}
-                    missingHint="Address or map required"
-                    multiline
-                  />
+                  <LocationFields idPrefix="courier" value={form} onChange={onFieldChange} disabled={readOnly || isSaving}
+                    baseLocations={locationBases} confirmedMapLocation={confirmedMapLocation} onConfirmMap={onConfirmMap}
+                    customerLocation={customerLocation} saveDefault={saveCustomerLocation} onSaveDefault={onSaveCustomerLocationChange} onUseDefault={onUseCustomerLocation} />
                 </div>
                 {!worker && (
                 <div className="sm:col-span-2">
@@ -344,10 +329,6 @@ export default function CourierDetailsModal({
                 </div>
                 )}
               </fieldset>
-              {worker && !readOnly && <label className="mt-3 flex items-start gap-2 text-xs text-slate-700">
-                <input type="checkbox" checked={saveCustomerLocation} onChange={(event) => onSaveCustomerLocationChange(event.target.checked)} disabled={isSaving} className="mt-0.5" />
-                <span>Save as customer&apos;s default location<span className="mt-1 block text-slate-500">Updates the customer’s address and map for future orders. Other existing orders keep their locations.</span></span>
-              </label>}
             </section>}
 
             {!worker && (
@@ -412,8 +393,8 @@ export default function CourierDetailsModal({
             Close
           </button>
           {onRefresh && <button type="button" onClick={onRefresh} disabled={isSaving} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">Reload details</button>}
-          {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving || assignmentMissing || taskMissing || defaultLocationMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{saveCustomerLocation && showDelivery ? "Save details" : "Save for this order"}</button>}
-          {worker && sheet?.problems?.length > 0 && <button type="button" onClick={onCopyDraft} disabled={isSaving || assignmentMissing || taskMissing || defaultLocationMissing} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{needsSave ? "Save & Copy Draft" : "Copy preparation draft"}</button>}
+          {!readOnly && needsSave && <button type="button" onClick={onSaveOnly} disabled={isSaving || assignmentMissing || taskMissing || defaultLocationMissing || mapReviewPending} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{saveCustomerLocation && showDelivery ? "Save details" : "Save for this order"}</button>}
+          {worker && sheet?.problems?.length > 0 && <button type="button" onClick={onCopyDraft} disabled={isSaving || assignmentMissing || taskMissing || defaultLocationMissing || mapReviewPending} className="rounded-xl px-3 py-2 text-sm ring-1 ring-slate-300">{needsSave ? "Save & Copy Draft" : "Copy preparation draft"}</button>}
           <button
             type="button"
             onClick={onSubmit}

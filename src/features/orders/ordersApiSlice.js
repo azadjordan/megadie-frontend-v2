@@ -18,7 +18,7 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
     // ✅ Single order (owner or admin; owner is sanitized)
     getOrderById: builder.query({
       query: (id) => `/orders/${id}`,
-      providesTags: (_result, _error, id) => [{ type: "Order", id }],
+      providesTags: (result, _error, id) => [{ type: "Order", id }, ...(result?.data?.user?._id ? [{ type: "User", id: result.data.user._id }] : [])],
     }),
 
     getOrderMovement: builder.query({

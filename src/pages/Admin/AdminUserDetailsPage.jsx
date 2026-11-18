@@ -1,3 +1,5 @@
+import LocationFields from "../../components/common/LocationFields";
+import { needsMapReview, profileLocationPatch } from "../../utils/customerLocation";
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft, FiCopy } from "react-icons/fi";
@@ -252,6 +254,7 @@ export default function AdminUserDetailsPage() {
     isError,
     error,
     isFetching,
+    refetch: refetchUser,
   } = useGetUserByIdQuery(id, { skip: !id });
 
   const user = userResult?.data ?? userResult;
@@ -306,20 +309,28 @@ export default function AdminUserDetailsPage() {
   const [editRowId, setEditRowId] = useState(null);
   const [editPriceStr, setEditPriceStr] = useState("");
 
-  const userKey = user ? `${userId || ""}:${user.updatedAt || ""}` : "";
+  const [infoBase, setInfoBase] = useState(null);
+  const [confirmedMapLocation, setConfirmedMapLocation] = useState(false);
+  const userKey = user ? userId : "";
+
+  function loadInfoFields(next) {
+    setInfoBase(next);
+    setConfirmedMapLocation(false);
+    setName(next.name || "");
+    setEmail(next.email || "");
+    setPhoneNumber(next.phoneNumber || "");
+    setSecondaryPhoneNumber(next.secondaryPhoneNumber || "");
+    setDeliveryContactName(next.deliveryContactName || "");
+    setDeliveryPhoneNumber(next.deliveryPhoneNumber || "");
+    setAddress(next.address || "");
+    setDeliveryGoogleMapsUrl(next.deliveryGoogleMapsUrl || "");
+    setDeliveryNotes(next.deliveryNotes || "");
+    setIsAdmin(Boolean(next.isAdmin));
+    setIsWorker(Boolean(next.isWorker));
+  }
 
   if (user && loadedUserKey !== userKey) {
-    setName(user.name || "");
-    setEmail(user.email || "");
-    setPhoneNumber(user.phoneNumber || "");
-    setSecondaryPhoneNumber(user.secondaryPhoneNumber || "");
-    setDeliveryContactName(user.deliveryContactName || "");
-    setDeliveryPhoneNumber(user.deliveryPhoneNumber || "");
-    setAddress(user.address || "");
-    setDeliveryGoogleMapsUrl(user.deliveryGoogleMapsUrl || "");
-    setDeliveryNotes(user.deliveryNotes || "");
-    setIsAdmin(Boolean(user.isAdmin));
-    setIsWorker(Boolean(user.isWorker));
+    loadInfoFields(user);
     setApprovalStatus(user.approvalStatus || "Approved");
     setAdminNote(user.adminNote || "");
     setAdminNoteBase(String(user.adminNote || "").trim());
@@ -373,19 +384,19 @@ export default function AdminUserDetailsPage() {
     editRowId && userPrices.some((p) => p._id === editRowId) ? editRowId : null;
 
   const hasInfoChanges = useMemo(() => {
-    if (!user) return false;
+    if (!infoBase) return false;
     const base = {
-      name: String(user.name || "").trim(),
-      email: String(user.email || "").trim().toLowerCase(),
-      phoneNumber: String(user.phoneNumber || "").trim(),
-      secondaryPhoneNumber: String(user.secondaryPhoneNumber || "").trim(),
-      deliveryContactName: String(user.deliveryContactName || "").trim(),
-      deliveryPhoneNumber: String(user.deliveryPhoneNumber || "").trim(),
-      address: String(user.address || "").trim(),
-      deliveryGoogleMapsUrl: String(user.deliveryGoogleMapsUrl || "").trim(),
-      deliveryNotes: String(user.deliveryNotes || "").trim(),
-      isAdmin: Boolean(user.isAdmin),
-      isWorker: Boolean(user.isWorker),
+      name: String(infoBase.name || "").trim(),
+      email: String(infoBase.email || "").trim().toLowerCase(),
+      phoneNumber: String(infoBase.phoneNumber || "").trim(),
+      secondaryPhoneNumber: String(infoBase.secondaryPhoneNumber || "").trim(),
+      deliveryContactName: String(infoBase.deliveryContactName || "").trim(),
+      deliveryPhoneNumber: String(infoBase.deliveryPhoneNumber || "").trim(),
+      address: String(infoBase.address || "").trim(),
+      deliveryGoogleMapsUrl: String(infoBase.deliveryGoogleMapsUrl || "").trim(),
+      deliveryNotes: String(infoBase.deliveryNotes || "").trim(),
+      isAdmin: Boolean(infoBase.isAdmin),
+      isWorker: Boolean(infoBase.isWorker),
     };
     const current = {
       name: String(name || "").trim(),
@@ -402,7 +413,7 @@ export default function AdminUserDetailsPage() {
     };
     return Object.keys(base).some((key) => base[key] !== current[key]);
   }, [
-    user,
+    infoBase,
     name,
     email,
     phoneNumber,
@@ -416,7 +427,8 @@ export default function AdminUserDetailsPage() {
     isWorker,
   ]);
 
-  const canUpdateInfo = hasInfoChanges && !isSaving;
+  const mapReviewPending = needsMapReview([infoBase], { address, googleMapsUrl: deliveryGoogleMapsUrl }) && !confirmedMapLocation;
+  const canUpdateInfo = hasInfoChanges && !isSaving && !mapReviewPending;
   const approvalBase = String(user?.approvalStatus || "Approved");
   const effectiveApprovalStatus = isAdmin ? "Approved" : approvalStatus;
   const hasApprovalChanges = effectiveApprovalStatus !== approvalBase;
@@ -439,7 +451,7 @@ export default function AdminUserDetailsPage() {
     !isUpdatingPassword;
 
   const onSaveUserInfo = async () => {
-    if (!userId || !hasInfoChanges) return;
+    if (!userId || !hasInfoChanges || mapReviewPending) return;
     setSaved(false);
 
     const payload = {
@@ -450,15 +462,19 @@ export default function AdminUserDetailsPage() {
       secondaryPhoneNumber: secondaryPhoneNumber.trim(),
       deliveryContactName: deliveryContactName.trim(),
       deliveryPhoneNumber: deliveryPhoneNumber.trim(),
-      address: address.trim(),
-      deliveryGoogleMapsUrl: deliveryGoogleMapsUrl.trim(),
+      ...profileLocationPatch(infoBase, { address, googleMapsUrl: deliveryGoogleMapsUrl }, confirmedMapLocation),
       deliveryNotes: deliveryNotes.trim(),
       isAdmin,
       isWorker,
     };
 
     try {
-      await updateUser(payload).unwrap();
+      for (const key of ['name', 'email', 'phoneNumber', 'secondaryPhoneNumber', 'deliveryContactName', 'deliveryPhoneNumber', 'deliveryNotes', 'isAdmin', 'isWorker']) {
+        const old = typeof payload[key] === 'boolean' ? Boolean(infoBase?.[key]) : String(infoBase?.[key] || '').trim();
+        if (payload[key] === old) delete payload[key];
+      }
+      const response = await updateUser(payload).unwrap();
+      loadInfoFields({ ...infoBase, ...response.data });
       setSaved(true);
       toast.success("User info updated.");
     } catch {
@@ -797,28 +813,15 @@ export default function AdminUserDetailsPage() {
               </div>
 
               <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Address
-                </label>
-                <textarea
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  rows={2}
-                  className="w-full resize-none rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-semibold text-slate-600">
-                  Google Maps location
-                </label>
-                <input
-                  type="text"
-                  value={deliveryGoogleMapsUrl}
-                  onChange={(e) => setDeliveryGoogleMapsUrl(e.target.value)}
-                  placeholder="https://maps..."
-                  className="w-full rounded-xl bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
-                />
+                <LocationFields value={{ address, googleMapsUrl: deliveryGoogleMapsUrl }} baseLocations={[infoBase]}
+                  onChange={(field, value) => field === 'address' ? setAddress(value) : setDeliveryGoogleMapsUrl(value)}
+                  disabled={isSaving} confirmedMapLocation={confirmedMapLocation} onConfirmMap={setConfirmedMapLocation} />
+                {user?.updatedAt !== infoBase?.updatedAt && <p role="status" className="mt-3 text-sm text-amber-900">Client details changed elsewhere. Your draft has been kept.</p>}
+                <button type="button" disabled={isSaving} className="mt-2 min-h-11 text-sm font-semibold text-indigo-700 underline" onClick={async () => {
+                  if (hasInfoChanges && !window.confirm('Reload client details and discard your unsaved changes?')) return;
+                  try { await refetchUser().unwrap(); setLoadedUserKey(''); }
+                  catch { toast.error('Could not reload client details. Your draft has been kept.'); }
+                }}>Reload client details</button>
               </div>
 
               <div className="md:col-span-2">

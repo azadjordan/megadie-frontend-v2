@@ -1,4 +1,5 @@
-﻿// src/pages/Admin/AdminOrdersPage.jsx
+import { needsMapReview } from "../../utils/customerLocation";
+// src/pages/Admin/AdminOrdersPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FiRefreshCw, FiSearch } from 'react-icons/fi';
@@ -197,6 +198,7 @@ export default function AdminOrdersPage() {
   const [assignedToBase, setAssignedToBase] = useState("");
   const [preparationMode, setPreparationMode] = useState("");
   const [saveCustomerLocation, setSaveCustomerLocation] = useState(false);
+  const [confirmedMapLocation, setConfirmedMapLocation] = useState(false);
   const [courierLoadingId, setCourierLoadingId] = useState(null);
   const [deliveryWorking, setDeliveryWorking] = useState(false);
   const deliveryLock = useRef(false);
@@ -323,10 +325,12 @@ export default function AdminOrdersPage() {
     [courierForm, deliveryMode, preparationMode]
   );
   const courierHasChanges = useMemo(
-    () => hasCourierProfileChanges(courierBaseForm, courierForm)
+    () => hasCourierProfileChanges(courierBaseForm, courierForm) || (saveCustomerLocation && (deliveryMode !== "worker" || preparationMode === "prepare_deliver"))
       || (deliveryMode === "worker" && (assignedTo.trim() !== assignedToBase || preparationMode !== (workerSheet?.preparationMode || "") || (preparationMode === "prepare_deliver" && saveCustomerLocation))),
     [courierBaseForm, courierForm, deliveryMode, assignedTo, assignedToBase, preparationMode, workerSheet, saveCustomerLocation]
   );
+  const customerLocation = workerSheet?.customerLocation ?? courierTarget?.customerLocation;
+  const locationBases = [courierBaseForm, ...(saveCustomerLocation ? [customerLocation] : [])];
   const deliveryRequiresSave = Boolean(courierTarget && !courierTarget.resolvedDelivery?.savedToOrder);
   const deliveryReadOnly = Boolean(courierTarget && !["Processing", "Shipping"].includes(courierTarget.status));
   const effectiveWorkerSheet = useMemo(() => {
@@ -353,6 +357,7 @@ export default function AdminOrdersPage() {
     setWorkerSheet(sheet);
     setPreparationMode(sheet?.preparationMode || "");
     setSaveCustomerLocation(false);
+    setConfirmedMapLocation(false);
     setAssignedTo(order.assignedTo || "");
     setAssignedToBase(order.assignedTo || "");
     setCourierTarget(order);
@@ -363,7 +368,7 @@ export default function AdminOrdersPage() {
 
   function showWorkerDialog(sheet) {
     showDeliveryDialog({ _id: sheet.orderId, orderNumber: sheet.orderNumber, status: sheet.status,
-      resolvedDelivery: sheet.delivery, assignedTo: sheet.assignedTo || "" }, "worker", sheet);
+      resolvedDelivery: sheet.delivery, assignedTo: sheet.assignedTo || "", customerLocation: sheet.customerLocation }, "worker", sheet);
   }
 
   async function onCopy(order) {
@@ -440,6 +445,7 @@ export default function AdminOrdersPage() {
   }
 
   async function submitCourierDetails(copyAfter = true, draftCopy = false) {
+    const saveDefaultRequested = saveCustomerLocation && (deliveryMode !== "worker" || preparationMode === "prepare_deliver");
     if (!courierTarget || deliveryLock.current) return;
     if (deliveryMode === "worker" && !["prepare_only", "prepare_deliver"].includes(preparationMode)) {
       toast.warning("Choose Prepare Only or Prepare & Deliver."); return;
@@ -450,6 +456,7 @@ export default function AdminOrdersPage() {
     if (copyAfter && !draftCopy && courierMissingFields.length) {
       toast.warning("Add the required delivery fields first."); return;
     }
+    if ((deliveryMode !== "worker" || preparationMode === "prepare_deliver") && needsMapReview(locationBases, courierForm) && !confirmedMapLocation) { toast.warning("Review the map pin before saving."); return; }
     deliveryLock.current = true;
     setDeliveryWorking(true);
     try {
@@ -458,15 +465,13 @@ export default function AdminOrdersPage() {
       if (courierHasChanges || deliveryRequiresSave) {
         if (deliveryReadOnly) throw new Error("Closed orders are read-only.");
         const response = await updateOrderDelivery({ id: courierTarget._id,
-          deliveryDetails: getCourierDeliveryProfile(courierForm),
+          deliveryDetails: getCourierDeliveryProfile(deliveryMode === "worker" && preparationMode === "prepare_only" ? courierBaseForm : courierForm),
           expectedRevision: courierTarget.resolvedDelivery.revision,
-          ...(deliveryMode === "worker" ? { assignedTo: assignedTo.trim(), preparationMode,
-            ...(preparationMode === "prepare_deliver" && saveCustomerLocation ? {
-              saveCustomerLocation: true, expectedCustomerLocation: workerSheet.customerLocation,
-            } : {}),
-          } : {}),
+          confirmedMapLocation,
+          ...(saveDefaultRequested ? { saveCustomerLocation: true, expectedCustomerLocation: customerLocation } : {}),
+          ...(deliveryMode === "worker" ? { assignedTo: assignedTo.trim(), preparationMode } : {}),
         }).unwrap();
-        finalOrder = { ...courierTarget, resolvedDelivery: response.data.resolvedDelivery, assignedTo: response.data.assignedTo || "" };
+        finalOrder = { ...courierTarget, resolvedDelivery: response.data.resolvedDelivery, assignedTo: response.data.assignedTo || "", customerLocation: response.data.customerLocation ?? courierTarget.customerLocation };
         const savedForm = getCourierDeliveryProfile(finalOrder.resolvedDelivery.details);
         setCourierTarget(finalOrder);
         setSaveCustomerLocation(false);
@@ -485,7 +490,7 @@ export default function AdminOrdersPage() {
         }
       }
       if (!copyAfter) {
-        toast.success(deliveryMode === "worker" && preparationMode === "prepare_deliver" && saveCustomerLocation
+        toast.success(saveDefaultRequested
           ? "Order details and customer default location saved."
           : deliveryMode === "worker" ? "Preparation details saved for this order." : "Delivery details saved for this order.");
         return;
@@ -962,7 +967,10 @@ export default function AdminOrdersPage() {
         onPreparationModeChange={setPreparationMode}
         saveCustomerLocation={saveCustomerLocation}
         onSaveCustomerLocationChange={setSaveCustomerLocation}
-        onUseCustomerLocation={() => setCourierForm((form) => ({ ...form, ...workerSheet.customerLocation }))}
+        onUseCustomerLocation={() => setCourierForm((form) => ({ ...form, ...customerLocation }))}
+        locationBases={locationBases}
+        confirmedMapLocation={confirmedMapLocation}
+        onConfirmMap={setConfirmedMapLocation}
         assignedTo={assignedTo}
         onAssignedToChange={setAssignedTo}
         isSaving={isSavingCourier}

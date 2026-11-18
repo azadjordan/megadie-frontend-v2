@@ -73,7 +73,7 @@ export const usersApiSlice = apiSlice.injectEndpoints({
         method: "PUT",
         body,
       }),
-      invalidatesTags: () => [{ type: "User", id: "ME" }],
+      invalidatesTags: (result) => result ? [{ type: "User", id: "ME" }, { type: "User", id: result.data._id }, { type: "User", id: "LIST" }] : [],
     }),
 
 // ✅ Admin: list users (for assigning quote owner, etc.)

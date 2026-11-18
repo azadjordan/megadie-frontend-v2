@@ -24,7 +24,7 @@ export const packingApiSlice = apiSlice.injectEndpoints({
         const reports = (incoming.data.reportsVersion ?? 0) > (current.data.reportsVersion ?? 0) ? incoming : (incoming.data.reportsVersion ?? 0) < (current.data.reportsVersion ?? 0) ? current : progress;
         return { ...progress, data: { ...progress.data, reports: reports.data.reports, reportsVersion: reports.data.reportsVersion, stockChecksPending: reports.data.stockChecksPending } };
       },
-      providesTags: (_result, _error, id) => [{ type: "Packing", id }],
+      providesTags: (result, _error, id) => [{ type: "Packing", id }, ...(result?.data?.customerId ? [{ type: "User", id: result.data.customerId }] : [])],
       keepUnusedDataFor: 0,
     }),
     reviewPackingStockReport: builder.mutation({
@@ -49,6 +49,7 @@ export const packingApiSlice = apiSlice.injectEndpoints({
         { type: "Packing", id: "LIST" }, { type: "Order", id: arg.orderId }, { type: "Order", id: "LIST" },
         { type: "OrderAllocation", id: `ORDER-${arg.orderId}` }, { type: "OrderAllocation", id: "LIST" },
         { type: "SlotItem", id: "LIST" }, { type: "InventoryMovement", id: "LIST" },
+        ...(arg.saveCustomerLocation && result?.data?.customerId ? [{ type: "User", id: result.data.customerId }, { type: "User", id: "LIST" }] : []),
       ] : [],
     }),
   }),

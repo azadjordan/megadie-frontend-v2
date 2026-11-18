@@ -1,3 +1,5 @@
+import LocationFields from "../../components/common/LocationFields";
+import { needsMapReview, profileLocationPatch } from "../../utils/customerLocation";
 import { useState } from "react";
 import { useDispatch } from "react-redux";
 
@@ -70,16 +72,24 @@ function AccountProfileForm({
   const [name, setName] = useState(profileName);
   const [phoneNumber, setPhoneNumber] = useState(profilePhone);
   const [address, setAddress] = useState(profileAddress);
+  const [googleMapsUrl, setGoogleMapsUrl] = useState(profile?.deliveryGoogleMapsUrl || "");
+  const [infoBase, setInfoBase] = useState(profile);
+  const [confirmedMapLocation, setConfirmedMapLocation] = useState(false);
+  const mapReviewPending = needsMapReview([infoBase], { address, googleMapsUrl }) && !confirmedMapLocation;
   const [saved, setSaved] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
   const onSave = async (e) => {
     e.preventDefault();
-    if (!isEditing || isSaving) return;
+    if (!isEditing || isSaving || mapReviewPending) return;
     setSaved(false);
 
     try {
-      const res = await updateProfile({ name, phoneNumber, address }).unwrap();
+      const payload = { ...profileLocationPatch(infoBase, { address, googleMapsUrl }, confirmedMapLocation) };
+      if (name.trim() !== (infoBase?.name || '')) payload.name = name.trim();
+      if (phoneNumber.trim() !== (infoBase?.phoneNumber || '')) payload.phoneNumber = phoneNumber.trim();
+      const res = await updateProfile(payload).unwrap();
+      setInfoBase(res.data);
       dispatch(setCredentials(res.data, "profile"));
       setSaved(true);
       setIsEditing(false);
@@ -91,6 +101,8 @@ function AccountProfileForm({
   };
 
   const onEdit = () => {
+    onCancel();
+    setInfoBase(profile);
     setIsEditing(true);
     setSaved(false);
   };
@@ -99,6 +111,8 @@ function AccountProfileForm({
     setName(profileName);
     setPhoneNumber(profilePhone);
     setAddress(profileAddress);
+    setGoogleMapsUrl(profile?.deliveryGoogleMapsUrl || "");
+    setConfirmedMapLocation(false);
     setIsEditing(false);
     setSaved(false);
   };
@@ -166,17 +180,10 @@ function AccountProfileForm({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Default delivery address
-                  </label>
-                  <textarea
-                    className="mt-2 w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-violet-500 focus:outline-none disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500"
-                    rows={4}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Street, building, city, country"
-                    disabled={!isEditing}
-                  />
+                  <div className="mb-2 text-sm font-semibold text-slate-900">Default delivery location</div>
+                  <LocationFields value={isEditing ? { address, googleMapsUrl } : { address: profileAddress, googleMapsUrl: profile?.deliveryGoogleMapsUrl || '' }}
+                    baseLocations={[infoBase]} onChange={(field, value) => field === 'address' ? setAddress(value) : setGoogleMapsUrl(value)}
+                    disabled={!isEditing || isSaving} confirmedMapLocation={confirmedMapLocation} onConfirmMap={setConfirmedMapLocation} />
                   <p className="mt-2 text-xs text-slate-500">Used for new orders. Existing orders keep their saved delivery details.</p>
                 </div>
               </div>
@@ -185,6 +192,12 @@ function AccountProfileForm({
             {saveErrMsg ? (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
                 {saveErrMsg}
+                {isEditing && <button type="button" className="ml-3 min-h-11 font-semibold underline" onClick={async () => {
+                  if (!window.confirm('Reload your profile and discard unsaved changes?')) return;
+                  const result = await refetch();
+                  const latest = result.data?.data;
+                  if (latest) { setName(latest.name || ''); setPhoneNumber(latest.phoneNumber || ''); setAddress(latest.address || ''); setGoogleMapsUrl(latest.deliveryGoogleMapsUrl || ''); setInfoBase(latest); setConfirmedMapLocation(false); }
+                }}>Reload profile</button>}
               </div>
             ) : null}
 
@@ -192,7 +205,7 @@ function AccountProfileForm({
               {isEditing ? (
                 <button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={isSaving || mapReviewPending}
                   className="rounded-2xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700 disabled:opacity-60"
                 >
                   {isSaving ? "Saving..." : "Save changes"}
