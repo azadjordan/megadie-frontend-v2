@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getAdminOrderActionState } from './adminOrderActions.js';
+import { canCreateOrderInvoice, getCreateInvoiceReason } from './adminOrderWorkflow.js';
 
 const now = Date.parse('2026-11-16T08:00:00Z');
 const paid = { _id: 'invoice', status: 'Issued', paymentStatus: 'Paid', amountMinor: 1000, paidTotalMinor: 1000, balanceDueMinor: 0 };
@@ -8,6 +9,36 @@ const unpaid = { ...paid, paymentStatus: 'Unpaid', paidTotalMinor: 0, balanceDue
 const packed = { status: 'Shipping', allocationStatus: 'Allocated', packingSentAt: '2026-11-14T08:00:00Z', packedAt: '2026-11-14T09:00:00Z', assignedTo: 'Ahmed', stockChecksPending: 0 };
 const delivered = { ...packed, status: 'Delivered', stockFinalizedAt: '2026-11-14T10:00:00Z', invoice: paid, listAction: null };
 const state = order => getAdminOrderActionState(order, now);
+
+test('invoice eligibility is independent of assignment and picking progress', () => {
+  for (const progress of [{ packingSentAt: null, packedAt: null }, { packedAt: null }, { packedAt: null, packingSummary: { totalItems: 1, collectedItems: 1 } }, {}]) {
+    const order = { ...packed, ...progress };
+    assert.equal(canCreateOrderInvoice(order), true);
+    assert.equal(getCreateInvoiceReason(order), '');
+    assert.equal(canCreateOrderInvoice({ ...order, invoice: paid }), false);
+    assert.equal(canCreateOrderInvoice({ ...order, status: 'Cancelled' }), false);
+  }
+  const picking = state({ ...packed, packedAt: null });
+  assert.equal(picking.primaryAction.id, 'view-packing');
+  assert.equal(picking.secondaryActions.filter(a => a.id === 'create-invoice').length, 1);
+});
+
+test('invoicing first does not imply manual preparation or delivery readiness', () => {
+  for (const invoice of [paid, unpaid]) {
+    const reserved = state({ ...packed, packingSentAt: null, packedAt: null, assignedTo: '', invoice });
+    assert.equal(reserved.preparation.label, 'Reserved');
+    assert.match(reserved.preparation.detail, /Assign a worker or prepare manually/);
+    assert.equal(reserved.delivery.label, 'Pending');
+    assert.equal(reserved.primaryAction.id, 'send-worker');
+    assert.ok(reserved.secondaryActions.some(a => a.id === 'legacy-packing'));
+    assert.ok(reserved.secondaryActions.some(a => a.id === 'mark-out-for-delivery'));
+    assert.ok(!reserved.secondaryActions.some(a => a.id === 'create-invoice'));
+    const picking = state({ ...packed, packedAt: null, invoice });
+    assert.equal(picking.primaryAction.id, 'view-packing');
+    assert.equal(picking.preparation.label, 'Packing');
+    assert.equal(picking.delivery.label, 'Pending');
+  }
+});
 
 test('packing and delivery are independent, retaining invoice and delivery actions', () => {
   const beforeInvoice = state(packed);

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiChevronLeft, FiTruck, FiArchive } from "react-icons/fi";
 import { toast } from "react-toastify";
 
@@ -317,8 +317,8 @@ export default function AdminOrderDetailsPage() {
   }, [allocations, items]);
 
   const isStockFinalized = isOrderStockFinalized(order, allocationMetrics);
-  const itemsEditLockReason = (!goodsReturned && movementStockLock) || (isStockFinalized ? "Stock finalized." : orderStatus !== "Shipping" ? "Items can be edited while Shipping." : hasInvoice ? "Invoice exists. Items are locked." : order?.packedAt && !goodsReturned ? "Reopen packing before editing items." : "");
-  const editItemsAction = <div className="text-right"><button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={Boolean(itemsEditLockReason)} onClick={() => goodsReturned ? setStockReturnTarget('items') : setItemsEditorOpen(true)}>Edit items</button>{itemsEditLockReason && <p className="mt-1 max-w-44 text-xs text-slate-500">{itemsEditLockReason}</p>}</div>;
+  const itemsEditLockReason = (!goodsReturned && movementStockLock) || (isStockFinalized ? "Stock finalized." : orderStatus !== "Shipping" ? "Items can be edited while Shipping." : hasInvoice ? "Invoiced items are locked. Review billing to change products or ordered quantities." : order?.packedAt && !goodsReturned ? "Reopen packing before editing items." : "");
+  const editItemsAction = <div className="text-right"><button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40" disabled={Boolean(itemsEditLockReason)} onClick={() => goodsReturned ? setStockReturnTarget('items') : setItemsEditorOpen(true)}>Edit items</button>{itemsEditLockReason && <p className="mt-1 max-w-44 text-xs text-slate-500">{itemsEditLockReason}{hasInvoice && <Link to={`/admin/invoices/${invoiceId}/edit`} className="ml-1 inline-flex min-h-10 items-center font-semibold text-indigo-700 underline">Review billing</Link>}</p>}</div>;
   const releaseAllowed =
     orderStatus === "Shipping" &&
     !movementStockLock &&
@@ -720,7 +720,7 @@ export default function AdminOrderDetailsPage() {
       label: "Deliver & Invoice",
       shortLabel: "Del & Inv",
       number: 3,
-      locked: !canDeliver && !canCreateInvoice,
+      locked: !hasInvoice && !canDeliver && !canCreateInvoice,
       lockReason: deliverInvoiceLockReason,
     },
     {
@@ -933,7 +933,7 @@ export default function AdminOrderDetailsPage() {
           <StepCard
             n={3}
             title="Deliver & Invoice"
-            subtitle={order?.packingSentAt ? 'After packing, create the invoice and record delivery when it is complete.' : 'Create the invoice and record the completed delivery.'}
+            subtitle="Create the invoice when needed. Record departure when ready and delivery after customer receipt."
           >
             <div className="flex flex-wrap items-center gap-2">
               <OrderDeliveryActions order={order} onAction={openDeliverModal} />
@@ -957,7 +957,7 @@ export default function AdminOrderDetailsPage() {
             {!hasInvoice && createInvoiceReason && <p className="mt-3 text-xs text-amber-900">{createInvoiceReason}</p>}
             {canCreateInvoice && orderStatus !== "Delivered" ? (
               <div className="mt-3 text-[11px] text-slate-500">
-                {order?.packingSentAt ? 'Packing is complete. The invoice can now be created.' : 'Using live worker packing? Send the order to a worker before invoicing.'}
+                You can invoice before, during, or after packing. Invoiced products, quantities, and charges stay locked.
               </div>
             ) : null}
           </StepCard>

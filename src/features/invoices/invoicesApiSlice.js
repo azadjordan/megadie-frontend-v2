@@ -168,6 +168,8 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: (_result, _error, id) => [
         { type: "Invoice", id: "LIST" },
         { type: "Invoice", id },
+        { type: "Invoice", id: "SUMMARY" },
+        "Order", "Packing",
       ],
     }),
 
@@ -182,6 +184,8 @@ export const invoicesApiSlice = apiSlice.injectEndpoints({
         { type: "Invoice", id: "SUMMARY" },
         { type: "Order", id: "LIST" },
         { type: "Order", id: arg?.orderId },
+        { type: "Packing", id: arg?.orderId },
+        { type: "Packing", id: "LIST" },
       ],
     }),
     createManualInvoice: builder.mutation({

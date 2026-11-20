@@ -157,7 +157,7 @@ function primaryId(order) {
     if (order.deliveryMovement?.departedAt && !order.deliveryMovement?.slotsReturnedAt) return order.deliveryMovement.returnedAt ? 'mark-out-for-delivery' : 'mark-delivered';
     if (order.helpRequestedItems > 0) return 'review-help';
     if (!f.isAllocated) return 'reserve-stock';
-    if (!order.packingSentAt && !b.hasInvoice) return 'send-worker';
+    if (!order.packingSentAt && !order.packedAt) return 'send-worker';
     if (order.packingSentAt && !order.packedAt) return 'view-packing';
     return b.hasInvoice ? 'mark-out-for-delivery' : 'create-invoice';
   }
@@ -180,7 +180,7 @@ function display(label, detail = '', tone = 'neutral', icon = 'waiting') {
   return { label, detail, tone, icon };
 }
 
-function preparationFor(order, f, billing) {
+function preparationFor(order, f) {
   const worker = order.assignedTo || '';
   const published = Boolean(order.packingSentAt);
   if (f.isCancelled) return display('Not required', '', 'neutral', 'cancelled');
@@ -199,7 +199,7 @@ function preparationFor(order, f, billing) {
     if (known) result.picking = { total, collected };
     return result;
   }
-  return display('Reserved', billing.hasInvoice ? 'Manual preparation' : worker || 'Ready to assign a worker', 'active', 'reservation');
+  return display('Reserved', worker || 'Assign a worker or prepare manually', 'active', 'reservation');
 }
 
 function deliveryFor(order, f) {
@@ -208,7 +208,7 @@ function deliveryFor(order, f) {
   if (order.deliveryMovement?.departedAt && !order.deliveryMovement?.slotsReturnedAt) return order.deliveryMovement.returnedAt
     ? display('Awaiting delivery', 'Returned to store · still packed', 'followUp', 'delivery')
     : display('Out for delivery', order.deliveryMovement.handler || '', 'active', 'delivery');
-  if (f.isShipping && f.isAllocated && (order.packedAt || (!order.packingSentAt && order.invoice))) return display('Awaiting delivery', '', 'active', 'delivery');
+  if (f.isShipping && f.isAllocated && order.packedAt) return display('Awaiting delivery', '', 'active', 'delivery');
   return display('Pending', 'After preparation', 'neutral', 'delivery');
 }
 
@@ -230,7 +230,7 @@ export function getAdminOrderActionState(order, now = Date.now()) {
   const fulfillment = getAdminOrderFulfillmentState(order);
   const billing = getAdminOrderBillingState(order, now);
   const operational = getAdminOrderPrimaryAction(order);
-  const preparation = preparationFor(order, fulfillment, billing);
+  const preparation = preparationFor(order, fulfillment);
   const delivery = deliveryFor(order, fulfillment);
   const stock = stockFor(order, fulfillment, operational);
   const published = Boolean(order.packingSentAt);
@@ -256,7 +256,7 @@ export function getAdminOrderActionState(order, now = Date.now()) {
   if (active && fulfillment.isShipping) secondary.push(buildAction('delivery-assignment'));
   const paymentAction = getAdminOrderBillingAction(order);
   if (paymentAction) secondary.push(paymentAction);
-  if (active && !inDelivery && fulfillment.isShipping && (published || !billing.hasInvoice)) secondary.push(buildAction('assignment', { label: published ? 'Packing worker' : 'Send to worker' }));
+  if (active && !inDelivery && fulfillment.isShipping) secondary.push(buildAction('assignment', { label: published ? 'Packing worker' : 'Send to worker' }));
   if (published || stock.checksPending > 0) secondary.push(buildAction('view-packing', { label: active ? 'View packing' : 'Packing history' }));
   secondary.push(buildAction('delivery-details'), buildAction('copy-summary'));
   if (active && !inDelivery && !published) secondary.push(buildAction('legacy-packing'));

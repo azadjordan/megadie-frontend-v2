@@ -216,7 +216,7 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
             {admin && task.status === "Shipping" && onAssignment && <button type="button" className={packingSecondary} disabled={saving || needsRefresh} onClick={onAssignment}>{task.sentAt ? "Packing worker" : "Send to worker"}</button>}
             <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-slate-500 hover:bg-slate-100 disabled:opacity-50" onClick={refresh} disabled={saving || query.isFetching} aria-label="Refresh"><FiRefreshCw aria-hidden="true" className={query.isFetching ? 'animate-spin' : ''} /><span className="hidden sm:inline">Refresh</span></button>
           </div>
-          {admin && task.editItemsLockReason && <p id="packing-items-lock" className="max-w-sm text-xs text-slate-500">{task.editItemsLockReason}</p>}
+          {admin && task.editItemsLockReason && <p id="packing-items-lock" className="max-w-sm text-xs text-slate-500">{task.editItemsLockReason}{task.invoiceId && <Link to={`/admin/invoices/${task.invoiceId}/edit`} className="ml-1 inline-flex min-h-10 items-center font-semibold text-indigo-700 underline">Review billing</Link>}</p>}
         </div>
       </div>
       <details className="text-sm text-slate-500"><summary className="min-h-11 cursor-pointer content-center">Full carton label</summary><p className="break-words pb-2 font-medium text-slate-700">{task.label}</p></details>
