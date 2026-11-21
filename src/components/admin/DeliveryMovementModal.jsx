@@ -14,6 +14,7 @@ const actions = {
   reshelved: { title: 'Change reserved stock', text: 'Before changing stock or preparation, return every unit to its original slot. Reservations will stay in place.', label: 'Continue', Icon: FiArchive },
 };
 const time = value => value ? new Date(value).toLocaleString() : '';
+const deliveryOwners = new Map([['azad', 'Azad'], ['momani', 'Momani']]);
 
 export default function DeliveryMovementModal({ open, order, action = 'history', onClose, onSaved }) {
   if (!open || !order?._id) return null;
@@ -33,6 +34,8 @@ function MovementDialog({ order, action, onClose, onSaved }) {
   const config = actions[action];
   const historyOnly = action === 'history';
   const collection = method === 'collection' && !view?.isOut && !view?.deliveryWorker;
+  const needsMethod = ['departed', 'delivered'].includes(action) && !view?.isOut && !view?.deliveryWorker;
+  const invalidMethod = needsMethod && (!['azad', 'momani', 'courier', 'collection'].includes(method) || (method === 'courier' && !handler.trim()));
   const closed = view && view.status !== 'Shipping';
   const alreadyReshelved = action === 'reshelved' && view?.movement?.slotsReturnedAt && !view?.holdsGoods && !closed;
   const staleAction = closed || (action === 'departed' && view?.isOut) || (action === 'returned' && !view?.isOut) || (action === 'reshelved' && (!view?.holdsGoods || view?.isOut));
@@ -42,13 +45,15 @@ function MovementDialog({ order, action, onClose, onSaved }) {
     event.preventDefault();
     if (!view || lock.current || needsRefresh || isFetching || staleAction) return;
     if (action === 'reshelved' && !confirmedReturn) return;
-    if (['departed', 'delivered'].includes(action) && !view.isOut && !view.deliveryWorker && (!method || (method === 'courier' && !handler.trim()))) return;
+    if (invalidMethod) return;
     lock.current = true; setError('');
     try {
-      await save({ id: order._id, expectedRevision: view.version, action: method === 'collection' && !view.isOut && !view.deliveryWorker ? 'collected' : action,
-        ...(['departed', 'delivered'].includes(action) && !view.isOut && !view.deliveryWorker ? { method, ...(method === 'collection' ? {} : { handler: handler.trim() }) } : {}),
+      const eventAction = collection && needsMethod ? 'collected' : action;
+      const owner = deliveryOwners.get(method);
+      await save({ id: order._id, expectedRevision: view.version, action: eventAction,
+        ...(needsMethod ? { method: owner ? 'company' : method, ...(owner ? { handler: owner } : method === 'courier' ? { handler: handler.trim() } : {}) } : {}),
         confirmedReady: true, confirmedReceived: true, confirmedReturn: true }).unwrap();
-      toast.success(`${events[action]}.`); await finish();
+      toast.success(`${events[eventAction]}.`); await finish();
     } catch (err) {
       setNeedsRefresh(true); setConfirmedReturn(false);
       setError(err?.data?.message || 'Could not confirm the update. Check the latest delivery details before trying again.');
@@ -70,14 +75,14 @@ function MovementDialog({ order, action, onClose, onSaved }) {
           {view.deliveryWorker ? <><p className="text-sm text-slate-500">Delivery worker</p><p className="text-lg font-semibold">{view.deliveryWorker.name}</p><button type="button" onClick={() => setAssigning(true)} disabled={isLoading || needsRefresh} className="min-h-11 text-sm font-medium text-indigo-700 underline">Change delivery worker</button></>
             : view.isOut ? <p className="text-sm font-medium">Handed to: {view.movement?.handler || 'Not recorded'}</p> : <>
               <button type="button" className={button + ' border border-slate-200 text-indigo-700'} disabled={isLoading || needsRefresh} onClick={() => setAssigning(true)}>Assign delivery worker</button>
-              <label className="block text-sm font-medium">Delivery method<select aria-label="Delivery method" value={method} onChange={e => setMethod(e.target.value)} disabled={isLoading || needsRefresh} className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base"><option value="">Choose delivery method</option><option value="company">Company / owner</option><option value="courier">Courier</option><option value="collection">Customer collection</option></select></label>
-              {method && method !== 'collection' && <label className="block text-sm font-medium">{method === 'courier' ? 'Courier name' : 'Company / owner name (optional)'}<input value={handler} onChange={e => setHandler(e.target.value)} maxLength={120} required={method === 'courier'} disabled={isLoading || needsRefresh} className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3 py-2" /></label>}
+              <label className="block text-sm font-medium">Delivery method<select aria-label="Delivery method" value={method} onChange={e => { setMethod(e.target.value); setHandler(''); }} disabled={isLoading || needsRefresh} className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base"><option value="">Choose delivery method</option>{[...deliveryOwners].map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="courier">Courier</option><option value="collection">Customer collection</option></select></label>
+              {method === 'courier' && <label className="block text-sm font-medium">Courier name<input value={handler} onChange={e => setHandler(e.target.value)} maxLength={120} required disabled={isLoading || needsRefresh} className="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-3 py-2" /></label>}
             </>}
         </div>}
         {view.manualPreparation && ['departed', 'delivered'].includes(action) && <p className="text-xs leading-5 text-slate-500">The complete order must be prepared from its reserved slots.</p>}
         {action === 'reshelved' && <label className="flex min-h-11 items-start gap-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={confirmedReturn} onChange={e => setConfirmedReturn(e.target.checked)} disabled={isLoading || needsRefresh} />Every unit is physically back in its original slot.</label>}
         {reason && <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{reason}</p>}
-        {!needsRefresh && <button type="submit" disabled={isLoading || isFetching || Boolean(reason) || (action === 'reshelved' && !confirmedReturn) || (['departed', 'delivered'].includes(action) && !view.isOut && !view.deliveryWorker && (!method || (method === 'courier' && !handler.trim())))} className={button + ' bg-blue-600 text-white hover:bg-blue-700'}><config.Icon aria-hidden="true" />{isLoading ? 'Saving…' : method === 'collection' && !view.deliveryWorker && !view.isOut ? 'Confirm customer collection' : config.label || config.title}</button>}
+        {!needsRefresh && <button type="submit" disabled={isLoading || isFetching || Boolean(reason) || (action === 'reshelved' && !confirmedReturn) || invalidMethod} className={button + ' bg-blue-600 text-white hover:bg-blue-700'}><config.Icon aria-hidden="true" />{isLoading ? 'Saving…' : collection ? 'Confirm customer collection' : config.label || config.title}</button>}
       </form>}
       {!historyOnly && staleAction && <p role="status" className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{alreadyReshelved ? 'The goods are already recorded back in their original slots.' : view.isOut ? 'This order is already out for delivery.' : closed ? `This order is ${view.status.toLowerCase()}.` : action === 'returned' ? 'This order is already in the store.' : 'Record the return to the store before changing stock.'}</p>}
       {alreadyReshelved && <button type="button" className={button + ' mt-4 bg-blue-600 text-white'} onClick={finish}>Continue</button>}

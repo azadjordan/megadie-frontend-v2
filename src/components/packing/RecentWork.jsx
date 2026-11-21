@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowLeft, FiBox, FiClock, FiRefreshCw, FiTruck } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowRight, FiBox, FiCheckCircle, FiClock, FiRefreshCw, FiTruck } from 'react-icons/fi';
+import WorkerBackLink from './WorkerBackLink';
 import { useGetWorkerWorkQuery } from '../../features/packing/workApiSlice';
 import { packingCartonReference, packingQuantity, packingSecondary } from '../../utils/packing';
-import DeliveryAssignmentPanel from './DeliveryAssignmentPanel';
 
 const workerPeriods = [['today', 'Today'], ['yesterday', 'Yesterday'], ['dayBeforeYesterday', 'Day before yesterday']];
 const adminPeriods = [['today', 'Today'], ['yesterday', 'Yesterday'], ['last7', 'Last 7 days']];
@@ -25,31 +25,32 @@ function useWorkClock(deadline) {
 
 export function WorkCard({ card }) {
   const latest = card.work[0];
+  const units = card.totalUnits ?? card.items.reduce((sum, item) => sum + item.qty, 0);
   return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <div className="flex flex-wrap gap-2">{card.work.map((work, i) => <span key={work.type + i} className={'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ' + (!work.active ? 'bg-slate-100 text-slate-500' : work.type === 'delivered' ? 'bg-emerald-50 text-emerald-800' : 'bg-blue-50 text-blue-800')}>{work.type === 'delivered' ? <FiTruck aria-hidden="true" /> : <FiBox aria-hidden="true" />}{work.type === 'delivered' ? 'Delivered' : 'Packed'}{!work.active && (work.voidReason === 'delivery_corrected' ? ' · corrected, not counted' : ' · reopened, not counted')}</span>)}</div>
     <h3 className="mt-3 break-words text-xl font-semibold text-slate-900">{card.customerName || 'Carton ' + packingCartonReference(card)}</h3>
     {card.customerName && <p className="mt-1 break-words text-xs text-slate-500">Carton {packingCartonReference(card)}</p>}
     <ul className="mt-3 space-y-1 text-sm text-slate-600">{card.work.map((work, i) => <li key={i}>{work.type === 'delivered' ? 'Delivered' : 'Packed'} · {formatDate(work.completedAt)}</li>)}</ul>
-    <details className="mt-4 border-t border-slate-100 pt-2"><summary className="min-h-11 cursor-pointer content-center text-sm font-semibold text-indigo-700">View items · {card.totalItems ?? card.items.length} {(card.totalItems ?? card.items.length) === 1 ? 'item' : 'items'} · {card.totalUnits ?? card.items.reduce((sum, item) => sum + item.qty, 0)} units</summary>
+    <details className="mt-4 border-t border-slate-100 pt-2"><summary className="min-h-11 cursor-pointer content-center text-sm font-semibold text-indigo-700">View items · {card.totalItems ?? card.items.length} {(card.totalItems ?? card.items.length) === 1 ? 'item' : 'items'} · {units} {units === 1 ? 'unit' : 'units'}</summary>
       {card.work.length > 1 && <p className="mb-2 text-xs text-slate-500">Contents recorded when last {latest.type}.</p>}
       <ul className="divide-y divide-slate-100">{card.items.map((item, i) => <li key={item.sku + i} className="flex items-start justify-between gap-3 py-3 text-sm"><div className="min-w-0 break-words"><p className="font-medium text-slate-900">{item.name || item.sku}</p><p className="mt-1 break-all text-xs text-slate-500">{item.sku}</p></div><span className="max-w-[45%] break-words text-right font-semibold tabular-nums">{packingQuantity(item.qty, item.unit)}</span></li>)}</ul>
     </details>
   </article>;
 }
 
-export function CompletedWorkSummary({ task, refetch }) {
+export function CompletedWorkSummary({ task, refetch, packingFinished = false }) {
   const deadline = task.privacyRefreshAt && task.expiresAt ? new Date(Math.min(+new Date(task.privacyRefreshAt), +new Date(task.expiresAt))).toISOString() : task.expiresAt;
   const now = useWorkClock(deadline);
   const refreshPrivacy = Boolean(task.privacyRefreshAt && now >= +new Date(task.privacyRefreshAt));
   const expired = task.expiresAt && now >= +new Date(task.expiresAt);
   useEffect(() => { if (expired || refreshPrivacy) refetch?.(); }, [expired, refreshPrivacy, refetch]);
-  const handoffText = task.deliveryState === 'returned' ? 'Packing complete. The carton is back in store.' : task.deliveryState ? 'Packing complete. The carton is out for delivery.' : 'Packing complete. Keep the carton ready for handoff.';
   return <section className="space-y-4">
-    <Link to="/packing?tab=recent" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-slate-600"><FiArrowLeft aria-hidden="true" />Recent work</Link>
+    {packingFinished ? <WorkerBackLink /> : <Link to="/packing?tab=recent" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-slate-600"><FiArrowLeft aria-hidden="true" />Recent work</Link>}
     {expired ? <p role="status" className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">This completed task is outside your three-day work history. Contact an admin if you need help.</p> : <>
-      <p className="text-sm text-slate-500">{task.scope === 'packed-handoff' ? handoffText : 'Completed work · read only. Contact an admin about any corrections.'}</p>
+      {packingFinished && <p role="status" className="flex items-start gap-2 text-sm font-semibold text-emerald-800"><FiCheckCircle aria-hidden="true" className="mt-0.5 shrink-0" />Packing complete. Your work on this order is finished.</p>}
+      <p className="text-sm text-slate-500">Completed work · read only. Contact an admin about any corrections.</p>
       <WorkCard card={refreshPrivacy ? { ...task, customerName: undefined, label: undefined } : task} />
-      {task.scope === 'packed-handoff' && <DeliveryAssignmentPanel orderId={task.orderId} />}
+      {packingFinished && <Link to="/packing?tab=recent" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-indigo-700">View recent work<FiArrowRight aria-hidden="true" /></Link>}
     </>}
     {refetch && <button type="button" onClick={refetch} className={packingSecondary}><FiRefreshCw aria-hidden="true" />Refresh</button>}
   </section>;

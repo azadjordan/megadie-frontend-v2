@@ -15,6 +15,8 @@ export const packingProgressLabel = summary => `${summary?.collectedItems || 0} 
 export const packingDate = value => value ? new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 export const packingButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50";
 export const packingPrimary = packingButton + " bg-slate-900 text-white hover:bg-slate-800";
+export const workerPrimary = packingButton + " bg-indigo-600 text-white hover:bg-indigo-700";
+export const workerReturnTo = location => location.state?.workReturnTo?.match(/^\/packing(?:\?[^#]*)?$/)?.[0] || '/packing';
 export const packingSecondary = packingButton + " border border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
 
 export const packingUnitProgressLabel = summary => Number.isFinite(summary?.pickedUnits) && Number.isFinite(summary?.totalUnits)

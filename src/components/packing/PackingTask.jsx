@@ -1,12 +1,15 @@
+import OrderCreatedAt from './OrderCreatedAt';
 import { orderListParams, orderDestination } from '../../utils/adminOrderListState';
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { FiAlertCircle, FiArrowLeft, FiArrowRight, FiCheck, FiEdit3, FiCheckCircle, FiRefreshCw } from "react-icons/fi";
 import { useGetPackingOrderQuery, useSavePackingMutation } from "../../features/packing/packingApiSlice";
-import { packingQuantity, packingError, needsPackingRefresh, packingTaskLabel, packingProgressLabel, packingUnitProgressLabel, packingCartonReference, packingDate, packingPrimary, packingSecondary } from "../../utils/packing";
+import { packingQuantity, packingError, needsPackingRefresh, packingTaskLabel, packingProgressLabel, packingUnitProgressLabel, packingCartonReference, packingDate, packingPrimary as adminPrimary, workerPrimary, workerReturnTo, packingSecondary } from "../../utils/packing";
 import PackingDialog from "./PackingDialog";
 import DeliveryAssignmentPanel from './DeliveryAssignmentPanel';
 import { CompletedWorkSummary } from './RecentWork';
+import PackingHandoff from './PackingHandoff';
+import WorkerBackLink from './WorkerBackLink';
 import AdminPackingStockReports from '../admin/AdminPackingStockReports';
 
 const textButton = "inline-flex min-h-11 items-center text-sm font-medium text-slate-600 underline underline-offset-4 disabled:opacity-50";
@@ -35,7 +38,9 @@ function OrderUpdateNotice({ task }) {
 }
 
 export default function PackingTask({ orderId, admin = false, onAssignment }) {
-  const listSearch = orderListParams(useLocation().search).toString();
+  const location = useLocation();
+  const listSearch = orderListParams(location.search).toString();
+  const packingPrimary = admin ? adminPrimary : workerPrimary;
   const [panel, setPanel] = useState(null);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState(null);
@@ -192,9 +197,10 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
   const refreshBlock = needsRefresh && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p>Check the latest saved progress before another change.</p><button type="button" onClick={refresh} disabled={saving || query.isFetching} className={packingSecondary + ' mt-2'}>{query.isFetching ? "Checking…" : "Check latest progress"}</button></div>;
   const errorBlock = error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>;
 
-  if (lostAccess || accessError) return <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">This task is no longer available to this account. <Link to={admin ? "/admin/orders" : "/packing"} className="underline">Back to orders</Link></div>;
+  if (lostAccess || accessError) return <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">This task is no longer available to this account. {admin ? <Link to="/admin/orders" className="underline">Back to orders</Link> : <WorkerBackLink />}</div>;
   if (!task) return <div role="status" className="rounded-2xl border border-slate-200 bg-white p-5 text-sm">{query.isError ? <><p>Could not load packing progress.</p><button type="button" className={packingSecondary + ' mt-3'} onClick={refresh}>Retry</button></> : "Loading packing progress…"}</div>;
-  if (!admin && ['recent-work', 'packed-handoff'].includes(task.scope)) return <CompletedWorkSummary task={task} refetch={query.refetch} />;
+  if (!admin && task.scope === 'recent-work') return <CompletedWorkSummary task={task} refetch={query.refetch} packingFinished={Boolean(task.packedAt && !task.deliveredAt)} />;
+  if (!admin && task.scope === 'packed-handoff') return <PackingHandoff task={task} refetch={query.refetch} />;
   const openTask = task.status === "Shipping" && Boolean(task.sentAt) && !task.packedAt;
   const editable = openTask && (!admin || assist);
   const candidates = item?.alternatives.filter(candidate => candidate.slotId !== allocation?.slotId && candidate.availableQty > 0) || [];
@@ -205,11 +211,12 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
   const unitsLeft = Math.max(0, unitSummary.totalUnits - unitSummary.pickedUnits);
   const editItemsHref = '/admin/orders/' + orderId + '?editItems=1&returnTo=packing' + (listSearch ? '&' + listSearch : '');
   const hasReadyLocation = task.items.some(product => product.allocations.some(isReadyToPick));
+  const hasAlternativeWork = task.items.some(product => product.allocations.some(row => row.problemQty > 0 && product.alternatives.some(slot => slot.slotId !== row.slotId && slot.availableQty > 0)));
   return <div className="space-y-5">
     <header className="space-y-4">
-      {!admin && <Link to="/packing" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-slate-600"><FiArrowLeft aria-hidden="true" />Back to orders</Link>}
+      {!admin && <WorkerBackLink />}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">{admin ? 'Packing progress' : packingTaskLabel(task.preparationMode)}</p><h1 className="break-words text-2xl font-semibold tracking-tight sm:text-3xl">{task.customerName}</h1><p className="mt-2 break-all text-sm text-slate-500">Carton {packingCartonReference(task)}</p></div>
+        <div className="min-w-0"><p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">{admin ? 'Packing progress' : packingTaskLabel(task.preparationMode)}</p><h1 className="break-words text-2xl font-semibold tracking-tight sm:text-3xl">{task.customerName}</h1><p className="mt-2 break-all text-sm text-slate-500">Carton {packingCartonReference(task)}</p>{!admin && <OrderCreatedAt value={task.createdAt} />}</div>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             {admin && (task.editItemsLockReason || blocked
@@ -234,12 +241,12 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
     {task.packedAt && <section aria-label="Packing complete" className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start gap-3"><FiCheckCircle className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden="true" /><div><h2 className="text-lg font-semibold">Packed</h2><p className="mt-2 text-sm text-slate-600">Packed by {task.packedBy} · {packingDate(task.packedAt)}</p>{admin && task.status === 'Shipping' && <button type="button" className={packingSecondary + ' mt-3'} disabled={blocked || Boolean(task.reopenLockReason)} title={task.reopenLockReason || undefined} onClick={() => write('reopen')}>{pending?.action === 'reopen' ? 'Reopening…' : 'Reopen packing'}</button>}{admin && task.reopenLockReason && <p className="mt-2 text-xs text-slate-500">{task.reopenLockReason}</p>}</div></div></section>}
     {(task.packedAt || admin) && <DeliveryAssignmentPanel orderId={orderId} />}
     {admin && openTask && <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-slate-500">{assist ? 'Record only quantities physically picked or returned.' : 'Monitor progress and resolve reported shortages.'}</p><button type="button" disabled={saving} className={textButton} onClick={() => setAssist(!assist)}>{assist ? 'Done editing' : 'Edit picking progress'}</button></div>}
-    {!panel && nextLocation && !nextLocation.finish && (nextLocation.allocationId || (!task.canPack && !hasReadyLocation)) && <p ref={nextStepElement} tabIndex={-1} role="status" className={nextLocation.allocationId ? 'sr-only' : 'rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 focus:outline-none'}>{nextLocation.allocationId ? nextLocation.message : 'No other slots are ready to pick. ' + (task.helpRequestedItems > 0 ? 'Admin help has been requested.' : 'Review the unresolved shortages below.')}{!nextLocation.allocationId && !admin && <> <Link to="/packing" className="font-semibold underline">Choose another order</Link></>}</p>}
+    {!panel && nextLocation && !nextLocation.finish && (nextLocation.allocationId || (!task.canPack && !hasReadyLocation)) && <p ref={nextStepElement} tabIndex={-1} role="status" className={nextLocation.allocationId ? 'sr-only' : 'rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 focus:outline-none'}>{nextLocation.allocationId ? nextLocation.message : hasAlternativeWork ? 'Another location is available. Review the shortage below. ' : 'No other slots are ready to pick. ' + (task.helpRequestedItems > 0 ? 'Admin help has been requested.' : 'Review the unresolved shortages below.')}{!nextLocation.allocationId && !admin && <> <Link to={workerReturnTo(location)} state={{ restoreWorkScroll: true }} className="font-semibold underline">Choose another order</Link></>}</p>}
     <div className="space-y-4">{task.items.map(product => {
       const complete = product.pickedQty === product.qty;
       return <article key={product.productId} aria-label={product.sku} className={"overflow-hidden rounded-2xl border bg-white " + (complete ? "border-slate-100" : "border-slate-200")}>
-        <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5"><div className="min-w-0"><h2 className="break-all text-base font-bold text-slate-900">{product.sku}</h2><p className="mt-1 break-words text-sm text-slate-600">{product.name}</p><p className="mt-2 text-sm text-slate-500">Order quantity: {packingQuantity(product.qty, product.unit)}</p></div>{complete && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800"><FiCheck aria-hidden="true" />Complete</span>}</div>
-        {product.helpRequestedAt && <p className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><strong>Admin help requested</strong><span className="mt-1 block">{admin ? 'The worker needs help with this shortage.' : hasReadyLocation ? 'You can pick from the other available slots while this shortage is reviewed.' : 'You can work on another order while this shortage is reviewed.'}</span></p>}
+        <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5"><div className="min-w-0"><h2 className="break-words text-lg font-semibold text-slate-900">{admin ? product.sku : product.name || product.sku}</h2><p className="mt-1 break-words text-xs text-slate-500">{admin ? product.name : product.sku}</p><p className="mt-2 text-sm text-slate-500">Order quantity: {packingQuantity(product.qty, product.unit)}</p></div>{complete && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800"><FiCheck aria-hidden="true" />Complete</span>}</div>
+        {product.helpRequestedAt && <p className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><strong>Admin help requested</strong><span className="mt-1 block">{admin ? 'The worker needs help with this shortage.' : hasReadyLocation ? 'You can pick from the other available slots while this shortage is reviewed.' : hasAlternativeWork ? 'Another location is available. Review the shortage to continue.' : 'You can work on another order while this shortage is reviewed.'}</span></p>}
         {task.status === "Shipping" && product.reservedQty !== product.qty && <p className="mx-4 mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Reservations cover {product.reservedQty} of {product.qty}. {admin ? <Link to={orderDestination(orderId, listSearch, { tab: 'stock' })} className="font-semibold underline">Review reservations</Link> : 'Ask an admin to review.'}</p>}
         {product.allocations.map(row => {
           const done = row.pickedQty === row.qty;
@@ -260,13 +267,13 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
       </article>;
     })}</div>
     {editable && <footer className="sticky bottom-3 z-20 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-baseline justify-between gap-2"><p className="text-sm font-semibold tabular-nums">{packingUnitProgressLabel(unitSummary)}</p><p className="text-xs tabular-nums text-slate-500">{unitsLeft} remaining</p></div>{task.canPack ? <p className="mt-1 text-xs text-slate-500">All units picked. Pack and label the carton, then finish.</p> : task.helpRequestedItems > 0 && !hasReadyLocation && <p className="mt-1 text-xs text-amber-800">Waiting for admin</p>}</div>
+      <div className="min-w-0 flex-1"><div className="flex flex-wrap items-baseline justify-between gap-2"><p className="text-sm font-semibold tabular-nums">{packingUnitProgressLabel(unitSummary)}</p><p className="text-xs tabular-nums text-slate-500">{unitsLeft} remaining</p></div>{task.canPack ? <p className="mt-1 text-xs text-slate-500">All units picked. Pack and label the carton, then finish.</p> : hasAlternativeWork && !hasReadyLocation ? <p className="mt-1 text-xs text-amber-800">Review the shortage to continue at another location.</p> : task.helpRequestedItems > 0 && !hasReadyLocation && <p className="mt-1 text-xs text-amber-800">Waiting for admin</p>}</div>
       <button ref={finishButton} type="button" disabled={blocked || !task.canPack} className={packingPrimary + ' shrink-0'} onClick={() => write('packed')}><FiCheckCircle aria-hidden="true" />{pending?.action === 'packed' ? 'Saving...' : 'Mark packed'}</button>
     </footer>}
     {admin && <AdminPackingStockReports orderId={orderId} task={task} onRefresh={() => query.refetch().unwrap()} refreshing={query.isFetching} offline={offline} />}
     {panel && <PackingDialog title={panel.mode === 'edit' ? allocation?.problemQty > 0 ? 'Update picked total' : 'Correct count' : 'Not enough here'} onClose={closePanel} busy={saving || handlingShortage}>
       {discard ? <div className="space-y-4"><p>Discard unsaved changes?</p><div className="flex flex-wrap gap-2"><button type="button" className={packingPrimary} onClick={() => setDiscard(false)}>Keep editing</button><button type="button" className={packingSecondary} onClick={() => { setPanel(null); setDiscard(false); }}>Discard changes</button></div></div> : <div className="space-y-4">
-        <div><p className="break-all text-sm font-bold">{item?.sku}</p><p className="mt-1 text-sm text-slate-500">{item?.name}</p><p className="mt-3 text-lg font-semibold">{allocation?.slot || 'Location changed'}</p></div>
+        <div><p className="break-words text-base font-semibold">{admin ? item?.sku : item?.name || item?.sku}</p><p className="mt-1 break-words text-xs text-slate-500">{admin ? item?.name : item?.sku}</p><p className="mt-3 text-lg font-semibold">{allocation?.slot || 'Location changed'}</p></div>
         {errorBlock}{refreshBlock}
         {!allocation ? <><p>This reservation changed. Review the latest picking list.</p><button type="button" className={packingSecondary} onClick={() => continuePicking()}>Continue picking</button></> : panel.mode === 'edit' ? <>
           <label className="block text-sm font-semibold">How many have you picked from {allocation.slot} in total?<input type="number" inputMode="numeric" min={0} max={allocation.qty} step="1" value={panel.picked} disabled={blocked} onChange={event => setPanel({ ...panel, picked: event.target.value, returned: false })} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 py-2 text-lg tabular-nums" /></label>
@@ -281,7 +288,7 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
             <p className="text-xs text-slate-500">Already recorded: {panel.basePicked}. Enter only what you took this time, including 0 if none.</p>
             <PackingNote value={panel.note} disabled={blocked} onChange={note => setPanel({ ...panel, note })} />
           </>}
-          <p role="status" className="rounded-xl bg-slate-50 p-3 text-sm font-semibold tabular-nums">{panelPicked || 0} picked · {panelMissing} needed from another location</p>
+          <p role="status" className="rounded-xl bg-slate-50 p-3 text-sm font-semibold tabular-nums">{panelPicked || 0} collected · {panelMissing} remaining</p>
           {panel.saved && allocation.problemQty === 0 ? <><p className="text-sm text-emerald-800">This slot's shortage is resolved. Review the latest picking list.</p><button type="button" className={packingSecondary + ' w-full'} disabled={saving || handlingShortage} onClick={() => continuePicking()}>Back to checklist<FiArrowLeft aria-hidden="true" /></button></> : <>
             {panel.saved && <button type="button" className={textButton} disabled={blocked} onClick={() => setPanel({ ...panel, mode: 'edit', picked: String(allocation.pickedQty), saved: false })}><FiEdit3 className="mr-2" aria-hidden="true" />Update picked total</button>}
             {panelMissing === 0 && !panel.saved ? <button type="button" className={packingPrimary + ' w-full'} disabled={blocked || !draftValid} onClick={() => resolveShortage()}><FiCheck aria-hidden="true" />Confirm picked</button> : <>

@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import PackingDialog from './PackingDialog';
 import DeliveryAssignmentDialog from './DeliveryAssignmentDialog';
 import { useGetDeliveryTaskQuery, useMoveDeliveryMutation } from '../../features/packing/deliveryApiSlice';
-import { packingPrimary, packingSecondary, packingPhoneLink, packingError, subscribePackingNetwork } from '../../utils/packing';
+import { packingPrimary as adminPrimary, workerPrimary, packingSecondary, packingPhoneLink, packingError, subscribePackingNetwork } from '../../utils/packing';
 import { deliveryMapAction } from '../../utils/delivery';
 
 export function DeliveryContactActions({ delivery }) {
@@ -17,8 +17,9 @@ export function DeliveryContactActions({ delivery }) {
   </div>;
 }
 
-export default function DeliveryControls({ task, onChanged }) {
+export default function DeliveryControls({ task, onChanged, showStatus = true }) {
   const isAdmin = useSelector(state => Boolean(state.auth.userInfo?.isAdmin));
+  const packingPrimary = isAdmin ? adminPrimary : workerPrimary;
   const [action, setAction] = useState(null);
   const [assigning, setAssigning] = useState(false);
   const online = useSyncExternalStore(subscribePackingNetwork, () => navigator.onLine, () => true);
@@ -30,8 +31,8 @@ export default function DeliveryControls({ task, onChanged }) {
       {isAdmin && task.canAssign && <button type="button" className={packingSecondary} disabled={!online} onClick={() => setAssigning(true)}><FiUserCheck aria-hidden="true" />{task.worker ? 'Change delivery worker' : 'Assign delivery'}</button>}
       {(task.canReturn || task.canCorrect) && <details className="relative"><summary className={packingSecondary + ' cursor-pointer list-none'}><FiMoreHorizontal aria-hidden="true" />More</summary><div className="absolute bottom-full right-0 z-30 mb-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">{task.canReturn && <button type="button" className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-slate-50" disabled={!online} onClick={() => setAction('returned')}><FiRotateCcw aria-hidden="true" />Returned to store</button>}{task.canCorrect && <button type="button" className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm hover:bg-slate-50" disabled={!online} onClick={() => setAction('corrected')}><FiEdit3 aria-hidden="true" />Correct recorded status</button>}</div></details>}
     </div>
-    {task.readyReason && (isAdmin || task.worker) && <p role="status" className="text-sm text-amber-800">{task.readyReason}</p>}
-    {!online && <p role="status" className="text-sm text-amber-800">Offline. Reconnect before updating delivery.</p>}
+    {showStatus && task.readyReason && (isAdmin || task.worker) && <p role="status" className="text-sm text-amber-800">{task.readyReason}</p>}
+    {showStatus && !online && <p role="status" className="text-sm text-amber-800">Offline. Reconnect before updating delivery.</p>}
     {isAdmin && assigning && <DeliveryAssignmentDialog orderId={task.orderId} onClose={saved => saved ? changed() : setAssigning(false)} />}
     {action && <DeliveryEventDialog orderId={task.orderId} action={action} onClose={() => setAction(null)} onSaved={changed} />}
   </div>;
@@ -44,6 +45,8 @@ const events = {
   corrected: { label: 'Correct recorded status', text: '', done: 'Delivery status corrected. Packing and stock records retained.', permission: 'canCorrect', Icon: FiEdit3 },
 };
 function DeliveryEventDialog({ orderId, action, onClose, onSaved }) {
+  const isAdmin = useSelector(state => Boolean(state.auth.userInfo?.isAdmin));
+  const packingPrimary = isAdmin ? adminPrimary : workerPrimary;
   const query = useGetDeliveryTaskQuery(orderId, { refetchOnMountOrArgChange: true });
   const [save, { isLoading }] = useMoveDeliveryMutation();
   const [error, setError] = useState('');

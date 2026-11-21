@@ -5,6 +5,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import RecentWork from '../../components/packing/RecentWork';
 import DeliveriesList from './DeliveriesList';
 import DeliveryAssignmentPanel from '../../components/packing/DeliveryAssignmentPanel';
+import WorkerWorkPage from './WorkerWorkPage';
 import { useGetDeliveriesQuery } from '../../features/packing/deliveryApiSlice';
 import { FiArrowRight, FiBox, FiCheck, FiCheckCircle, FiRefreshCw, FiTruck } from "react-icons/fi";
 import { useGetPackingOrdersQuery, useSavePackingMutation } from "../../features/packing/packingApiSlice";
@@ -67,6 +68,11 @@ function OrderCard({ order, refresh }) {
 }
 
 export default function PackingOrdersPage() {
+  const isAdmin = useSelector(state => Boolean(state.auth.userInfo?.isAdmin));
+  return isAdmin ? <AdminPackingOrdersPage /> : <WorkerWorkPage />;
+}
+
+function AdminPackingOrdersPage() {
   const isAdmin = useSelector(state => Boolean(state.auth.userInfo?.isAdmin));
   const [params, setParams] = useSearchParams();
   const [pages, setPages] = useState({});
