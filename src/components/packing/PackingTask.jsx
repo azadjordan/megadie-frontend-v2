@@ -6,6 +6,7 @@ import { useGetPackingOrderQuery, useSavePackingMutation } from "../../features/
 import { packingQuantity, packingError, needsPackingRefresh, packingTaskLabel, packingProgressLabel, packingUnitProgressLabel, packingCartonReference, packingDate, packingPrimary, packingSecondary } from "../../utils/packing";
 import PackingDialog from "./PackingDialog";
 import DeliveryAssignmentPanel from './DeliveryAssignmentPanel';
+import { CompletedWorkSummary } from './RecentWork';
 import AdminPackingStockReports from '../admin/AdminPackingStockReports';
 
 const textButton = "inline-flex min-h-11 items-center text-sm font-medium text-slate-600 underline underline-offset-4 disabled:opacity-50";
@@ -193,6 +194,7 @@ export default function PackingTask({ orderId, admin = false, onAssignment }) {
 
   if (lostAccess || accessError) return <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">This task is no longer available to this account. <Link to={admin ? "/admin/orders" : "/packing"} className="underline">Back to orders</Link></div>;
   if (!task) return <div role="status" className="rounded-2xl border border-slate-200 bg-white p-5 text-sm">{query.isError ? <><p>Could not load packing progress.</p><button type="button" className={packingSecondary + ' mt-3'} onClick={refresh}>Retry</button></> : "Loading packing progress…"}</div>;
+  if (!admin && ['recent-work', 'packed-handoff'].includes(task.scope)) return <CompletedWorkSummary task={task} refetch={query.refetch} />;
   const openTask = task.status === "Shipping" && Boolean(task.sentAt) && !task.packedAt;
   const editable = openTask && (!admin || assist);
   const candidates = item?.alternatives.filter(candidate => candidate.slotId !== allocation?.slotId && candidate.availableQty > 0) || [];

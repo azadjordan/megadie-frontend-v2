@@ -29,6 +29,7 @@ export const apiSlice = createApi({
   tagTypes: [
     'MaintenanceNotice',
     'Packing',
+    'WorkerWork',
     'Product',
     'Order',
     'Invoice',

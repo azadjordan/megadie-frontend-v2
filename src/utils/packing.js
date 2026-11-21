@@ -19,7 +19,7 @@ export const packingSecondary = packingButton + " border border-slate-200 bg-whi
 
 export const packingUnitProgressLabel = summary => Number.isFinite(summary?.pickedUnits) && Number.isFinite(summary?.totalUnits)
   ? `${summary.pickedUnits} / ${summary.totalUnits} units picked` : 'Unit progress unavailable';
-export const packingCartonReference = order => order?.label?.includes(' — ') ? order.label.split(' — ').at(-1) : order?.orderNumber || '';
+export const packingCartonReference = order => order?.cartonReference || (order?.label?.includes(' — ') ? order.label.split(' — ').at(-1) : order?.orderNumber || '');
 export const subscribePackingNetwork = callback => {
   window.addEventListener('online', callback); window.addEventListener('offline', callback);
   return () => { window.removeEventListener('online', callback); window.removeEventListener('offline', callback); };

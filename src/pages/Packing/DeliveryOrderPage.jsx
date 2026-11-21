@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { FiArrowLeft, FiPackage } from 'react-icons/fi';
 import { useGetDeliveryTaskQuery } from '../../features/packing/deliveryApiSlice';
+import { CompletedWorkSummary } from '../../components/packing/RecentWork';
 import DeliveryControls, { DeliveryContactActions } from '../../components/packing/DeliveryControls';
 import { packingCartonReference, packingSecondary, packingDate } from '../../utils/packing';
 import { deliveryLabel, deliveryTone } from '../../utils/delivery';
@@ -11,6 +12,7 @@ export default function DeliveryOrderPage() {
   const task = query.currentData?.data;
   const lost = [403, 404].includes(query.error?.status);
   if (!task || lost) return <div className="space-y-4"><p role="status">{lost ? 'This delivery is no longer assigned to you.' : query.isError ? 'Could not load delivery.' : 'Loading delivery…'}</p>{query.isError && !lost && <button type="button" onClick={query.refetch} className={packingSecondary}>Try again</button>}<Link to="/packing?tab=deliveries" className={packingSecondary}><FiArrowLeft aria-hidden="true" />Back to deliveries</Link></div>;
+  if (task.scope === 'recent-work') return <CompletedWorkSummary task={task} refetch={query.refetch} />;
   return <div className="space-y-5">
     <Link to="/packing?tab=deliveries" className="inline-flex min-h-11 items-center gap-2 text-sm text-slate-600"><FiArrowLeft aria-hidden="true" />My deliveries</Link>
     <header><span className={'inline-flex rounded-md px-2 py-1 text-xs font-semibold ring-1 ring-inset ' + deliveryTone(task)}>{deliveryLabel(task)}</span><h1 className="mt-3 break-words text-2xl font-semibold">{task.customerName}</h1><p className="mt-2 text-sm text-slate-500">Carton {packingCartonReference(task)} · Delivery: {task.worker?.name || 'Not assigned'}</p>{task.deliveredAt && <p className="mt-2 text-sm text-emerald-800">Received {packingDate(task.deliveredAt)}</p>}</header>

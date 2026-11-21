@@ -30,7 +30,7 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
       query: ({ id, ...body }) => ({ url: `/orders/${id}/movement`, method: 'POST', body, timeout: 20000 }),
       invalidatesTags: (_result, _error, arg) => [
         { type: 'Order', id: arg.id }, { type: 'Order', id: 'LIST' },
-        'Packing', 'OrderAllocation', 'SlotItem', 'InventoryProduct', 'Quote',
+        'WorkerWork', 'Packing', 'OrderAllocation', 'SlotItem', 'InventoryProduct', 'Quote',
       ],
     }),
     getOrderFulfillmentSheet: builder.query({
@@ -171,6 +171,7 @@ export const ordersApiSlice = apiSlice.injectEndpoints({
         ...(typeof arg === "object" ? { body: { confirmedPhysicalReturn: arg.confirmedPhysicalReturn, expectedRevision: arg.expectedRevision } } : {}),
       }),
       invalidatesTags: (_result, _error, arg) => [
+        "WorkerWork",
         { type: "Order", id: "LIST" },
         { type: "Order", id: typeof arg === "object" ? arg.id : arg },
         { type: "Quote", id: "LIST" },

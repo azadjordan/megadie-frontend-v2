@@ -1,6 +1,6 @@
 import { apiSlice } from '../../app/apiSlice';
 
-const tags = id => [{ type: 'Packing', id }, { type: 'Packing', id: 'LIST' }, { type: 'Order', id }, { type: 'Order', id: 'LIST' }];
+const tags = id => ['WorkerWork', { type: 'Packing', id }, { type: 'Packing', id: 'LIST' }, { type: 'Order', id }, { type: 'Order', id: 'LIST' }];
 export const deliveryApiSlice = apiSlice.injectEndpoints({
   endpoints: builder => ({
     getDeliveries: builder.query({

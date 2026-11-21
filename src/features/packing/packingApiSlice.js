@@ -46,7 +46,7 @@ export const packingApiSlice = apiSlice.injectEndpoints({
         } catch { /* The caller keeps errors and uncertain results visible. */ }
       },
       invalidatesTags: (result, _error, arg) => result ? [
-        { type: "Packing", id: "LIST" }, { type: "Order", id: arg.orderId }, { type: "Order", id: "LIST" },
+        "WorkerWork", { type: "Packing", id: "LIST" }, { type: "Order", id: arg.orderId }, { type: "Order", id: "LIST" },
         { type: "OrderAllocation", id: `ORDER-${arg.orderId}` }, { type: "OrderAllocation", id: "LIST" },
         { type: "SlotItem", id: "LIST" }, { type: "InventoryMovement", id: "LIST" },
         ...(arg.saveCustomerLocation && result?.data?.customerId ? [{ type: "User", id: result.data.customerId }, { type: "User", id: "LIST" }] : []),

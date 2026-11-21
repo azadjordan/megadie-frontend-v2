@@ -1,6 +1,8 @@
+import { useSelector } from 'react-redux';
 import { toast } from "react-toastify";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import RecentWork from '../../components/packing/RecentWork';
 import DeliveriesList from './DeliveriesList';
 import DeliveryAssignmentPanel from '../../components/packing/DeliveryAssignmentPanel';
 import { useGetDeliveriesQuery } from '../../features/packing/deliveryApiSlice';
@@ -65,6 +67,7 @@ function OrderCard({ order, refresh }) {
 }
 
 export default function PackingOrdersPage() {
+  const isAdmin = useSelector(state => Boolean(state.auth.userInfo?.isAdmin));
   const [params, setParams] = useSearchParams();
   const [pages, setPages] = useState({});
   const query = useGetPackingOrdersQuery(pages, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnReconnect: true, refetchOnFocus: true });
@@ -72,6 +75,7 @@ export default function PackingOrdersPage() {
   const deliveryQuery = useGetDeliveriesQuery(1, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true });
   const packingTotal = queues.reduce((sum, queue) => sum + (groups?.[queue.key]?.pagination?.total || 0), 0);
   const deliveryTotal = deliveryQuery.currentData?.pagination?.total;
+  const recent = !isAdmin && params.get('tab') === 'recent';
   const deliveries = params.get('tab') === 'deliveries' || (!params.has('tab') && groups && packingTotal === 0 && deliveryTotal > 0);
   if ([403, 404].includes(query.error?.status)) return <p role="alert">Packing access changed. Sign out and check with an admin.</p>;
   return <div className="space-y-8">
@@ -79,8 +83,8 @@ export default function PackingOrdersPage() {
       <div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">My work</h1><p className="mt-2 text-sm text-slate-500">Your assigned packing and deliveries.</p></div>
       <button type="button" onClick={query.refetch} disabled={query.isFetching} className={packingSecondary} aria-label="Refresh orders"><FiRefreshCw aria-hidden="true" className={query.isFetching ? 'animate-spin' : ''} /><span className="hidden sm:inline">Refresh</span></button>
     </header>
-    <nav aria-label="Work type" className="flex gap-2 border-b border-slate-200"><button type="button" onClick={() => setParams({ tab: 'packing' })} aria-current={!deliveries ? 'page' : undefined} className={'inline-flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-semibold ' + (!deliveries ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500')}><FiBox aria-hidden="true" />Packing{groups && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs tabular-nums">{packingTotal}</span>}</button><button type="button" onClick={() => setParams({ tab: 'deliveries' })} aria-current={deliveries ? 'page' : undefined} className={'inline-flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-semibold ' + (deliveries ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500')}><FiTruck aria-hidden="true" />Deliveries{deliveryTotal !== undefined && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs tabular-nums">{deliveryTotal}</span>}</button></nav>
-    {deliveries ? <DeliveriesList /> : <>
+    <nav aria-label="Work type" className={'grid gap-1 border-b border-slate-200 ' + (isAdmin ? 'grid-cols-2' : 'grid-cols-3')}><button type="button" onClick={() => setParams({ tab: 'packing' })} aria-current={!deliveries && !recent ? 'page' : undefined} className={'inline-flex min-h-12 min-w-0 flex-wrap items-center justify-center gap-1 border-b-2 px-1 text-xs font-semibold sm:gap-2 sm:px-4 sm:text-sm ' + (!deliveries && !recent ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500')}><FiBox aria-hidden="true" />Packing{groups && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs tabular-nums">{packingTotal}</span>}</button><button type="button" onClick={() => setParams({ tab: 'deliveries' })} aria-current={deliveries ? 'page' : undefined} className={'inline-flex min-h-12 min-w-0 flex-wrap items-center justify-center gap-1 border-b-2 px-1 text-xs font-semibold sm:gap-2 sm:px-4 sm:text-sm ' + (deliveries ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500')}><FiTruck aria-hidden="true" />Deliveries{deliveryTotal !== undefined && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs tabular-nums">{deliveryTotal}</span>}</button>{!isAdmin && <button type="button" onClick={() => setParams({ tab: 'recent' })} aria-current={recent ? 'page' : undefined} className={'inline-flex min-h-12 min-w-0 flex-wrap items-center justify-center gap-1 border-b-2 px-1 text-xs font-semibold sm:gap-2 sm:px-4 sm:text-sm ' + (recent ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500')}><FiCheckCircle aria-hidden="true" />Recent work</button>}</nav>
+    {recent ? <RecentWork /> : deliveries ? <DeliveriesList /> : <>
     {query.isError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p>{groups ? "Could not refresh. Your last saved order list is shown." : "Could not load your packing orders."}</p><button type="button" onClick={query.refetch} className="mt-2 min-h-11 font-semibold underline">Retry</button></div>}
     {queues.map(queue => {
       const { key, title, description, empty } = queue;

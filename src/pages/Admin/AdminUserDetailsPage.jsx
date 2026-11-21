@@ -1,3 +1,4 @@
+import RecentWork from '../../components/packing/RecentWork';
 import LocationFields from "../../components/common/LocationFields";
 import { needsMapReview, profileLocationPatch } from "../../utils/customerLocation";
 import { useMemo, useState } from "react";
@@ -689,6 +690,7 @@ export default function AdminUserDetailsPage() {
             { id: "approval", label: "Approval" },
             { id: "signup", label: "Signup Context" },
             { id: "pricing", label: "User Pricing" },
+            { id: "work", label: "Work report" },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -711,7 +713,7 @@ export default function AdminUserDetailsPage() {
         </div>
       </div>
 
-      {activeTab === "info" ? (
+      {activeTab === "work" ? <RecentWork key={userId} workerId={userId} /> : activeTab === "info" ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
             <div className="text-sm font-semibold text-slate-900">
